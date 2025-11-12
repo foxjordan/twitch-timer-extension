@@ -1,0 +1,45 @@
+# Fly.io app config. Update `app` after `fly launch` assigns a name.
+app = "twitch-timer-ebs"
+primary_region = "iad"
+
+[build]
+  dockerfile = "ebs/Dockerfile"
+
+[env]
+  PORT = "8080"
+  DATA_DIR = "/data"
+
+[[services]]
+  internal_port = 8080
+  processes = ["app"]
+  protocol = "tcp"
+
+  [services.concurrency]
+    hard_limit = 200
+    soft_limit = 100
+    type = "connections"
+
+  [[services.ports]]
+    handlers = ["http"]
+    port = 80
+  [[services.ports]]
+    handlers = ["tls", "http"]
+    port = 443
+
+  [[services.tcp_checks]]
+    interval = "15s"
+    timeout = "2s"
+    grace_period = "10s"
+
+  [[services.http_checks]]
+    interval = "15s"
+    method = "get"
+    path = "/api/timer/state"
+    protocol = "http"
+    timeout = "2s"
+    tls_skip_verify = false
+
+[mounts]
+  source = "data"
+  destination = "/data"
+

@@ -499,7 +499,7 @@ app.get('/overlay/config', requireAdmin, (req, res) => {
         <div class="control"><label>Font Size</label><input id="fontSize" type="number" min="10" max="300" step="1" value="${initial.fontSize}"></div>
         <div class="control"><label>Color</label><input id="color" type="color" value="${initial.color}"></div>
         <div class="control"><label>Transparent</label><input id="transparent" type="checkbox" ${initial.transparent ? 'checked' : ''}></div>
-        <div class="control"><label>Background</label><input id="bg" type="text" placeholder="rgba(0,0,0,0)" value="${initial.bg}"></div>
+        <div class="control"><label>Background</label><input id="bg" type="color" value="#000000"></div>
         <div class="control"><label>Font Family</label><input id="font" type="text" value="${initial.font}"></div>
         <div class="control"><label>Show Label</label><input id="label" type="checkbox" ${initial.label ? 'checked' : ''}></div>
         <div class="control"><label>Label Text</label><input id="title" type="text" value="${initial.title}"></div>
@@ -512,10 +512,10 @@ app.get('/overlay/config', requireAdmin, (req, res) => {
         </div>
         <div class="control"><label>Weight</label><input id="weight" type="number" min="100" max="1000" step="100" value="${initial.weight}"></div>
         <div class="control"><label>Shadow</label><input id="shadow" type="checkbox" ${initial.shadow ? 'checked' : ''}></div>
-        <div class="control"><label>Shadow Color</label><input id="shadowColor" type="text" value="${initial.shadowColor}"></div>
+        <div class="control"><label>Shadow Color</label><input id="shadowColor" type="color" value="#000000"></div>
         <div class="control"><label>Shadow Blur</label><input id="shadowBlur" type="number" min="0" max="50" step="1" value="${initial.shadowBlur}"></div>
         <div class="control"><label>Outline Width</label><input id="stroke" type="number" min="0" max="20" step="1" value="${initial.stroke}"></div>
-        <div class="control"><label>Outline Color</label><input id="strokeColor" type="text" value="${initial.strokeColor}"></div>
+        <div class="control"><label>Outline Color</label><input id="strokeColor" type="color" value="#000000"></div>
         <div class="row2">
           <button class="secondary" id="presetClean">Preset: Clean</button>
           <button class="secondary" id="presetBold">Preset: Bold White</button>

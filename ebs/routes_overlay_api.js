@@ -1,5 +1,5 @@
 export function mountOverlayApiRoutes(app, ctx) {
-  const { requireOverlayAuth, normKey, getSavedStyle, setSavedStyle, getOrCreateUserKey, rotateUserKey, getUserSettings, setUserSettings, sseClients, getRules, setRules } = ctx;
+  const { requireOverlayAuth, normKey, getSavedStyle, setSavedStyle, getOrCreateUserKey, rotateUserKey, getUserSettings, setUserSettings, sseClients } = ctx;
 
   // Style read (public to overlays/key holder)
   app.get('/api/overlay/style', (req, res) => {
@@ -62,14 +62,5 @@ export function mountOverlayApiRoutes(app, ctx) {
     res.json(saved);
   });
 
-  // Rules read/update (admin)
-  app.get('/api/rules', (req, res) => {
-    if (!req?.session?.isAdmin) return res.status(401).json({ error: 'Admin login required' });
-    res.json(getRules());
-  });
-  app.post('/api/rules', (req, res) => {
-    if (!req?.session?.isAdmin) return res.status(401).json({ error: 'Admin login required' });
-    const saved = setRules(req.body || {});
-    res.json(saved);
-  });
+  // Rules API removed in rollback
 }

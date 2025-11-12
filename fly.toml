@@ -1,5 +1,5 @@
 # Fly.io app config. Update `app` after `fly launch` assigns a name.
-app = "twitch-timer-ebs"
+app = "twitch-timer-extension"
 primary_region = "iad"
 
 [build]

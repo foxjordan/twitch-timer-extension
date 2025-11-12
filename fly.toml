@@ -40,5 +40,5 @@ primary_region = "sjc"
     tls_skip_verify = false
 
 [[mounts]]
-  source = "data"
+  source = "snowy-wind-6873"
   destination = "/data"

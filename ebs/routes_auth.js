@@ -74,7 +74,8 @@ export function mountAuthRoutes(app) {
   });
 
   app.post('/auth/logout', (req, res) => {
-    try { res.clearCookie('overlay.sid'); } catch {}
+    const secure = req.secure || req.headers['x-forwarded-proto'] === 'https';
+    try { res.clearCookie('overlay.sid', { path: '/', sameSite: 'lax', secure }); } catch {}
     req.session.destroy(() => {
       res.json({ ok: true });
     });
@@ -84,7 +85,8 @@ export function mountAuthRoutes(app) {
   app.get('/auth/logout', (req, res) => {
     const next = req.query.next || '/overlay/config';
     const base = process.env.SERVER_BASE_URL || `${req.protocol}://${req.get('host')}`;
-    try { res.clearCookie('overlay.sid'); } catch {}
+    const secure = req.secure || req.headers['x-forwarded-proto'] === 'https';
+    try { res.clearCookie('overlay.sid', { path: '/', sameSite: 'lax', secure }); } catch {}
     req.session.destroy(() => {
       res.redirect(`${base}/auth/login?next=${encodeURIComponent(String(next))}`);
     });

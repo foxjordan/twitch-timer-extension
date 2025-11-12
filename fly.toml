@@ -1,9 +1,9 @@
 # Fly.io app config. Update `app` after `fly launch` assigns a name.
 app = "twitch-timer-extension"
-primary_region = "iad"
+primary_region = "sjc"
 
 [build]
-  dockerfile = "ebs/Dockerfile"
+  dockerfile = "Dockerfile"
 
 [env]
   PORT = "8080"

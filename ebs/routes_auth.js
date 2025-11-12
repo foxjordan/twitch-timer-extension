@@ -74,8 +74,19 @@ export function mountAuthRoutes(app) {
   });
 
   app.post('/auth/logout', (req, res) => {
+    try { res.clearCookie('overlay.sid'); } catch {}
     req.session.destroy(() => {
       res.json({ ok: true });
+    });
+  });
+
+  // Convenience GET logout that redirects to login
+  app.get('/auth/logout', (req, res) => {
+    const next = req.query.next || '/overlay/config';
+    const base = process.env.SERVER_BASE_URL || `${req.protocol}://${req.get('host')}`;
+    try { res.clearCookie('overlay.sid'); } catch {}
+    req.session.destroy(() => {
+      res.redirect(`${base}/auth/login?next=${encodeURIComponent(String(next))}`);
     });
   });
 

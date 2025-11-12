@@ -17,13 +17,15 @@ import { mountAuthRoutes } from './routes_auth.js';
 import { mountOverlayApiRoutes } from './routes_overlay_api.js';
 
 const app = express();
+// honor X-Forwarded-* so req.protocol resolves to https behind Fly
+app.set('trust proxy', 1);
 app.use(express.json());
 app.use(session({
   name: 'overlay.sid',
   secret: process.env.SESSION_SECRET || crypto.randomBytes(16).toString('hex'),
   resave: false,
   saveUninitialized: false,
-  cookie: { httpOnly: true, sameSite: 'lax' }
+  cookie: { httpOnly: true, sameSite: 'lax', secure: 'auto' }
 }));
 
 // CORS for local panel dev
@@ -416,7 +418,7 @@ function requireAdmin(req, res, next) {
 
 // Overlay Configurator (admin only; generates URL and previews)
 app.get('/overlay/config', requireAdmin, (req, res) => {
-  const base = `${req.protocol}://${req.get('host')}`;
+  const base = process.env.SERVER_BASE_URL || `${req.protocol}://${req.get('host')}`;
   const adminName = String((req.session?.twitchUser?.display_name) || (req.session?.twitchUser?.login) || 'Admin');
   const userKey = String(req.session?.userOverlayKey || getOrCreateUserKey(req.session?.twitchUser?.id));
   const settings = getUserSettings(req.session?.twitchUser?.id);
@@ -652,10 +654,9 @@ app.get('/overlay/config', requireAdmin, (req, res) => {
           el.addEventListener('input', () => { saveStyle(); });
           el.addEventListener('change', () => { saveStyle(); });
         }
-        document.getElementById('logout').addEventListener('click', async (e) => {
+        document.getElementById('logout').addEventListener('click', (e) => {
           e.preventDefault();
-          try { await fetch('/auth/logout', { method: 'POST' }); } catch (e) {}
-          window.location.href = '/auth/login?next=' + encodeURIComponent('/overlay/config');
+          window.location.href = '/auth/logout?next=' + encodeURIComponent('/overlay/config');
         });
         const copyBtn = document.getElementById('copy');
         copyBtn.addEventListener('click', async (e) => {

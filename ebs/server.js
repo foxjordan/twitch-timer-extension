@@ -2,7 +2,7 @@ import 'dotenv/config';
 import express from 'express';
 import session from 'express-session';
 import { v4 as uuidv4 } from 'uuid';
-import { RULES } from './rules.js';
+import { getRules, setRules, loadRules } from './rules_store.js';
 import { connectEventSubWS } from './eventsub-ws.js';
 import { broadcastToChannel } from './broadcast.js';
 import fetch from 'node-fetch';
@@ -15,6 +15,7 @@ import { loadOverlayKeys, getOrCreateUserKey, rotateUserKey, keyIsValid } from '
 import { mountTimerRoutes } from './routes_timer.js';
 import { mountAuthRoutes } from './routes_auth.js';
 import { mountOverlayApiRoutes } from './routes_overlay_api.js';
+import { getRules, setRules } from './rules_store.js';
 
 const app = express();
 // honor X-Forwarded-* so req.protocol resolves to https behind Fly
@@ -48,6 +49,7 @@ const sseClients = new Set();
 // Load keys + styles at startup
 loadOverlayKeys().catch(() => {});
 loadStyles().catch(() => {});
+loadRules().catch(() => {});
 
 // ===== Per-user settings (persisted) =====
 const DATA_DIR = process.env.DATA_DIR || process.cwd();
@@ -405,7 +407,9 @@ mountOverlayApiRoutes(app, {
   rotateUserKey,
   getUserSettings,
   setUserSettings,
-  sseClients
+  sseClients,
+  getRules,
+  setRules
 });
 
 // Overlay Configurator (no auth; generates URL and previews)
@@ -499,7 +503,7 @@ app.get('/overlay/config', requireAdmin, (req, res) => {
         <div class="control"><label>Font Size</label><input id="fontSize" type="number" min="10" max="300" step="1" value="${initial.fontSize}"></div>
         <div class="control"><label>Color</label><input id="color" type="color" value="${initial.color}"></div>
         <div class="control"><label>Transparent</label><input id="transparent" type="checkbox" ${initial.transparent ? 'checked' : ''}></div>
-        <div class="control"><label>Background</label><input id="bg" type="text" placeholder="rgba(0,0,0,0)" value="${initial.bg}"></div>
+        <div class="control"><label>Background</label><input id="bg" type="color" value="#000000"></div>
         <div class="control"><label>Font Family</label><input id="font" type="text" value="${initial.font}"></div>
         <div class="control"><label>Show Label</label><input id="label" type="checkbox" ${initial.label ? 'checked' : ''}></div>
         <div class="control"><label>Label Text</label><input id="title" type="text" value="${initial.title}"></div>
@@ -512,10 +516,10 @@ app.get('/overlay/config', requireAdmin, (req, res) => {
         </div>
         <div class="control"><label>Weight</label><input id="weight" type="number" min="100" max="1000" step="100" value="${initial.weight}"></div>
         <div class="control"><label>Shadow</label><input id="shadow" type="checkbox" ${initial.shadow ? 'checked' : ''}></div>
-        <div class="control"><label>Shadow Color</label><input id="shadowColor" type="text" value="${initial.shadowColor}"></div>
+        <div class="control"><label>Shadow Color</label><input id="shadowColor" type="color" value="#000000"></div>
         <div class="control"><label>Shadow Blur</label><input id="shadowBlur" type="number" min="0" max="50" step="1" value="${initial.shadowBlur}"></div>
         <div class="control"><label>Outline Width</label><input id="stroke" type="number" min="0" max="20" step="1" value="${initial.stroke}"></div>
-        <div class="control"><label>Outline Color</label><input id="strokeColor" type="text" value="${initial.strokeColor}"></div>
+        <div class="control"><label>Outline Color</label><input id="strokeColor" type="color" value="#000000"></div>
         <div class="row2">
           <button class="secondary" id="presetClean">Preset: Clean</button>
           <button class="secondary" id="presetBold">Preset: Bold White</button>
@@ -559,6 +563,18 @@ app.get('/overlay/config', requireAdmin, (req, res) => {
           <button class="secondary" data-add="1800">+30 min</button>
         </div>
         <div class="hint" style="margin-top:8px">Current remaining: <span id="remain">--:--</span></div>
+        <hr style="border:none;border-top:1px solid #303038;margin:16px 0;" />
+        <div style="margin:4px 0 12px; opacity:0.85; font-weight:600;">Rules</div>
+        <div class="control"><label>Bits per</label><input id="r_bits_per" type="number" min="1" step="1" value="100"></div>
+        <div class="control"><label>Bits add seconds</label><input id="r_bits_add" type="number" min="0" step="1" value="60"></div>
+        <div class="control"><label>Sub T1 seconds</label><input id="r_sub_1000" type="number" min="0" step="1" value="300"></div>
+        <div class="control"><label>Sub T2 seconds</label><input id="r_sub_2000" type="number" min="0" step="1" value="600"></div>
+        <div class="control"><label>Sub T3 seconds</label><input id="r_sub_3000" type="number" min="0" step="1" value="900"></div>
+        <div class="control"><label>Re-sub base sec</label><input id="r_resub" type="number" min="0" step="1" value="300"></div>
+        <div class="control"><label>Gift per-sub sec</label><input id="r_gift" type="number" min="0" step="1" value="300"></div>
+        <div class="control"><label>Charity sec / $</label><input id="r_charity" type="number" min="0" step="1" value="60"></div>
+        <div class="control"><label>Hype multiplier</label><input id="r_hype" type="number" min="0" step="0.1" value="2"></div>
+        <div class="row2"><button id="saveRules">Save Rules</button></div>
       </div>
       <div class="panel preview">
         <div style="margin-bottom:8px; opacity:0.85">Live Preview</div>
@@ -579,25 +595,31 @@ app.get('/overlay/config', requireAdmin, (req, res) => {
         return '${base}/overlay' + (p.toString() ? ('?' + p.toString()) : '');
       }
 
+      function toHexOrFallback(v, fallback) {
+        if (typeof v !== 'string') return fallback;
+        if (v.startsWith('#') && (v.length===7 || v.length===4)) return v;
+        return fallback;
+      }
+
       async function saveStyle() {
         const p = new URLSearchParams();
         if (inputs.key.value) p.set('key', inputs.key.value.trim());
         const url = '${base}/api/overlay/style' + (p.toString() ? ('?' + p.toString()) : '');
         const payload = {
           fontSize: Number(inputs.fontSize.value),
-          color: inputs.color.value,
+          color: toHexOrFallback(inputs.color.value, '#FFFFFF'),
           transparent: Boolean(inputs.transparent.checked),
-          bg: inputs.bg.value,
+          bg: toHexOrFallback(inputs.bg.value, '#000000'),
           font: inputs.font.value,
           label: Boolean(inputs.label.checked),
           title: inputs.title.value,
           align: inputs.align.value,
           weight: Number(inputs.weight.value),
           shadow: Boolean(inputs.shadow.checked),
-          shadowColor: inputs.shadowColor.value,
+          shadowColor: toHexOrFallback(inputs.shadowColor.value, '#000000'),
           shadowBlur: Number(inputs.shadowBlur.value),
           stroke: Number(inputs.stroke.value),
-          strokeColor: inputs.strokeColor.value,
+          strokeColor: toHexOrFallback(inputs.strokeColor.value, '#000000'),
           warnUnderSeconds: Number(document.getElementById('warnUnder').value||0),
           warnColor: document.getElementById('warnColor').value,
           dangerUnderSeconds: Number(document.getElementById('dangerUnder').value||0),
@@ -754,6 +776,11 @@ app.get('/overlay/config', requireAdmin, (req, res) => {
               if (typeof s.dangerColor !== 'undefined') document.getElementById('dangerColor').value = s.dangerColor || '#FF4D4D';
               if (typeof s.flashUnderSeconds !== 'undefined') document.getElementById('flashUnder').value = Number(s.flashUnderSeconds)||0;
               if (typeof s.timeFormat !== 'undefined') document.getElementById('timeFormat').value = (s.timeFormat==='hh:mm:ss' || s.timeFormat==='auto') ? s.timeFormat : 'mm:ss';
+              // set color inputs safely
+              if (s.shadowColor) { try { document.getElementById('shadowColor').value = s.shadowColor.startsWith('#') ? s.shadowColor : '#000000'; } catch(e){} }
+              if (s.strokeColor) { try { document.getElementById('strokeColor').value = s.strokeColor.startsWith('#') ? s.strokeColor : '#000000'; } catch(e){} }
+              // background only used when not transparent
+              try { document.getElementById('bg').value = '#000000'; } catch(e){}
             } catch(e) {}
           }).catch(function(){});
         })();
@@ -761,6 +788,35 @@ app.get('/overlay/config', requireAdmin, (req, res) => {
         // Show current remaining
         function updateRemain(){ fetch('/api/timer/state').then(function(r){return r.json();}).then(function(j){ document.getElementById('remain').textContent = fmt(j.remaining||0); }).catch(function(){}); }
         updateRemain(); setInterval(updateRemain, 1000);
+
+        // Load current rules into inputs
+        fetch('/api/rules').then(function(r){return r.json();}).then(function(rr){
+          try {
+            document.getElementById('r_bits_per').value = rr.bits?.per ?? 100;
+            document.getElementById('r_bits_add').value = rr.bits?.add_seconds ?? 60;
+            document.getElementById('r_sub_1000').value = rr.sub?.['1000'] ?? 300;
+            document.getElementById('r_sub_2000').value = rr.sub?.['2000'] ?? 600;
+            document.getElementById('r_sub_3000').value = rr.sub?.['3000'] ?? 900;
+            document.getElementById('r_resub').value = rr.resub?.base_seconds ?? 300;
+            document.getElementById('r_gift').value = rr.gift_sub?.per_sub_seconds ?? 300;
+            document.getElementById('r_charity').value = rr.charity?.per_usd ?? 60;
+            document.getElementById('r_hype').value = rr.hypeTrain?.multiplier ?? 2;
+          } catch(e){}
+        }).catch(function(){});
+
+        // Save rules
+        document.getElementById('saveRules').addEventListener('click', async function(e){
+          e.preventDefault();
+          const body = {
+            bits: { per: Number(document.getElementById('r_bits_per').value||100), add_seconds: Number(document.getElementById('r_bits_add').value||60) },
+            sub: { '1000': Number(document.getElementById('r_sub_1000').value||300), '2000': Number(document.getElementById('r_sub_2000').value||600), '3000': Number(document.getElementById('r_sub_3000').value||900) },
+            resub: { base_seconds: Number(document.getElementById('r_resub').value||300) },
+            gift_sub: { per_sub_seconds: Number(document.getElementById('r_gift').value||300) },
+            charity: { per_usd: Number(document.getElementById('r_charity').value||60) },
+            hypeTrain: { multiplier: Number(document.getElementById('r_hype').value||2) }
+          };
+          try { await fetch('/api/rules', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body)}); } catch(e){}
+        });
       }
 
       bind();
@@ -781,6 +837,7 @@ app.get('/overlay/config', requireAdmin, (req, res) => {
 function secondsFromEvent(notification) {
   const subType = notification?.payload?.subscription?.type;
   const e = notification?.payload?.event ?? {};
+  const RULES = getRules();
   switch (subType) {
     case 'channel.bits.use': {
       const bits = e.bits ?? e.total_bits_used ?? 0;
@@ -829,7 +886,7 @@ async function handleEventSub(notification) {
 
   let seconds = secondsFromEvent(notification);
   if (seconds > 0 && state.hypeActive) {
-    seconds = Math.floor(seconds * RULES.hypeTrain.multiplier);
+    seconds = Math.floor(seconds * getRules().hypeTrain.multiplier);
   }
   if (seconds > 0) {
     const remaining = addSeconds(seconds);

@@ -42,4 +42,4 @@ primary_region = "sjc"
 [[mounts]]
   source = "data"
   destination = "/data"
-  volume = "snowy-wind-6873
+  processes = ["app"]

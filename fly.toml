@@ -34,7 +34,7 @@ primary_region = "iad"
   [[services.http_checks]]
     interval = "15s"
     method = "get"
-    path = "/api/timer/state"
+    path = "/healthz"
     protocol = "http"
     timeout = "2s"
     tls_skip_verify = false
@@ -42,4 +42,3 @@ primary_region = "iad"
 [mounts]
   source = "data"
   destination = "/data"
-

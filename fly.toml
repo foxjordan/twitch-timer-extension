@@ -39,6 +39,6 @@ primary_region = "sjc"
     timeout = "2s"
     tls_skip_verify = false
 
-[mounts]
+[[mounts]]
   source = "data"
   destination = "/data"

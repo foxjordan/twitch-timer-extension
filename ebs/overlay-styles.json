@@ -1,0 +1,24 @@
+{
+  "1b67141ca50c0b297d4d880c4422dd4e": {
+    "fontSize": 64,
+    "color": "#96d35f",
+    "bg": "rgba(0,0,0,0)",
+    "transparent": true,
+    "font": "Inter,system-ui,Arial,sans-serif",
+    "label": false,
+    "title": "Stream Countdown",
+    "align": "center",
+    "weight": 700,
+    "shadow": false,
+    "shadowColor": "rgba(0,0,0,0.7)",
+    "shadowBlur": 8,
+    "stroke": 0,
+    "strokeColor": "#000000",
+    "warnUnderSeconds": 300,
+    "warnColor": "#ffa500",
+    "dangerUnderSeconds": 60,
+    "dangerColor": "#ff4d4d",
+    "flashUnderSeconds": 20,
+    "timeFormat": "hh:mm:ss"
+  }
+}

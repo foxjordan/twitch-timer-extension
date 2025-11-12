@@ -15,6 +15,7 @@ import { loadOverlayKeys, getOrCreateUserKey, rotateUserKey, keyIsValid } from '
 import { mountTimerRoutes } from './routes_timer.js';
 import { mountAuthRoutes } from './routes_auth.js';
 import { mountOverlayApiRoutes } from './routes_overlay_api.js';
+import { getRules, setRules, loadRules } from './rules_store.js';
 
 const app = express();
 // honor X-Forwarded-* so req.protocol resolves to https behind Fly
@@ -48,6 +49,7 @@ const sseClients = new Set();
 // Load keys + styles at startup
 loadOverlayKeys().catch(() => {});
 loadStyles().catch(() => {});
+loadRules().catch(() => {});
 
 // ===== Per-user settings (persisted) =====
 const DATA_DIR = process.env.DATA_DIR || process.cwd();
@@ -405,7 +407,9 @@ mountOverlayApiRoutes(app, {
   rotateUserKey,
   getUserSettings,
   setUserSettings,
-  sseClients
+  sseClients,
+  getRules,
+  setRules
 });
 
 // Overlay Configurator (no auth; generates URL and previews)
@@ -783,6 +787,7 @@ app.get('/overlay/config', requireAdmin, (req, res) => {
 function secondsFromEvent(notification) {
   const subType = notification?.payload?.subscription?.type;
   const e = notification?.payload?.event ?? {};
+  const RULES = getRules();
   switch (subType) {
     case 'channel.bits.use': {
       const bits = e.bits ?? e.total_bits_used ?? 0;
@@ -831,7 +836,7 @@ async function handleEventSub(notification) {
 
   let seconds = secondsFromEvent(notification);
   if (seconds > 0 && state.hypeActive) {
-    seconds = Math.floor(seconds * RULES.hypeTrain.multiplier);
+    seconds = Math.floor(seconds * getRules().hypeTrain.multiplier);
   }
   if (seconds > 0) {
     const remaining = addSeconds(seconds);

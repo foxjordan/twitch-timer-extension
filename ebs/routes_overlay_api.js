@@ -1,5 +1,5 @@
 export function mountOverlayApiRoutes(app, ctx) {
-  const { requireOverlayAuth, normKey, getSavedStyle, setSavedStyle, getOrCreateUserKey, rotateUserKey, getUserSettings, setUserSettings, sseClients } = ctx;
+  const { requireOverlayAuth, normKey, getSavedStyle, setSavedStyle, getOrCreateUserKey, rotateUserKey, getUserSettings, setUserSettings, sseClients, getRules, setRules } = ctx;
 
   // Style read (public to overlays/key holder)
   app.get('/api/overlay/style', (req, res) => {
@@ -62,5 +62,23 @@ export function mountOverlayApiRoutes(app, ctx) {
     res.json(saved);
   });
 
-  // Rules API removed in rollback
+  // Rules (admin only)
+  app.get('/api/rules', (req, res) => {
+    if (!req?.session?.isAdmin) return res.status(401).json({ error: 'Admin login required' });
+    try {
+      res.json(getRules());
+    } catch (e) {
+      res.status(500).json({ error: 'Failed to load rules' });
+    }
+  });
+
+  app.post('/api/rules', (req, res) => {
+    if (!req?.session?.isAdmin) return res.status(401).json({ error: 'Admin login required' });
+    try {
+      const saved = setRules(req.body || {});
+      res.json(saved);
+    } catch (e) {
+      res.status(400).json({ error: 'Invalid rules payload' });
+    }
+  });
 }

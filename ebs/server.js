@@ -563,6 +563,13 @@ app.get('/overlay/config', requireAdmin, (req, res) => {
           <button class="secondary" data-add="1800">+30 min</button>
         </div>
         <div class="hint" style="margin-top:8px">Current remaining: <span id="remain">--:--</span></div>
+        <hr style="border:none;border-top:1px solid #303038;margin:16px 0;" />
+        <div style="margin:4px 0 12px; opacity:0.85; font-weight:600;">Rules (Basic)</div>
+        <div class="control"><label>Bits per</label><input id="r_bits_per" type="number" min="1" step="1" value="100"></div>
+        <div class="control"><label>Bits add (sec)</label><input id="r_bits_add" type="number" min="0" step="1" value="60"></div>
+        <div class="control"><label>Sub T1 (sec)</label><input id="r_sub_1000" type="number" min="0" step="1" value="300"></div>
+        <div class="control"><label>Hype x</label><input id="r_hype" type="number" min="0" step="0.1" value="2"></div>
+        <div class="row2"><button id="saveRules">Save Rules</button></div>
       </div>
       <div class="panel preview">
         <div style="margin-bottom:8px; opacity:0.85">Live Preview</div>
@@ -765,6 +772,33 @@ app.get('/overlay/config', requireAdmin, (req, res) => {
         // Show current remaining
         function updateRemain(){ fetch('/api/timer/state').then(function(r){return r.json();}).then(function(j){ document.getElementById('remain').textContent = fmt(j.remaining||0); }).catch(function(){}); }
         updateRemain(); setInterval(updateRemain, 1000);
+
+        // Load basic rules and populate inputs
+        fetch('/api/rules').then(r=>r.json()).then(function(rr){
+          try {
+            if (rr && rr.bits) {
+              document.getElementById('r_bits_per').value = rr.bits.per ?? 100;
+              document.getElementById('r_bits_add').value = rr.bits.add_seconds ?? 60;
+            }
+            if (rr && rr.sub) {
+              document.getElementById('r_sub_1000').value = rr.sub['1000'] ?? 300;
+            }
+            if (rr && rr.hypeTrain) {
+              document.getElementById('r_hype').value = rr.hypeTrain.multiplier ?? 2;
+            }
+          } catch (e) {}
+        }).catch(function(){});
+
+        // Save basic rules
+        document.getElementById('saveRules').addEventListener('click', async function(e){
+          e.preventDefault();
+          const body = {
+            bits: { per: Number(document.getElementById('r_bits_per').value||100), add_seconds: Number(document.getElementById('r_bits_add').value||60) },
+            sub: { '1000': Number(document.getElementById('r_sub_1000').value||300) },
+            hypeTrain: { multiplier: Number(document.getElementById('r_hype').value||2) }
+          };
+          try { await fetch('/api/rules', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }); } catch(e) {}
+        });
 
         // (rules UI removed)
       }

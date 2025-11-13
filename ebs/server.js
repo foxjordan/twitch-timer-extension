@@ -709,16 +709,16 @@ app.get("/overlay/config", requireAdmin, (req, res) => {
         <div class="control"><label>Hours</label><input id="h" type="number" min="0" step="1" value="${defH}"></div>
         <div class="control"><label>Minutes</label><input id="m" type="number" min="0" max="59" step="1" value="${defM}"></div>
         <div class="control"><label>Seconds</label><input id="s" type="number" min="0" max="59" step="1" value="${defS}"></div>
-        <div class="row2">
-          <button id="startTimer">Start Timer</button>
-          <button class="secondary" id="saveDefault">Save Default</button>
-        </div>
+       
         <div class="control"><label>Max Stream Length</label>
           <div style="display:flex; gap:8px; align-items:center;">
             <input id="maxH" type="number" min="0" step="1" value="0" style="max-width:80px">h
             <input id="maxM" type="number" min="0" max="59" step="1" value="0" style="max-width:80px">m
             <input id="maxS" type="number" min="0" max="59" step="1" value="0" style="max-width:80px">s
           </div>
+        </div> <div class="row2">
+          <button id="startTimer">Start Timer</button>
+          <button class="secondary" id="saveDefault">Save Default</button>
         </div>
         <div class="row2">
           <button class="secondary" id="clearMax" title="Remove the max cap">Clear Max</button>

@@ -12,6 +12,9 @@ RUN npm install --omit=dev
 # Copy source
 COPY . ./
 
+# Ensure the New Relic agent finds the CommonJS config file
+ENV NEW_RELIC_CONFIG_FILENAME=newrelic.cjs
+
 # Create data dir (volume may mount here in Fly)
 ENV DATA_DIR=/data
 RUN mkdir -p /data

@@ -13,20 +13,23 @@ export async function connectEventSubWS({ userAccessToken, clientId, broadcaster
     if (msg.metadata?.message_type === 'session_welcome') {
       sessionId = msg.payload.session.id;
 
+      // Subscribe to common channel events. For standard Bits, use channel.cheer.
       const wants = [
         { type: 'channel.subscribe', version: '1' },
         { type: 'channel.subscription.gift', version: '1' },
         { type: 'channel.subscription.message', version: '1' },
+        { type: 'channel.cheer', version: '1' },
+        // Keep Bits-in-Extensions as optional; if not used, it will simply not fire.
         { type: 'channel.bits.use', version: '1' },
         { type: 'channel.charity_campaign.donate', version: '1' },
-        { type: 'channel.hype_train.begin', version: '2' },
-        { type: 'channel.hype_train.progress', version: '2' },
-        { type: 'channel.hype_train.end', version: '2' }
+        { type: 'channel.hype_train.begin', version: '1' },
+        { type: 'channel.hype_train.progress', version: '1' },
+        { type: 'channel.hype_train.end', version: '1' }
       ];
 
       for (const { type, version } of wants) {
         try {
-          await fetch('https://api.twitch.tv/helix/eventsub/subscriptions', {
+          const r = await fetch('https://api.twitch.tv/helix/eventsub/subscriptions', {
             method: 'POST',
             headers: {
               'Client-Id': clientId,
@@ -39,6 +42,13 @@ export async function connectEventSubWS({ userAccessToken, clientId, broadcaster
               transport: { method: 'websocket', session_id: sessionId }
             })
           });
+          if (!r.ok && r.status !== 202) {
+            const t = await r.text().catch(() => '');
+            console.error('EventSub subscribe failed', { type, version, status: r.status, body: t });
+          } else {
+            // 202 Accepted is typical; Twitch will send a notification once enabled
+            if (process.env.DEBUG) console.log('EventSub subscribe requested', type, version);
+          }
         } catch (e) {
           console.error('Failed to create subscription', type, e?.message);
         }

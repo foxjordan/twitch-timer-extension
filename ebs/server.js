@@ -1205,8 +1205,9 @@ function secondsFromEvent(notification) {
   const e = notification?.payload?.event ?? {};
   const RULES = getRules();
   switch (subType) {
-    case "channel.bits.use": {
-      const bits = e.bits ?? e.total_bits_used ?? 0;
+    case "channel.bits.use": // Bits in Extensions
+    case "channel.cheer": {  // Standard Bits cheers
+      const bits = e.bits ?? e.total_bits_used ?? e.total_bits ?? 0;
       return Math.floor(bits / RULES.bits.per) * RULES.bits.add_seconds;
     }
     case "channel.subscribe": {

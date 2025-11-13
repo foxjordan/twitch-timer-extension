@@ -72,3 +72,10 @@ export function getTotals() {
     maxTotalSeconds: Math.max(0, Math.floor(state.maxTotalSeconds || 0))
   };
 }
+
+export function capReached() {
+  const max = Math.max(0, Math.floor(state.maxTotalSeconds || 0));
+  if (max <= 0) return false;
+  const used = Math.max(0, Math.floor((state.initialSeconds || 0) + (state.additionsTotal || 0)));
+  return used >= max;
+}

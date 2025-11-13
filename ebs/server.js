@@ -18,6 +18,8 @@ import {
   resumeTimer,
   setInitialSeconds,
   setMaxTotalSeconds,
+  capReached,
+  getTotals,
 } from "./state.js";
 import {
   DEFAULT_STYLE,
@@ -144,6 +146,8 @@ mountTimerRoutes(app, {
   getUserSettings,
   setInitialSeconds,
   setMaxTotalSeconds,
+  capReached,
+  getTotals,
 });
 
 // Get/Set overlay style linked to overlay key
@@ -282,6 +286,7 @@ app.get("/overlay", (req, res) => {
       .label { font-size: 14px; opacity: 0.75; margin-bottom: 4px; text-align: ${align}; }
       .hype { font-size: 12px; opacity: 0.9; margin-top: 4px; }
       .paused { font-size: 12px; opacity: 0.9; margin-top: 4px; }
+      .cap  { font-size: 12px; opacity: 0.9; margin-top: 4px; }
       @keyframes flash {
         0% { opacity: 1; }
         50% { opacity: 0.3; }
@@ -305,6 +310,7 @@ app.get("/overlay", (req, res) => {
   }">--:--</div>
         <div id="hype" class="hype" style="display:none">🔥 Hype Train active</div>
         <div id="paused" class="paused" style="display:none">⏸ Paused</div>
+        <div id="cap" class="cap" style="display:none">⏱ Stream has reached maximum length</div>
       </div>
     </div>
     <script>
@@ -315,6 +321,7 @@ app.get("/overlay", (req, res) => {
         let paused = false;
         let styleThresholds = { warnUnderSeconds: 300, warnColor: '#FFA500', dangerUnderSeconds: 60, dangerColor: '#FF4D4D', flashUnderSeconds: 0 };
         let timeFormat = 'mm:ss';
+        let cap = false;
 
         function render() {
           const el = document.getElementById('clock');
@@ -336,6 +343,7 @@ app.get("/overlay", (req, res) => {
           el.textContent = txt;
           document.getElementById('hype').style.display = hype ? 'block' : 'none';
           document.getElementById('paused').style.display = paused ? 'block' : 'none';
+          document.getElementById('cap').style.display = cap ? 'block' : 'none';
 
           // Apply threshold color/flash
           var color = el.style.color;
@@ -414,6 +422,7 @@ app.get("/overlay", (req, res) => {
           remaining = Number(s.remaining || 0);
           hype = Boolean(s.hype);
           paused = Boolean(s.paused);
+          cap = Boolean(s.capReached);
           render();
           startLocalTick();
         }).catch(function(){});
@@ -439,6 +448,7 @@ app.get("/overlay", (req, res) => {
                 if (typeof data.remaining === 'number') { remaining = data.remaining; }
                 if (typeof data.hype === 'boolean') { hype = data.hype; }
                 if (typeof data.paused === 'boolean') { paused = data.paused; }
+                if (typeof data.capReached === 'boolean') { cap = data.capReached; }
                 render();
               } catch (e) {}
             });
@@ -693,6 +703,7 @@ app.get("/overlay/config", requireAdmin, (req, res) => {
           <button class="secondary" data-add="1800">+30 min</button>
         </div>
         <div class="hint" style="margin-top:8px">Current remaining: <span id="remain">--:--</span></div>
+        <div class="hint" id="capStatus" style="margin-top:4px; opacity:0.8"></div>
         <hr style="border:none;border-top:1px solid #303038;margin:16px 0;" />
         <div style="margin:4px 0 12px; opacity:0.85; font-weight:600;">Rules (Basic)</div>
         <div class="control"><label>Min. Bits to Trigger</label><input id="r_bits_per" type="number" min="1" step="1" value="100"></div>
@@ -846,6 +857,24 @@ ${isDarkFox ? `        <hr style="border:none;border-top:1px solid #303038;margi
         document.getElementById('preview').src = url;
       }
 
+      async function updateCapStatus(){
+        const el = document.getElementById('capStatus');
+        if (!el) return;
+        try {
+          const r = await fetch('/api/timer/totals', { cache: 'no-store' });
+          const t = await r.json();
+          const max = Number(t.maxTotalSeconds||0);
+          const init = Number(t.initialSeconds||0);
+          const add = Number(t.additionsTotal||0);
+          const used = Math.max(0, init + add);
+          if (max > 0) {
+            el.textContent = 'Max: ' + fmt(max) + ' • Initial: ' + fmt(init) + ' • Added: ' + fmt(add) + ' • Total: ' + fmt(used);
+          } else {
+            el.textContent = 'No max set • Initial: ' + fmt(init) + ' • Added: ' + fmt(add) + ' • Total: ' + fmt(used);
+          }
+        } catch(e) {}
+      }
+
       function bind() {
         for (const id in inputs) {
           const el = inputs[id];
@@ -923,10 +952,10 @@ ${isDarkFox ? `        <hr style="border:none;border-top:1px solid #303038;margi
         });
 
         // Timer controls
-        document.getElementById('startTimer').addEventListener('click', async function(e){ e.preventDefault(); const btn=e.currentTarget; flashButton(btn); setBusy(btn,true); await startTimer(); setBusy(btn,false); });
-        document.getElementById('saveDefault').addEventListener('click', async function(e){ e.preventDefault(); const btn=e.currentTarget; flashButton(btn); setBusy(btn,true); await saveDefaultInitial(); setBusy(btn,false); });
+        document.getElementById('startTimer').addEventListener('click', async function(e){ e.preventDefault(); const btn=e.currentTarget; flashButton(btn); setBusy(btn,true); await startTimer(); await updateCapStatus(); setBusy(btn,false); });
+        document.getElementById('saveDefault').addEventListener('click', async function(e){ e.preventDefault(); const btn=e.currentTarget; flashButton(btn); setBusy(btn,true); await saveDefaultInitial(); await updateCapStatus(); setBusy(btn,false); });
         Array.from(document.querySelectorAll('[data-add]')).forEach(function(btn){
-          btn.addEventListener('click', async function(e){ e.preventDefault(); flashButton(btn); var v = parseInt(btn.getAttribute('data-add'),10)||0; if (v>0) { setBusy(btn,true); await addTime(v); setBusy(btn,false);} });
+          btn.addEventListener('click', async function(e){ e.preventDefault(); flashButton(btn); var v = parseInt(btn.getAttribute('data-add'),10)||0; if (v>0) { setBusy(btn,true); await addTime(v); await updateCapStatus(); setBusy(btn,false);} });
         });
         document.getElementById('pause').addEventListener('click', async function(e){ e.preventDefault(); const btn=e.currentTarget; flashButton(btn); setBusy(btn,true); try { await fetch('/api/timer/pause', { method: 'POST' }); } catch(e) {} setBusy(btn,false); });
         document.getElementById('resume').addEventListener('click', async function(e){ e.preventDefault(); const btn=e.currentTarget; flashButton(btn); setBusy(btn,true); try { await fetch('/api/timer/resume', { method: 'POST' }); } catch(e) {} setBusy(btn,false); });
@@ -950,6 +979,7 @@ ${isDarkFox ? `        <hr style="border:none;border-top:1px solid #303038;margi
                 }
               } catch(e) {}
               await addTime(secs);
+              await updateCapStatus();
               setBusy(btn, false);
             });
           });
@@ -962,7 +992,7 @@ ${isDarkFox ? `        <hr style="border:none;border-top:1px solid #303038;margi
             let secs = Math.floor(bits / (Number(window.DEV_RULES.bits?.per)||100)) * (Number(window.DEV_RULES.bits?.add_seconds)||0);
             const hype = await getHypeActive();
             if (hype) { const mult = Number(window.DEV_RULES.hypeTrain?.multiplier)||1; secs = Math.floor(secs * mult); }
-            flashButton(bitsBtn); setBusy(bitsBtn,true); await addTime(secs); setBusy(bitsBtn,false);
+            flashButton(bitsBtn); setBusy(bitsBtn,true); await addTime(secs); await updateCapStatus(); setBusy(bitsBtn,false);
           });
           // Custom subs
           const subsBtn = document.getElementById('devApplySubs');
@@ -975,7 +1005,7 @@ ${isDarkFox ? `        <hr style="border:none;border-top:1px solid #303038;margi
             let secs = Math.floor(count * per);
             const hype = await getHypeActive();
             if (hype) { const mult = Number(window.DEV_RULES.hypeTrain?.multiplier)||1; secs = Math.floor(secs * mult); }
-            flashButton(subsBtn); setBusy(subsBtn,true); await addTime(secs); setBusy(subsBtn,false);
+            flashButton(subsBtn); setBusy(subsBtn,true); await addTime(secs); await updateCapStatus(); setBusy(subsBtn,false);
           });
           // Custom gift subs
           const giftsBtn = document.getElementById('devApplyGifts');
@@ -986,13 +1016,13 @@ ${isDarkFox ? `        <hr style="border:none;border-top:1px solid #303038;margi
             let secs = Math.floor(count * (Number(window.DEV_RULES.gift_sub?.per_sub_seconds)||0));
             const hype = await getHypeActive();
             if (hype) { const mult = Number(window.DEV_RULES.hypeTrain?.multiplier)||1; secs = Math.floor(secs * mult); }
-            flashButton(giftsBtn); setBusy(giftsBtn,true); await addTime(secs); setBusy(giftsBtn,false);
+            flashButton(giftsBtn); setBusy(giftsBtn,true); await addTime(secs); await updateCapStatus(); setBusy(giftsBtn,false);
           });
         }
         const hypeOnBtn = document.getElementById('testHypeOn');
         const hypeOffBtn = document.getElementById('testHypeOff');
-        if (hypeOnBtn) hypeOnBtn.addEventListener('click', async function(e){ e.preventDefault(); flashButton(hypeOnBtn); setBusy(hypeOnBtn,true); await setHypeActive(true); setBusy(hypeOnBtn,false); });
-        if (hypeOffBtn) hypeOffBtn.addEventListener('click', async function(e){ e.preventDefault(); flashButton(hypeOffBtn); setBusy(hypeOffBtn,true); await setHypeActive(false); setBusy(hypeOffBtn,false); });
+        if (hypeOnBtn) hypeOnBtn.addEventListener('click', async function(e){ e.preventDefault(); flashButton(hypeOnBtn); setBusy(hypeOnBtn,true); await setHypeActive(true); await updateCapStatus(); setBusy(hypeOnBtn,false); });
+        if (hypeOffBtn) hypeOffBtn.addEventListener('click', async function(e){ e.preventDefault(); flashButton(hypeOffBtn); setBusy(hypeOffBtn,true); await setHypeActive(false); await updateCapStatus(); setBusy(hypeOffBtn,false); });
 
         // Load current user settings into inputs in case server changed
         fetch('/api/user/settings').then(function(r){return r.json();}).then(function(j){
@@ -1026,6 +1056,7 @@ ${isDarkFox ? `        <hr style="border:none;border-top:1px solid #303038;margi
         // Show current remaining
         function updateRemain(){ fetch('/api/timer/state').then(function(r){return r.json();}).then(function(j){ document.getElementById('remain').textContent = fmt(j.remaining||0); }).catch(function(){}); }
         updateRemain(); setInterval(updateRemain, 1000);
+        updateCapStatus(); setInterval(updateCapStatus, 3000);
 
         // Load basic rules and populate inputs
         fetch('/api/rules').then(r=>r.json()).then(function(rr){
@@ -1169,6 +1200,7 @@ setInterval(async () => {
     remaining,
     hype: state.hypeActive,
     paused: state.paused,
+    capReached: (state.maxTotalSeconds|0) > 0 ? ((Math.max(0, (state.initialSeconds|0) + (state.additionsTotal|0)) >= (state.maxTotalSeconds|0)) ? true : false) : false,
   });
   for (const client of Array.from(sseClients)) {
     try {

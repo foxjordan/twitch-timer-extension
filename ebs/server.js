@@ -540,26 +540,21 @@ app.get("/overlay/config", requireAdmin, (req, res) => {
       getOrCreateUserKey(req.session?.twitchUser?.id)
   );
   const settings = getUserSettings(req.session?.twitchUser?.id);
-  const isDarkFox =
-    String(req.session?.twitchUser?.login || "").toLowerCase() === "darkfoxllc";
   const safeNum = (val, fallback = 0) => {
     const num = Number(val);
     return Number.isFinite(num) ? num : fallback;
   };
-  const rulesSnapshot = isDarkFox ? getRules() : null;
+  const rulesSnapshot = getRules();
   const devCharityUsd = 5;
-  const devTest = isDarkFox
-    ? {
-        bitsSeconds: safeNum(rulesSnapshot?.bits?.add_seconds, 60),
-        bitsPer: safeNum(rulesSnapshot?.bits?.per, 100),
-        subSeconds: safeNum(rulesSnapshot?.sub?.["1000"], 300),
-        resubSeconds: safeNum(rulesSnapshot?.resub?.base_seconds, 300),
-        giftSeconds: safeNum(rulesSnapshot?.gift_sub?.per_sub_seconds, 300),
-        charityUsd: devCharityUsd,
-        charitySeconds:
-          safeNum(rulesSnapshot?.charity?.per_usd, 60) * devCharityUsd,
-      }
-    : null;
+  const devTest = {
+    bitsSeconds: safeNum(rulesSnapshot?.bits?.add_seconds, 60),
+    bitsPer: safeNum(rulesSnapshot?.bits?.per, 100),
+    subSeconds: safeNum(rulesSnapshot?.sub?.["1000"], 300),
+    resubSeconds: safeNum(rulesSnapshot?.resub?.base_seconds, 300),
+    giftSeconds: safeNum(rulesSnapshot?.gift_sub?.per_sub_seconds, 300),
+    charityUsd: devCharityUsd,
+    charitySeconds: safeNum(rulesSnapshot?.charity?.per_usd, 60) * devCharityUsd,
+  };
   const defSecs = Number(settings.defaultInitialSeconds || 0);
   const defH = Math.floor(defSecs / 3600);
   const defM = Math.floor((defSecs % 3600) / 60);
@@ -751,11 +746,8 @@ app.get("/overlay/config", requireAdmin, (req, res) => {
         <div class="control"><label>Charity per $1 (sec)</label><input id="r_charity_per_usd" type="number" min="0" step="1" value="60"></div>
         <div class="control"><label>Hype Train Modifier</label><input id="r_hype" type="number" min="0" step="0.1" value="2"></div>
         <div class="row2"><button id="saveRules">Save Rules</button></div>
-${
-  isDarkFox
-    ? `        <hr style="border:none;border-top:1px solid #303038;margin:16px 0;" />
-        <div style="margin:4px 0 4px; opacity:0.85; font-weight:600;">Developer Testing</div>
-        <div class="hint" style="margin:-4px 0 8px;font-size:12px;opacity:0.75;">Only visible while logged in as DarkFoxLLC</div>
+        <hr style="border:none;border-top:1px solid #303038;margin:16px 0;" />
+        <div style="margin:4px 0 4px; opacity:0.85; font-weight:600;">Testing Tools</div>
         <div class="row2" id="devTests">
           <button class="secondary" data-test-seconds="${devTest.bitsSeconds}" title="Simulate ${devTest.bitsPer} bits">
             Quick: ${devTest.bitsPer} bits (+${devTest.bitsSeconds}s)
@@ -788,9 +780,6 @@ ${
           <button class="secondary" id="testHypeOn">Force Hype On</button>
           <button class="secondary" id="testHypeOff">Force Hype Off</button>
         </div>
-`
-    : ""
-}
       </div>
       <div class="panel preview">
         <div style="margin-bottom:8px; opacity:0.85">Live Preview</div>

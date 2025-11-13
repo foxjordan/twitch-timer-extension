@@ -17,7 +17,9 @@ export function mountAuthRoutes(app, opts = {}) {
       client_id: clientId,
       redirect_uri: buildRedirectURI(req),
       response_type: 'code',
-      scope: '',
+      // Scopes required to subscribe to EventSub WS for the logged-in broadcaster
+      // and handle timer rules: subs/bits/charity/hype train
+      scope: 'channel:read:subscriptions bits:read channel:read:charity channel:read:hype_train',
       force_verify: 'true',
       state
     });
@@ -58,9 +60,8 @@ export function mountAuthRoutes(app, opts = {}) {
       const user = userJson?.data?.[0];
       if (!user) return res.status(400).send('Failed to fetch Twitch user');
 
-      const isAdmin = String(user.id) === String(process.env.BROADCASTER_USER_ID);
-      if (!isAdmin) return res.status(403).send('Not authorized for this configurator');
-
+      // Treat any signed-in Twitch user as the admin of their own session.
+      // Their channel ID is used for broadcasts + EventSub wiring.
       req.session.isAdmin = true;
       req.session.twitchUser = { id: user.id, login: user.login, display_name: user.display_name };
       // ensure a per-user overlay key exists and store in session for convenience

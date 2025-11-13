@@ -1,5 +1,6 @@
 import WebSocket from 'ws';
 import fetch from 'node-fetch';
+import { recordEvent } from './nr.js';
 
 const WS_URL = 'wss://eventsub.wss.twitch.tv/ws?keepalive_timeout_seconds=30';
 
@@ -49,13 +50,17 @@ export async function connectEventSubWS({ userAccessToken, clientId, broadcaster
           });
           if (!r.ok && r.status !== 202) {
             const t = await r.text().catch(() => '');
-            console.error('EventSub subscribe failed', { type, version, status: r.status, body: t });
+            const info = { type, version, status: r.status, body: t };
+            console.error('EventSub subscribe failed', info);
+            try { recordEvent('EventSubSubscribeFailed', info); } catch {}
           } else {
             // 202 Accepted is typical; Twitch will send a notification once enabled
             if (process.env.DEBUG) console.log('EventSub subscribe requested', type, version);
+            try { recordEvent('EventSubSubscribeRequested', { type, version }); } catch {}
           }
         } catch (e) {
           console.error('Failed to create subscription', type, e?.message);
+          try { recordEvent('EventSubSubscribeError', { type, version, error: e?.message || String(e) }); } catch {}
         }
       }
     }

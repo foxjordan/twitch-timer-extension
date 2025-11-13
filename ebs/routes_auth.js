@@ -1,6 +1,7 @@
 import crypto from 'crypto';
 import fetch from 'node-fetch';
 import { getOrCreateUserKey } from './keys.js';
+import { recordError } from './nr.js';
 
 function buildRedirectURI(req) {
   const base = process.env.SERVER_BASE_URL || `${req.protocol}://${req.get('host')}`;
@@ -73,6 +74,7 @@ export function mountAuthRoutes(app, opts = {}) {
       res.redirect(`${base}${String(next).startsWith('/') ? next : '/overlay/config'}`);
     } catch (e) {
       console.error('OAuth callback error', e);
+      try { recordError(e, { scope: 'oauth_callback' }); } catch {}
       res.status(500).send('OAuth error');
     }
   });

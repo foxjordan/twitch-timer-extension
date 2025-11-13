@@ -135,7 +135,8 @@ app.get("/healthz", (_req, res) => res.json({ ok: true }));
 // ---- Helpers ----
 
 // ---- Routes mounting ----
-const getBroadcasterId = () => String(CURRENT_BROADCASTER_ID || BROADCASTER_ID || '');
+const getBroadcasterId = () =>
+  String(CURRENT_BROADCASTER_ID || BROADCASTER_ID || "");
 
 mountTimerRoutes(app, {
   BROADCASTER_ID,
@@ -478,8 +479,10 @@ mountAuthRoutes(app, {
   onAdminLogin: ({ user, accessToken }) => {
     try {
       CURRENT_BROADCASTER_ID = String(user.id);
-      if (eventSubWS && typeof eventSubWS.close === 'function') {
-        try { eventSubWS.close(); } catch {}
+      if (eventSubWS && typeof eventSubWS.close === "function") {
+        try {
+          eventSubWS.close();
+        } catch {}
       }
       if (accessToken && process.env.TWITCH_CLIENT_ID) {
         connectEventSubWS({
@@ -487,12 +490,16 @@ mountAuthRoutes(app, {
           clientId: process.env.TWITCH_CLIENT_ID,
           broadcasterId: CURRENT_BROADCASTER_ID,
           onEvent: handleEventSub,
-        }).then(ws => { eventSubWS = ws; }).catch((err) => console.error('EventSub WS error', err));
+        })
+          .then((ws) => {
+            eventSubWS = ws;
+          })
+          .catch((err) => console.error("EventSub WS error", err));
       }
     } catch (e) {
-      console.error('onAdminLogin wiring failed', e);
+      console.error("onAdminLogin wiring failed", e);
     }
-  }
+  },
 });
 // Mount overlay API routes (style, keys, user settings)
 mountOverlayApiRoutes(app, {
@@ -534,8 +541,7 @@ app.get("/overlay/config", requireAdmin, (req, res) => {
   );
   const settings = getUserSettings(req.session?.twitchUser?.id);
   const isDarkFox =
-    String(req.session?.twitchUser?.login || "").toLowerCase() ===
-    "darkfoxllc";
+    String(req.session?.twitchUser?.login || "").toLowerCase() === "darkfoxllc";
   const safeNum = (val, fallback = 0) => {
     const num = Number(val);
     return Number.isFinite(num) ? num : fallback;
@@ -548,10 +554,7 @@ app.get("/overlay/config", requireAdmin, (req, res) => {
         bitsPer: safeNum(rulesSnapshot?.bits?.per, 100),
         subSeconds: safeNum(rulesSnapshot?.sub?.["1000"], 300),
         resubSeconds: safeNum(rulesSnapshot?.resub?.base_seconds, 300),
-        giftSeconds: safeNum(
-          rulesSnapshot?.gift_sub?.per_sub_seconds,
-          300
-        ),
+        giftSeconds: safeNum(rulesSnapshot?.gift_sub?.per_sub_seconds, 300),
         charityUsd: devCharityUsd,
         charitySeconds:
           safeNum(rulesSnapshot?.charity?.per_usd, 60) * devCharityUsd,
@@ -685,8 +688,8 @@ app.get("/overlay/config", requireAdmin, (req, res) => {
         </div>
         <div class="control"><label>Time format</label>
           <select id="timeFormat">
-            <option value="mm:ss" selected>mm:ss</option>
-            <option value="hh:mm:ss">hh:mm:ss</option>
+            <option value="mm:ss" >mm:ss</option>
+            <option value="hh:mm:ss" selected>hh:mm:ss</option>
             <option value="auto">auto (hh:mm:ss when hours > 0)</option>
           </select>
         </div>
@@ -732,13 +735,20 @@ app.get("/overlay/config", requireAdmin, (req, res) => {
         <div class="hint" style="margin-top:8px">Current remaining: <span id="remain">--:--</span></div>
         <div class="hint" id="capStatus" style="margin-top:4px; opacity:0.8"></div>
         <hr style="border:none;border-top:1px solid #303038;margin:16px 0;" />
-        <div style="margin:4px 0 12px; opacity:0.85; font-weight:600;">Rules (Basic)</div>
+        <div style="margin:4px 0 12px; opacity:0.85; font-weight:600;">Rules</div>
         <div class="control"><label>Min. Bits to Trigger</label><input id="r_bits_per" type="number" min="1" step="1" value="100"></div>
         <div class="control"><label>Bits add (sec)</label><input id="r_bits_add" type="number" min="0" step="1" value="60"></div>
         <div class="control"><label>T1 Subs add (sec)</label><input id="r_sub_1000" type="number" min="0" step="1" value="300"></div>
+        <div class="control"><label>T2 Subs add (sec)</label><input id="r_sub_2000" type="number" min="0" step="1" value="600"></div>
+        <div class="control"><label>T3 Subs add (sec)</label><input id="r_sub_3000" type="number" min="0" step="1" value="900"></div>
+        <div class="control"><label>Resub base (sec)</label><input id="r_resub_base" type="number" min="0" step="1" value="300"></div>
+        <div class="control"><label>Gift sub per-sub (sec)</label><input id="r_gift_per" type="number" min="0" step="1" value="300"></div>
+        <div class="control"><label>Charity per $1 (sec)</label><input id="r_charity_per_usd" type="number" min="0" step="1" value="60"></div>
         <div class="control"><label>Hype Train Modifier</label><input id="r_hype" type="number" min="0" step="0.1" value="2"></div>
         <div class="row2"><button id="saveRules">Save Rules</button></div>
-${isDarkFox ? `        <hr style="border:none;border-top:1px solid #303038;margin:16px 0;" />
+${
+  isDarkFox
+    ? `        <hr style="border:none;border-top:1px solid #303038;margin:16px 0;" />
         <div style="margin:4px 0 4px; opacity:0.85; font-weight:600;">Developer Testing</div>
         <div class="hint" style="margin:-4px 0 8px;font-size:12px;opacity:0.75;">Only visible while logged in as DarkFoxLLC</div>
         <div class="row2" id="devTests">
@@ -773,7 +783,9 @@ ${isDarkFox ? `        <hr style="border:none;border-top:1px solid #303038;margi
           <button class="secondary" id="testHypeOn">Force Hype On</button>
           <button class="secondary" id="testHypeOff">Force Hype Off</button>
         </div>
-` : ""}
+`
+    : ""
+}
       </div>
       <div class="panel preview">
         <div style="margin-bottom:8px; opacity:0.85">Live Preview</div>
@@ -1008,7 +1020,9 @@ ${isDarkFox ? `        <hr style="border:none;border-top:1px solid #303038;margi
         const devPanel = document.getElementById('devTests');
         if (devPanel) {
           // Expose rules for client-side calculation
-          window.DEV_RULES = ${rulesSnapshot ? JSON.stringify(rulesSnapshot) : 'null'};
+          window.DEV_RULES = ${
+            rulesSnapshot ? JSON.stringify(rulesSnapshot) : "null"
+          };
           Array.from(devPanel.querySelectorAll('[data-test-seconds]')).forEach(function(btn){
             btn.addEventListener('click', async function(e){
               e.preventDefault();
@@ -1104,7 +1118,7 @@ ${isDarkFox ? `        <hr style="border:none;border-top:1px solid #303038;margi
         updateRemain(); setInterval(updateRemain, 1000);
         updateCapStatus(); setInterval(updateCapStatus, 3000);
 
-        // Load basic rules and populate inputs
+        // Load rules and populate inputs
         fetch('/api/rules').then(r=>r.json()).then(function(rr){
           try {
             if (rr && rr.bits) {
@@ -1113,6 +1127,17 @@ ${isDarkFox ? `        <hr style="border:none;border-top:1px solid #303038;margi
             }
             if (rr && rr.sub) {
               document.getElementById('r_sub_1000').value = rr.sub['1000'] ?? 300;
+              if (document.getElementById('r_sub_2000')) document.getElementById('r_sub_2000').value = rr.sub['2000'] ?? 600;
+              if (document.getElementById('r_sub_3000')) document.getElementById('r_sub_3000').value = rr.sub['3000'] ?? 900;
+            }
+            if (rr && rr.resub) {
+              if (document.getElementById('r_resub_base')) document.getElementById('r_resub_base').value = rr.resub.base_seconds ?? 300;
+            }
+            if (rr && rr.gift_sub) {
+              if (document.getElementById('r_gift_per')) document.getElementById('r_gift_per').value = rr.gift_sub.per_sub_seconds ?? 300;
+            }
+            if (rr && rr.charity) {
+              if (document.getElementById('r_charity_per_usd')) document.getElementById('r_charity_per_usd').value = rr.charity.per_usd ?? 60;
             }
             if (rr && rr.hypeTrain) {
               document.getElementById('r_hype').value = rr.hypeTrain.multiplier ?? 2;
@@ -1120,12 +1145,19 @@ ${isDarkFox ? `        <hr style="border:none;border-top:1px solid #303038;margi
           } catch (e) {}
         }).catch(function(){});
 
-        // Save basic rules
+        // Save rules
         document.getElementById('saveRules').addEventListener('click', async function(e){
           e.preventDefault();
           const body = {
             bits: { per: Number(document.getElementById('r_bits_per').value||100), add_seconds: Number(document.getElementById('r_bits_add').value||60) },
-            sub: { '1000': Number(document.getElementById('r_sub_1000').value||300) },
+            sub: {
+              '1000': Number(document.getElementById('r_sub_1000').value||300),
+              '2000': Number((document.getElementById('r_sub_2000')||{}).value||600),
+              '3000': Number((document.getElementById('r_sub_3000')||{}).value||900)
+            },
+            resub: { base_seconds: Number((document.getElementById('r_resub_base')||{}).value||300) },
+            gift_sub: { per_sub_seconds: Number((document.getElementById('r_gift_per')||{}).value||300) },
+            charity: { per_usd: Number((document.getElementById('r_charity_per_usd')||{}).value||60) },
             hypeTrain: { multiplier: Number(document.getElementById('r_hype').value||2) }
           };
           try { await fetch('/api/rules', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }); } catch(e) {}
@@ -1229,7 +1261,11 @@ if (process.env.BROADCASTER_USER_TOKEN) {
     clientId: process.env.TWITCH_CLIENT_ID,
     broadcasterId: getBroadcasterId(),
     onEvent: handleEventSub,
-  }).then(ws => { eventSubWS = ws; }).catch((err) => console.error("EventSub WS error", err));
+  })
+    .then((ws) => {
+      eventSubWS = ws;
+    })
+    .catch((err) => console.error("EventSub WS error", err));
 }
 
 // Server tick → broadcast remaining once per second
@@ -1246,7 +1282,16 @@ setInterval(async () => {
     remaining,
     hype: state.hypeActive,
     paused: state.paused,
-    capReached: (state.maxTotalSeconds|0) > 0 ? ((Math.max(0, (state.initialSeconds|0) + (state.additionsTotal|0)) >= (state.maxTotalSeconds|0)) ? true : false) : false,
+    capReached:
+      (state.maxTotalSeconds | 0) > 0
+        ? Math.max(
+            0,
+            (state.initialSeconds | 0) + (state.additionsTotal | 0)
+          ) >=
+          (state.maxTotalSeconds | 0)
+          ? true
+          : false
+        : false,
   });
   for (const client of Array.from(sseClients)) {
     try {

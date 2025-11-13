@@ -16,4 +16,4 @@ ENV DATA_DIR=/data
 RUN mkdir -p /data
 
 EXPOSE 8080
-CMD ["node", "server.js"]
+CMD ["node", "-r", "newrelic", "server.js"]

@@ -63,6 +63,21 @@ export function setInitialSeconds(secs) {
 
 export function setMaxTotalSeconds(secs) {
   state.maxTotalSeconds = Math.max(0, Math.floor(Number(secs) || 0));
+  // If lowering the cap below already scheduled total, clamp current remaining
+  const max = state.maxTotalSeconds|0;
+  if (max > 0) {
+    const used = Math.max(0, Math.floor((state.initialSeconds||0) + (state.additionsTotal||0)));
+    const overflow = Math.max(0, used - max);
+    if (overflow > 0) {
+      const rem = getRemainingSeconds();
+      const newRem = Math.max(0, rem - overflow);
+      if (state.paused) {
+        state.pauseRemaining = newRem;
+      } else {
+        state.timerExpiryEpochMs = Date.now() + newRem * 1000;
+      }
+    }
+  }
 }
 
 export function getTotals() {

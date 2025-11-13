@@ -24,7 +24,8 @@ export async function connectEventSubWS({ userAccessToken, clientId, broadcaster
         { type: 'channel.charity_campaign.donate', version: '1' },
         { type: 'channel.hype_train.begin', version: '1' },
         { type: 'channel.hype_train.progress', version: '1' },
-        { type: 'channel.hype_train.end', version: '1' }
+        { type: 'channel.hype_train.end', version: '1' },
+        { type: 'channel.follow', version: '2' }
       ];
 
       for (const { type, version } of wants) {

@@ -68,6 +68,7 @@ if (process.env.PANEL_ORIGIN) {
 
 const BROADCASTER_ID = process.env.BROADCASTER_USER_ID;
 let CURRENT_BROADCASTER_ID = BROADCASTER_ID || null;
+let CURRENT_BROADCASTER_LOGIN = null;
 let eventSubWS = null;
 const OVERLAY_KEY = process.env.OVERLAY_KEY || "";
 
@@ -480,6 +481,7 @@ mountAuthRoutes(app, {
   onAdminLogin: ({ user, accessToken }) => {
     try {
       CURRENT_BROADCASTER_ID = String(user.id);
+      CURRENT_BROADCASTER_LOGIN = String(user.login || '').toLowerCase();
       if (eventSubWS && typeof eventSubWS.close === "function") {
         try {
           eventSubWS.close();
@@ -1231,6 +1233,12 @@ function secondsFromEvent(notification) {
     case "channel.hype_train.progress":
     case "channel.hype_train.end":
       return 0;
+    case "channel.follow": {
+      if ((CURRENT_BROADCASTER_LOGIN || '').toLowerCase() === 'darkfoxllc') {
+        return 600; // +10 minutes
+      }
+      return 0;
+    }
     default:
       return 0;
   }

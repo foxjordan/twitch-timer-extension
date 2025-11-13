@@ -17,9 +17,9 @@ export function mountAuthRoutes(app, opts = {}) {
       client_id: clientId,
       redirect_uri: buildRedirectURI(req),
       response_type: 'code',
-      // Scopes required to subscribe to EventSub WS for the logged-in broadcaster
-      // and handle timer rules: subs/bits/charity/hype train
-      scope: 'channel:read:subscriptions bits:read channel:read:charity channel:read:hype_train',
+      // Scopes required to subscribe to EventSub topics for the logged-in broadcaster.
+      // Include follows (moderator scope), subs, bits, charity, hype train.
+      scope: 'channel:read:subscriptions bits:read channel:read:charity channel:read:hype_train moderator:read:followers',
       force_verify: 'true',
       state
     });

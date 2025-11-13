@@ -748,6 +748,12 @@ app.get("/overlay/config", requireAdmin, (req, res) => {
         <div class="control"><label>Resub base (sec)</label><input id="r_resub_base" type="number" min="0" step="1" value="300"></div>
         <div class="control"><label>Gift sub per-sub (sec)</label><input id="r_gift_per" type="number" min="0" step="1" value="300"></div>
         <div class="control"><label>Charity per $1 (sec)</label><input id="r_charity_per_usd" type="number" min="0" step="1" value="60"></div>
+        <div class="control"><label>Follows add (sec)</label>
+          <div style="display:flex; gap:8px; align-items:center;">
+            <input id="r_follow_add" type="number" min="0" step="1" value="600" style="max-width:140px" />
+            <label style="display:flex; gap:6px; align-items:center; opacity:.85;"><input id="r_follow_enabled" type="checkbox" /> Enabled</label>
+          </div>
+        </div>
         <div class="control"><label>Hype Train Modifier</label><input id="r_hype" type="number" min="0" step="0.1" value="2"></div>
         <div class="row2"><button id="saveRules">Save Rules</button></div>
         <hr style="border:none;border-top:1px solid #303038;margin:16px 0;" />
@@ -1160,6 +1166,12 @@ app.get("/overlay/config", requireAdmin, (req, res) => {
             if (rr && rr.charity) {
               if (document.getElementById('r_charity_per_usd')) document.getElementById('r_charity_per_usd').value = rr.charity.per_usd ?? 60;
             }
+            if (rr && rr.follow) {
+              const add = Number(rr.follow.add_seconds ?? 600);
+              const enabled = Boolean(rr.follow.enabled);
+              if (document.getElementById('r_follow_add')) document.getElementById('r_follow_add').value = add;
+              if (document.getElementById('r_follow_enabled')) document.getElementById('r_follow_enabled').checked = enabled;
+            }
             if (rr && rr.hypeTrain) {
               document.getElementById('r_hype').value = rr.hypeTrain.multiplier ?? 2;
             }
@@ -1179,6 +1191,7 @@ app.get("/overlay/config", requireAdmin, (req, res) => {
             resub: { base_seconds: Number((document.getElementById('r_resub_base')||{}).value||300) },
             gift_sub: { per_sub_seconds: Number((document.getElementById('r_gift_per')||{}).value||300) },
             charity: { per_usd: Number((document.getElementById('r_charity_per_usd')||{}).value||60) },
+            follow: { enabled: Boolean((document.getElementById('r_follow_enabled')||{}).checked), add_seconds: Number((document.getElementById('r_follow_add')||{}).value||600) },
             hypeTrain: { multiplier: Number(document.getElementById('r_hype').value||2) }
           };
           try { await fetch('/api/rules', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }); } catch(e) {}
@@ -1234,9 +1247,7 @@ function secondsFromEvent(notification) {
     case "channel.hype_train.end":
       return 0;
     case "channel.follow": {
-      if ((CURRENT_BROADCASTER_LOGIN || '').toLowerCase() === 'darkfoxllc') {
-        return 600; // +10 minutes
-      }
+      if (RULES.follow?.enabled) return Number(RULES.follow.add_seconds || 0) | 0;
       return 0;
     }
     default:

@@ -30,6 +30,14 @@ export async function connectEventSubWS({ userAccessToken, clientId, broadcaster
 
       for (const { type, version } of wants) {
         try {
+          const body = {
+            type, version,
+            condition: { broadcaster_user_id: broadcasterId },
+            transport: { method: 'websocket', session_id: sessionId }
+          };
+          if (type === 'channel.follow') {
+            body.condition = { broadcaster_user_id: broadcasterId, moderator_user_id: broadcasterId };
+          }
           const r = await fetch('https://api.twitch.tv/helix/eventsub/subscriptions', {
             method: 'POST',
             headers: {
@@ -37,11 +45,7 @@ export async function connectEventSubWS({ userAccessToken, clientId, broadcaster
               'Authorization': `Bearer ${userAccessToken}`,
               'Content-Type': 'application/json'
             },
-            body: JSON.stringify({
-              type, version,
-              condition: { broadcaster_user_id: broadcasterId },
-              transport: { method: 'websocket', session_id: sessionId }
-            })
+            body: JSON.stringify(body)
           });
           if (!r.ok && r.status !== 202) {
             const t = await r.text().catch(() => '');

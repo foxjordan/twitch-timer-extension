@@ -39,6 +39,12 @@ export function setRules(patch = {}) {
   if (patch.hypeTrain) {
     next.hypeTrain = { multiplier: numberOr(next.hypeTrain.multiplier, patch.hypeTrain.multiplier, 1) };
   }
+  if (patch.follow) {
+    next.follow = {
+      enabled: (typeof patch.follow.enabled === 'boolean') ? patch.follow.enabled : (next.follow?.enabled ?? false),
+      add_seconds: numberOr(next.follow?.add_seconds ?? 600, patch.follow.add_seconds)
+    };
+  }
   current = next;
   persistRules().catch(() => {});
   return current;
@@ -55,6 +61,7 @@ export async function loadRules() {
       gift_sub: { ...DEFAULT_RULES.gift_sub, ...(obj.gift_sub||{}) },
       charity: { ...DEFAULT_RULES.charity, ...(obj.charity||{}) },
       hypeTrain: { ...DEFAULT_RULES.hypeTrain, ...(obj.hypeTrain||{}) },
+      follow: { ...DEFAULT_RULES.follow, ...(obj.follow||{}) },
     };
   } catch {}
 }
@@ -71,4 +78,3 @@ function numberOr(base, candidate, min) {
   if (typeof min === 'number' && n < min) return base;
   return n;
 }
-

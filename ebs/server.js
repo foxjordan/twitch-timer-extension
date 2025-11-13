@@ -38,8 +38,6 @@ import { mountTimerRoutes } from "./routes_timer.js";
 import { mountAuthRoutes } from "./routes_auth.js";
 import { mountOverlayApiRoutes } from "./routes_overlay_api.js";
 import { getRules, setRules, loadRules } from "./rules_store.js";
-import { recordEvent, recordError } from "./nr.js";
-import "newrelic";
 
 const app = express();
 // honor X-Forwarded-* so req.protocol resolves to https behind Fly
@@ -1275,11 +1273,9 @@ async function handleEventSub(notification) {
     subType === "channel.hype_train.progress"
   ) {
     setHype(true);
-    try { recordEvent('HypeTrain', { phase: subType.split('.').pop(), broadcasterId: getBroadcasterId() }); } catch {}
   }
   if (subType === "channel.hype_train.end") {
     setHype(false);
-    try { recordEvent('HypeTrain', { phase: 'end', broadcasterId: getBroadcasterId() }); } catch {}
   }
 
   let seconds = secondsFromEvent(notification);
@@ -1291,22 +1287,6 @@ async function handleEventSub(notification) {
     const before = getRemainingSeconds();
     const remaining = addSeconds(seconds);
     const actual = Math.max(0, remaining - before);
-    // Record specific events for visibility
-    try {
-      if (subType === 'channel.follow') {
-        const e = notification?.payload?.event || {};
-        recordEvent('Follow', { user_id: e.user_id, user_login: e.user_login, secondsRequested: seconds, secondsApplied: actual });
-      } else if (subType === 'channel.subscribe' || subType === 'channel.subscription.message' || subType === 'channel.subscription.gift') {
-        const e = notification?.payload?.event || {};
-        recordEvent('Subscription', { subType, tier: e.tier, count: e.total || e.total_count || 1, secondsRequested: seconds, secondsApplied: actual });
-      } else if (subType === 'channel.cheer' || subType === 'channel.bits.use') {
-        const e = notification?.payload?.event || {};
-        const bits = e.bits ?? e.total_bits ?? e.total_bits_used ?? 0;
-        recordEvent('Cheer', { subType, bits, secondsRequested: seconds, secondsApplied: actual });
-      } else if (subType?.startsWith('channel.hype_train')) {
-        recordEvent('HypeTrainAdd', { subType, secondsRequested: seconds, secondsApplied: actual });
-      }
-    } catch {}
     await broadcastToChannel({
       broadcasterId: getBroadcasterId(),
       type: "timer_add",

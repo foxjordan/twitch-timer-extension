@@ -4,7 +4,7 @@
   "type": "module",
   "main": "server.js",
   "scripts": {
-    "dev": "node -r dotenv/config -r newrelic server.js"
+    "dev": "node server.js"
   },
   "dependencies": {
     "dotenv": "^16.4.1",
@@ -13,7 +13,6 @@
     "jsonwebtoken": "^9.0.2",
     "node-fetch": "^3.3.2",
     "ws": "^8.18.0",
-    "uuid": "^9.0.1",
-    "newrelic": "^11.0.0"
+    "uuid": "^9.0.1"
   }
 }

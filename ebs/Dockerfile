@@ -15,6 +15,12 @@ COPY . ./
 # Create data dir (volume may mount here in Fly)
 ENV DATA_DIR=/data
 RUN mkdir -p /data
+ENV NEW_RELIC_NO_CONFIG_FILE=true
+ENV NEW_RELIC_DISTRIBUTED_TRACING_ENABLED=true
+ENV NEW_RELIC_LOG=stdout
+
+
+
 
 EXPOSE 8080
 CMD ["node", "-r", "dotenv/config", "-r", "newrelic", "server.js"]

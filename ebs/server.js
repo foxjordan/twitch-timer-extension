@@ -489,6 +489,30 @@ app.get("/overlay/config", requireAdmin, (req, res) => {
       getOrCreateUserKey(req.session?.twitchUser?.id)
   );
   const settings = getUserSettings(req.session?.twitchUser?.id);
+  const isDarkFox =
+    String(req.session?.twitchUser?.login || "").toLowerCase() ===
+    "darkfoxllc";
+  const safeNum = (val, fallback = 0) => {
+    const num = Number(val);
+    return Number.isFinite(num) ? num : fallback;
+  };
+  const rulesSnapshot = isDarkFox ? getRules() : null;
+  const devCharityUsd = 5;
+  const devTest = isDarkFox
+    ? {
+        bitsSeconds: safeNum(rulesSnapshot?.bits?.add_seconds, 60),
+        bitsPer: safeNum(rulesSnapshot?.bits?.per, 100),
+        subSeconds: safeNum(rulesSnapshot?.sub?.["1000"], 300),
+        resubSeconds: safeNum(rulesSnapshot?.resub?.base_seconds, 300),
+        giftSeconds: safeNum(
+          rulesSnapshot?.gift_sub?.per_sub_seconds,
+          300
+        ),
+        charityUsd: devCharityUsd,
+        charitySeconds:
+          safeNum(rulesSnapshot?.charity?.per_usd, 60) * devCharityUsd,
+      }
+    : null;
   const defSecs = Number(settings.defaultInitialSeconds || 0);
   const defH = Math.floor(defSecs / 3600);
   const defM = Math.floor((defSecs % 3600) / 60);
@@ -654,11 +678,36 @@ app.get("/overlay/config", requireAdmin, (req, res) => {
         <div class="hint" style="margin-top:8px">Current remaining: <span id="remain">--:--</span></div>
         <hr style="border:none;border-top:1px solid #303038;margin:16px 0;" />
         <div style="margin:4px 0 12px; opacity:0.85; font-weight:600;">Rules (Basic)</div>
-        <div class="control"><label>Minimum Bits to Trigger</label><input id="r_bits_per" type="number" min="1" step="1" value="100"></div>
+        <div class="control"><label>Min. Bits to Trigger</label><input id="r_bits_per" type="number" min="1" step="1" value="100"></div>
         <div class="control"><label>Bits add (sec)</label><input id="r_bits_add" type="number" min="0" step="1" value="60"></div>
         <div class="control"><label>T1 Subs add (sec)</label><input id="r_sub_1000" type="number" min="0" step="1" value="300"></div>
-        <div class="control"><label>Hype x Modifier</label><input id="r_hype" type="number" min="0" step="0.1" value="2"></div>
+        <div class="control"><label>Hype Train Modifier</label><input id="r_hype" type="number" min="0" step="0.1" value="2"></div>
         <div class="row2"><button id="saveRules">Save Rules</button></div>
+${isDarkFox ? `        <hr style="border:none;border-top:1px solid #303038;margin:16px 0;" />
+        <div style="margin:4px 0 4px; opacity:0.85; font-weight:600;">Developer Testing</div>
+        <div class="hint" style="margin:-4px 0 8px;font-size:12px;opacity:0.75;">Only visible while logged in as DarkFoxLLC</div>
+        <div class="row2" id="devTests">
+          <button class="secondary" data-test-seconds="${devTest.bitsSeconds}" title="Simulate ${devTest.bitsPer} bits">
+            Sim ${devTest.bitsPer} bits (+${devTest.bitsSeconds}s)
+          </button>
+          <button class="secondary" data-test-seconds="${devTest.subSeconds}" title="Simulate Tier 1 sub">
+            Sim Tier 1 sub (+${devTest.subSeconds}s)
+          </button>
+          <button class="secondary" data-test-seconds="${devTest.resubSeconds}" title="Simulate resub">
+            Sim resub (+${devTest.resubSeconds}s)
+          </button>
+          <button class="secondary" data-test-seconds="${devTest.giftSeconds}" title="Simulate single gift sub">
+            Sim gift sub (+${devTest.giftSeconds}s)
+          </button>
+          <button class="secondary" data-test-seconds="${devTest.charitySeconds}" title="Simulate $${devTest.charityUsd} charity donation">
+            Sim charity $${devTest.charityUsd} (+${devTest.charitySeconds}s)
+          </button>
+        </div>
+        <div class="row2" id="devHypeControls">
+          <button class="secondary" id="testHypeOn">Force Hype On</button>
+          <button class="secondary" id="testHypeOff">Force Hype Off</button>
+        </div>
+` : ""}
       </div>
       <div class="panel preview">
         <div style="margin-bottom:8px; opacity:0.85">Live Preview</div>
@@ -727,6 +776,16 @@ app.get("/overlay/config", requireAdmin, (req, res) => {
 
       async function addTime(secs) {
         try { await fetch('/api/timer/add', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ seconds: secs }) }); } catch(e) {}
+      }
+
+      async function setHypeActive(active) {
+        try {
+          await fetch('/api/hype', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ active: !!active })
+          });
+        } catch (e) {}
       }
 
       async function saveDefaultInitial() {
@@ -832,6 +891,24 @@ app.get("/overlay/config", requireAdmin, (req, res) => {
         });
         document.getElementById('pause').addEventListener('click', async function(e){ e.preventDefault(); const btn=e.currentTarget; flashButton(btn); setBusy(btn,true); try { await fetch('/api/timer/pause', { method: 'POST' }); } catch(e) {} setBusy(btn,false); });
         document.getElementById('resume').addEventListener('click', async function(e){ e.preventDefault(); const btn=e.currentTarget; flashButton(btn); setBusy(btn,true); try { await fetch('/api/timer/resume', { method: 'POST' }); } catch(e) {} setBusy(btn,false); });
+        const devPanel = document.getElementById('devTests');
+        if (devPanel) {
+          Array.from(devPanel.querySelectorAll('[data-test-seconds]')).forEach(function(btn){
+            btn.addEventListener('click', async function(e){
+              e.preventDefault();
+              var secs = parseInt(btn.getAttribute('data-test-seconds'), 10) || 0;
+              if (secs <= 0) return;
+              flashButton(btn);
+              setBusy(btn, true);
+              await addTime(secs);
+              setBusy(btn, false);
+            });
+          });
+        }
+        const hypeOnBtn = document.getElementById('testHypeOn');
+        const hypeOffBtn = document.getElementById('testHypeOff');
+        if (hypeOnBtn) hypeOnBtn.addEventListener('click', async function(e){ e.preventDefault(); flashButton(hypeOnBtn); setBusy(hypeOnBtn,true); await setHypeActive(true); setBusy(hypeOnBtn,false); });
+        if (hypeOffBtn) hypeOffBtn.addEventListener('click', async function(e){ e.preventDefault(); flashButton(hypeOffBtn); setBusy(hypeOffBtn,true); await setHypeActive(false); setBusy(hypeOffBtn,false); });
 
         // Load current user settings into inputs in case server changed
         fetch('/api/user/settings').then(function(r){return r.json();}).then(function(j){

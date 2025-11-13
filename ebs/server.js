@@ -1,47 +1,68 @@
-import 'dotenv/config';
-import express from 'express';
-import session from 'express-session';
-import { v4 as uuidv4 } from 'uuid';
-import { RULES } from './rules.js';
-import { connectEventSubWS } from './eventsub-ws.js';
-import { broadcastToChannel } from './broadcast.js';
-import fetch from 'node-fetch';
-import crypto from 'crypto';
-import path from 'path';
-import { readFile, writeFile } from 'fs/promises';
-import { state, getRemainingSeconds, addSeconds, setHype, pauseTimer, resumeTimer } from './state.js';
-import { DEFAULT_STYLE, normKey, getSavedStyle, setSavedStyle, loadStyles } from './styles.js';
-import { loadOverlayKeys, getOrCreateUserKey, rotateUserKey, keyIsValid } from './keys.js';
-import { mountTimerRoutes } from './routes_timer.js';
-import { mountAuthRoutes } from './routes_auth.js';
-import { mountOverlayApiRoutes } from './routes_overlay_api.js';
-import { getRules, setRules, loadRules } from './rules_store.js';
+import "dotenv/config";
+import express from "express";
+import session from "express-session";
+import { v4 as uuidv4 } from "uuid";
+import { RULES } from "./rules.js";
+import { connectEventSubWS } from "./eventsub-ws.js";
+import { broadcastToChannel } from "./broadcast.js";
+import fetch from "node-fetch";
+import crypto from "crypto";
+import path from "path";
+import { readFile, writeFile } from "fs/promises";
+import {
+  state,
+  getRemainingSeconds,
+  addSeconds,
+  setHype,
+  pauseTimer,
+  resumeTimer,
+} from "./state.js";
+import {
+  DEFAULT_STYLE,
+  normKey,
+  getSavedStyle,
+  setSavedStyle,
+  loadStyles,
+} from "./styles.js";
+import {
+  loadOverlayKeys,
+  getOrCreateUserKey,
+  rotateUserKey,
+  keyIsValid,
+} from "./keys.js";
+import { mountTimerRoutes } from "./routes_timer.js";
+import { mountAuthRoutes } from "./routes_auth.js";
+import { mountOverlayApiRoutes } from "./routes_overlay_api.js";
+import { getRules, setRules, loadRules } from "./rules_store.js";
 
 const app = express();
 // honor X-Forwarded-* so req.protocol resolves to https behind Fly
-app.set('trust proxy', 1);
+app.set("trust proxy", 1);
 app.use(express.json());
-app.use(session({
-  name: 'overlay.sid',
-  secret: process.env.SESSION_SECRET || crypto.randomBytes(16).toString('hex'),
-  resave: false,
-  saveUninitialized: false,
-  cookie: { httpOnly: true, sameSite: 'lax', secure: 'auto' }
-}));
+app.use(
+  session({
+    name: "overlay.sid",
+    secret:
+      process.env.SESSION_SECRET || crypto.randomBytes(16).toString("hex"),
+    resave: false,
+    saveUninitialized: false,
+    cookie: { httpOnly: true, sameSite: "lax", secure: "auto" },
+  })
+);
 
 // CORS for local panel dev
 if (process.env.PANEL_ORIGIN) {
   app.use((req, res, next) => {
-    res.setHeader('Access-Control-Allow-Origin', process.env.PANEL_ORIGIN);
-    res.setHeader('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type,Authorization');
-    if (req.method === 'OPTIONS') return res.sendStatus(204);
+    res.setHeader("Access-Control-Allow-Origin", process.env.PANEL_ORIGIN);
+    res.setHeader("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
+    res.setHeader("Access-Control-Allow-Headers", "Content-Type,Authorization");
+    if (req.method === "OPTIONS") return res.sendStatus(204);
     next();
   });
 }
 
 const BROADCASTER_ID = process.env.BROADCASTER_USER_ID;
-const OVERLAY_KEY = process.env.OVERLAY_KEY || '';
+const OVERLAY_KEY = process.env.OVERLAY_KEY || "";
 
 // Server-Sent Events (SSE) clients for external overlays
 const sseClients = new Set();
@@ -53,21 +74,22 @@ loadRules().catch(() => {});
 
 // ===== Per-user settings (persisted) =====
 const DATA_DIR = process.env.DATA_DIR || process.cwd();
-const SETTINGS_PATH = path.resolve(DATA_DIR, 'overlay-user-settings.json');
+const SETTINGS_PATH = path.resolve(DATA_DIR, "overlay-user-settings.json");
 const userSettings = new Map(); // userId -> { defaultInitialSeconds?: number }
 
 async function loadUserSettings() {
   try {
-    const raw = await readFile(SETTINGS_PATH, 'utf-8');
+    const raw = await readFile(SETTINGS_PATH, "utf-8");
     const obj = JSON.parse(raw);
-    for (const [uid, val] of Object.entries(obj)) userSettings.set(String(uid), val || {});
+    for (const [uid, val] of Object.entries(obj))
+      userSettings.set(String(uid), val || {});
   } catch {}
 }
 async function persistUserSettings() {
   try {
     const obj = {};
     for (const [uid, val] of userSettings.entries()) obj[uid] = val;
-    await writeFile(SETTINGS_PATH, JSON.stringify(obj, null, 2), 'utf-8');
+    await writeFile(SETTINGS_PATH, JSON.stringify(obj, null, 2), "utf-8");
   } catch {}
 }
 function getUserSettings(uid) {
@@ -77,7 +99,7 @@ function setUserSettings(uid, patch) {
   const id = String(uid);
   const curr = userSettings.get(id) || {};
   const next = { ...curr };
-  if (patch && typeof patch.defaultInitialSeconds !== 'undefined') {
+  if (patch && typeof patch.defaultInitialSeconds !== "undefined") {
     const v = Number(patch.defaultInitialSeconds);
     if (!Number.isNaN(v) && v >= 0) next.defaultInitialSeconds = v;
   }
@@ -98,27 +120,37 @@ setInterval(() => {
 }, 10 * 60 * 1000);
 
 // Basic health endpoint
-app.get('/healthz', (_req, res) => res.json({ ok: true }));
+app.get("/healthz", (_req, res) => res.json({ ok: true }));
 
 // ---- Helpers ----
 
 // ---- Routes mounting ----
-mountTimerRoutes(app, { BROADCASTER_ID, sseClients, requireOverlayAuth, state, getRemainingSeconds, addSeconds, setHype, pauseTimer, resumeTimer });
+mountTimerRoutes(app, {
+  BROADCASTER_ID,
+  sseClients,
+  requireOverlayAuth,
+  state,
+  getRemainingSeconds,
+  addSeconds,
+  setHype,
+  pauseTimer,
+  resumeTimer,
+});
 
 // Get/Set overlay style linked to overlay key
-app.get('/api/overlay/style', (req, res) => {
+app.get("/api/overlay/style", (req, res) => {
   if (!requireOverlayAuth(req, res)) return;
   const key = normKey(req.query.key);
-  res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
-  res.setHeader('Pragma', 'no-cache');
-  res.setHeader('Expires', '0');
+  res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+  res.setHeader("Pragma", "no-cache");
+  res.setHeader("Expires", "0");
   res.json(getSavedStyle(key));
 });
 
 // Admin-only edit
-app.post('/api/overlay/style', (req, res) => {
+app.post("/api/overlay/style", (req, res) => {
   if (!req?.session?.isAdmin) {
-    return res.status(401).json({ error: 'Admin login required' });
+    return res.status(401).json({ error: "Admin login required" });
   }
   const key = normKey(req.query.key);
   const saved = setSavedStyle(key, req.body || {});
@@ -127,7 +159,7 @@ app.post('/api/overlay/style', (req, res) => {
   for (const client of Array.from(sseClients)) {
     if (client.key !== key) continue;
     try {
-      client.res.write('event: style_update\n');
+      client.res.write("event: style_update\n");
       client.res.write(`data: ${JSON.stringify(saved)}\n\n`);
     } catch (e) {
       sseClients.delete(client);
@@ -147,16 +179,16 @@ function requireOverlayAuth(req, res) {
   if (req?.session?.isAdmin) return true;
   if (!OVERLAY_KEY) return true; // no auth required when unset
   if (keyIsValid(OVERLAY_KEY, req.query.key)) return true;
-  res.status(401).json({ error: 'Unauthorized overlay request' });
+  res.status(401).json({ error: "Unauthorized overlay request" });
   return false;
 }
 
 // SSE stream for external overlays (OBS/Streamlabs browser source)
-app.get('/api/overlay/stream', (req, res) => {
+app.get("/api/overlay/stream", (req, res) => {
   if (!requireOverlayAuth(req, res)) return;
-  res.setHeader('Content-Type', 'text/event-stream');
-  res.setHeader('Cache-Control', 'no-cache');
-  res.setHeader('Connection', 'keep-alive');
+  res.setHeader("Content-Type", "text/event-stream");
+  res.setHeader("Cache-Control", "no-cache");
+  res.setHeader("Connection", "keep-alive");
   res.flushHeaders?.();
 
   const key = normKey(req.query.key);
@@ -164,50 +196,58 @@ app.get('/api/overlay/stream', (req, res) => {
   sseClients.add(client);
 
   // Send a ping comment so OBS marks as connected
-  res.write(': connected\n\n');
+  res.write(": connected\n\n");
 
   // Send initial snapshot as an event
-  const snapshot = { remaining: getRemainingSeconds(), hype: state.hypeActive, paused: state.paused };
+  const snapshot = {
+    remaining: getRemainingSeconds(),
+    hype: state.hypeActive,
+    paused: state.paused,
+  };
   res.write(`event: timer_tick\n`);
   res.write(`data: ${JSON.stringify(snapshot)}\n\n`);
 
   // Send current style for this key
   const style = getSavedStyle(key);
-  res.write('event: style_update\n');
+  res.write("event: style_update\n");
   res.write(`data: ${JSON.stringify(style)}\n\n`);
 
-  req.on('close', () => {
+  req.on("close", () => {
     sseClients.delete(client);
   });
 });
 
 // Minimal overlay page for browser sources
-app.get('/overlay', (req, res) => {
+app.get("/overlay", (req, res) => {
   if (!requireOverlayAuth(req, res)) return;
   // basic customization via query params
   const fontSize = Number(req.query.fontSize ?? 64);
-  const color = String(req.query.color ?? '#FFFFFF');
-  const bg = req.query.transparent ? 'transparent' : String(req.query.bg ?? 'rgba(0,0,0,0)');
-  const fontFamily = String(req.query.font ?? 'Inter,system-ui,Arial,sans-serif');
-  const showLabel = String(req.query.label ?? '0') !== '0';
-  const align = String(req.query.align ?? 'center'); // left|center|right
+  const color = String(req.query.color ?? "#FFFFFF");
+  const bg = req.query.transparent
+    ? "transparent"
+    : String(req.query.bg ?? "rgba(0,0,0,0)");
+  const fontFamily = String(
+    req.query.font ?? "Inter,system-ui,Arial,sans-serif"
+  );
+  const showLabel = String(req.query.label ?? "0") !== "0";
+  const align = String(req.query.align ?? "center"); // left|center|right
   const weight = Number(req.query.weight ?? 700);
-  const key = req.query.key ? String(req.query.key) : '';
-  const qs = key ? `?key=${encodeURIComponent(key)}` : '';
-  const title = String(req.query.title ?? 'Stream Countdown');
-  const shadow = String(req.query.shadow ?? '0') !== '0';
-  const shadowColor = String(req.query.shadowColor ?? 'rgba(0,0,0,0.7)');
+  const key = req.query.key ? String(req.query.key) : "";
+  const qs = key ? `?key=${encodeURIComponent(key)}` : "";
+  const title = String(req.query.title ?? "Stream Countdown");
+  const shadow = String(req.query.shadow ?? "0") !== "0";
+  const shadowColor = String(req.query.shadowColor ?? "rgba(0,0,0,0.7)");
   const shadowBlur = Number(req.query.shadowBlur ?? 8);
   const stroke = Number(req.query.stroke ?? 0);
-  const strokeColor = String(req.query.strokeColor ?? '#000000');
+  const strokeColor = String(req.query.strokeColor ?? "#000000");
 
   function esc(s) {
     return String(s)
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;')
-      .replace(/'/g, '&#39;');
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#39;");
   }
 
   const html = `<!doctype html>
@@ -222,7 +262,13 @@ app.get('/overlay', (req, res) => {
     <style>
       html, body { height: 100%; }
       body { margin: 0; background: ${bg}; color: ${color}; font-family: ${fontFamily}; }
-      .wrap { display: flex; align-items: center; justify-content: ${align === 'left' ? 'flex-start' : align === 'right' ? 'flex-end' : 'center'}; height: 100%; padding: 0 8px; }
+      .wrap { display: flex; align-items: center; justify-content: ${
+        align === "left"
+          ? "flex-start"
+          : align === "right"
+          ? "flex-end"
+          : "center"
+      }; height: 100%; padding: 0 8px; }
       .timer { font-variant-numeric: tabular-nums; letter-spacing: 1px; }
       .label { font-size: 14px; opacity: 0.75; margin-bottom: 4px; text-align: ${align}; }
       .hype { font-size: 12px; opacity: 0.9; margin-top: 4px; }
@@ -239,7 +285,15 @@ app.get('/overlay', (req, res) => {
     <div class="wrap">
       <div>
         <div id="label" class="label" style="display:none"></div>
-        <div id="clock" class="timer" style="font-size:${fontSize}px; font-weight:${weight}; text-align:${align};${shadow ? ` text-shadow: 0 0 ${shadowBlur}px ${shadowColor}, 0 2px 2px ${shadowColor};` : ''}${stroke > 0 ? ` -webkit-text-stroke: ${stroke}px ${strokeColor}; text-stroke: ${stroke}px ${strokeColor};` : ''}">--:--</div>
+        <div id="clock" class="timer" style="font-size:${fontSize}px; font-weight:${weight}; text-align:${align};${
+    shadow
+      ? ` text-shadow: 0 0 ${shadowBlur}px ${shadowColor}, 0 2px 2px ${shadowColor};`
+      : ""
+  }${
+    stroke > 0
+      ? ` -webkit-text-stroke: ${stroke}px ${strokeColor}; text-stroke: ${stroke}px ${strokeColor};`
+      : ""
+  }">--:--</div>
         <div id="hype" class="hype" style="display:none">🔥 Hype Train active</div>
         <div id="paused" class="paused" style="display:none">⏸ Paused</div>
       </div>
@@ -388,10 +442,10 @@ app.get('/overlay', (req, res) => {
   </body>
 </html>`;
 
-  res.setHeader('Content-Type', 'text/html; charset=utf-8');
-  res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
-  res.setHeader('Pragma', 'no-cache');
-  res.setHeader('Expires', '0');
+  res.setHeader("Content-Type", "text/html; charset=utf-8");
+  res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+  res.setHeader("Pragma", "no-cache");
+  res.setHeader("Expires", "0");
   res.send(html);
 });
 
@@ -409,22 +463,31 @@ mountOverlayApiRoutes(app, {
   setUserSettings,
   sseClients,
   getRules,
-  setRules
+  setRules,
 });
 
 // Overlay Configurator (no auth; generates URL and previews)
 function requireAdmin(req, res, next) {
   if (req?.session?.isAdmin) return next();
-  const base = process.env.SERVER_BASE_URL || `${req.protocol}://${req.get('host')}`;
-  const nextUrl = encodeURIComponent(req.originalUrl || '/overlay/config');
+  const base =
+    process.env.SERVER_BASE_URL || `${req.protocol}://${req.get("host")}`;
+  const nextUrl = encodeURIComponent(req.originalUrl || "/overlay/config");
   return res.redirect(`${base}/auth/login?next=${nextUrl}`);
 }
 
 // Overlay Configurator (admin only; generates URL and previews)
-app.get('/overlay/config', requireAdmin, (req, res) => {
-  const base = process.env.SERVER_BASE_URL || `${req.protocol}://${req.get('host')}`;
-  const adminName = String((req.session?.twitchUser?.display_name) || (req.session?.twitchUser?.login) || 'Admin');
-  const userKey = String(req.session?.userOverlayKey || getOrCreateUserKey(req.session?.twitchUser?.id));
+app.get("/overlay/config", requireAdmin, (req, res) => {
+  const base =
+    process.env.SERVER_BASE_URL || `${req.protocol}://${req.get("host")}`;
+  const adminName = String(
+    req.session?.twitchUser?.display_name ||
+      req.session?.twitchUser?.login ||
+      "Admin"
+  );
+  const userKey = String(
+    req.session?.userOverlayKey ||
+      getOrCreateUserKey(req.session?.twitchUser?.id)
+  );
   const settings = getUserSettings(req.session?.twitchUser?.id);
   const defSecs = Number(settings.defaultInitialSeconds || 0);
   const defH = Math.floor(defSecs / 3600);
@@ -432,20 +495,20 @@ app.get('/overlay/config', requireAdmin, (req, res) => {
   const defS = defSecs % 60;
   const initial = {
     fontSize: Number(req.query.fontSize ?? 64),
-    color: String(req.query.color ?? '#FFFFFF'),
-    bg: String(req.query.bg ?? 'rgba(0,0,0,0)'),
-    transparent: String(req.query.transparent ?? '1') !== '0',
-    font: String(req.query.font ?? 'Inter,system-ui,Arial,sans-serif'),
-    label: String(req.query.label ?? '0') !== '0',
-    title: String(req.query.title ?? 'Stream Countdown'),
-    align: String(req.query.align ?? 'center'),
+    color: String(req.query.color ?? "#FFFFFF"),
+    bg: String(req.query.bg ?? "rgba(0,0,0,0)"),
+    transparent: String(req.query.transparent ?? "1") !== "0",
+    font: String(req.query.font ?? "Inter,system-ui,Arial,sans-serif"),
+    label: String(req.query.label ?? "0") !== "0",
+    title: String(req.query.title ?? "Stream Countdown"),
+    align: String(req.query.align ?? "center"),
     weight: Number(req.query.weight ?? 700),
-    shadow: String(req.query.shadow ?? '0') !== '0',
-    shadowColor: String(req.query.shadowColor ?? 'rgba(0,0,0,0.7)'),
+    shadow: String(req.query.shadow ?? "0") !== "0",
+    shadowColor: String(req.query.shadowColor ?? "rgba(0,0,0,0.7)"),
     shadowBlur: Number(req.query.shadowBlur ?? 8),
     stroke: Number(req.query.stroke ?? 0),
-    strokeColor: String(req.query.strokeColor ?? '#000000'),
-    key: String(req.query.key ?? '')
+    strokeColor: String(req.query.strokeColor ?? "#000000"),
+    key: String(req.query.key ?? ""),
   };
 
   const html = `<!doctype html>
@@ -500,25 +563,51 @@ app.get('/overlay/config', requireAdmin, (req, res) => {
             <button class="secondary" id="rotateKey" title="Generate a new overlay key">Rotate</button>
           </div>
         </div>
-        <div class="control"><label>Font Size</label><input id="fontSize" type="number" min="10" max="300" step="1" value="${initial.fontSize}"></div>
-        <div class="control"><label>Color</label><input id="color" type="color" value="${initial.color}"></div>
-        <div class="control"><label>Transparent</label><input id="transparent" type="checkbox" ${initial.transparent ? 'checked' : ''}></div>
+        <div class="control"><label>Font Size</label><input id="fontSize" type="number" min="10" max="300" step="1" value="${
+          initial.fontSize
+        }"></div>
+        <div class="control"><label>Color</label><input id="color" type="color" value="${
+          initial.color
+        }"></div>
+        <div class="control"><label>Transparent</label><input id="transparent" type="checkbox" ${
+          initial.transparent ? "checked" : ""
+        }></div>
         <div class="control"><label>Background</label><input id="bg" type="color" value="#000000"></div>
-        <div class="control"><label>Font Family</label><input id="font" type="text" value="${initial.font}"></div>
-        <div class="control"><label>Show Label</label><input id="label" type="checkbox" ${initial.label ? 'checked' : ''}></div>
-        <div class="control"><label>Label Text</label><input id="title" type="text" value="${initial.title}"></div>
+        <div class="control"><label>Font Family</label><input id="font" type="text" value="${
+          initial.font
+        }"></div>
+        <div class="control"><label>Show Label</label><input id="label" type="checkbox" ${
+          initial.label ? "checked" : ""
+        }></div>
+        <div class="control"><label>Label Text</label><input id="title" type="text" value="${
+          initial.title
+        }"></div>
         <div class="control"><label>Align</label>
           <select id="align">
-            <option ${initial.align==='left'?'selected':''} value="left">left</option>
-            <option ${initial.align==='center'?'selected':''} value="center">center</option>
-            <option ${initial.align==='right'?'selected':''} value="right">right</option>
+            <option ${
+              initial.align === "left" ? "selected" : ""
+            } value="left">left</option>
+            <option ${
+              initial.align === "center" ? "selected" : ""
+            } value="center">center</option>
+            <option ${
+              initial.align === "right" ? "selected" : ""
+            } value="right">right</option>
           </select>
         </div>
-        <div class="control"><label>Weight</label><input id="weight" type="number" min="100" max="1000" step="100" value="${initial.weight}"></div>
-        <div class="control"><label>Shadow</label><input id="shadow" type="checkbox" ${initial.shadow ? 'checked' : ''}></div>
+        <div class="control"><label>Weight</label><input id="weight" type="number" min="100" max="1000" step="100" value="${
+          initial.weight
+        }"></div>
+        <div class="control"><label>Shadow</label><input id="shadow" type="checkbox" ${
+          initial.shadow ? "checked" : ""
+        }></div>
         <div class="control"><label>Shadow Color</label><input id="shadowColor" type="color" value="#000000"></div>
-        <div class="control"><label>Shadow Blur</label><input id="shadowBlur" type="number" min="0" max="50" step="1" value="${initial.shadowBlur}"></div>
-        <div class="control"><label>Outline Width</label><input id="stroke" type="number" min="0" max="20" step="1" value="${initial.stroke}"></div>
+        <div class="control"><label>Shadow Blur</label><input id="shadowBlur" type="number" min="0" max="50" step="1" value="${
+          initial.shadowBlur
+        }"></div>
+        <div class="control"><label>Outline Width</label><input id="stroke" type="number" min="0" max="20" step="1" value="${
+          initial.stroke
+        }"></div>
         <div class="control"><label>Outline Color</label><input id="strokeColor" type="color" value="#000000"></div>
         <div class="row2">
           <button class="secondary" id="presetClean">Preset: Clean</button>
@@ -565,10 +654,10 @@ app.get('/overlay/config', requireAdmin, (req, res) => {
         <div class="hint" style="margin-top:8px">Current remaining: <span id="remain">--:--</span></div>
         <hr style="border:none;border-top:1px solid #303038;margin:16px 0;" />
         <div style="margin:4px 0 12px; opacity:0.85; font-weight:600;">Rules (Basic)</div>
-        <div class="control"><label>Bits per</label><input id="r_bits_per" type="number" min="1" step="1" value="100"></div>
+        <div class="control"><label>Minimum Bits to Trigger</label><input id="r_bits_per" type="number" min="1" step="1" value="100"></div>
         <div class="control"><label>Bits add (sec)</label><input id="r_bits_add" type="number" min="0" step="1" value="60"></div>
-        <div class="control"><label>Sub T1 (sec)</label><input id="r_sub_1000" type="number" min="0" step="1" value="300"></div>
-        <div class="control"><label>Hype x</label><input id="r_hype" type="number" min="0" step="0.1" value="2"></div>
+        <div class="control"><label>T1 Subs add (sec)</label><input id="r_sub_1000" type="number" min="0" step="1" value="300"></div>
+        <div class="control"><label>Hype x Modifier</label><input id="r_hype" type="number" min="0" step="0.1" value="2"></div>
         <div class="row2"><button id="saveRules">Save Rules</button></div>
       </div>
       <div class="panel preview">
@@ -810,10 +899,10 @@ app.get('/overlay/config', requireAdmin, (req, res) => {
   </body>
 </html>`;
 
-  res.setHeader('Content-Type', 'text/html; charset=utf-8');
-  res.setHeader('Cache-Control', 'no-store');
-  res.setHeader('Pragma', 'no-cache');
-  res.setHeader('Expires', '0');
+  res.setHeader("Content-Type", "text/html; charset=utf-8");
+  res.setHeader("Cache-Control", "no-store");
+  res.setHeader("Pragma", "no-cache");
+  res.setHeader("Expires", "0");
   res.send(html);
 });
 
@@ -823,30 +912,30 @@ function secondsFromEvent(notification) {
   const e = notification?.payload?.event ?? {};
   const RULES = getRules();
   switch (subType) {
-    case 'channel.bits.use': {
+    case "channel.bits.use": {
       const bits = e.bits ?? e.total_bits_used ?? 0;
       return Math.floor(bits / RULES.bits.per) * RULES.bits.add_seconds;
     }
-    case 'channel.subscribe': {
-      const tier = e.tier || '1000';
-      return RULES.sub[tier] || RULES.sub['1000'];
+    case "channel.subscribe": {
+      const tier = e.tier || "1000";
+      return RULES.sub[tier] || RULES.sub["1000"];
     }
-    case 'channel.subscription.message': {
+    case "channel.subscription.message": {
       return RULES.resub.base_seconds;
     }
-    case 'channel.subscription.gift': {
+    case "channel.subscription.gift": {
       const count = e.total ?? e.cumulative_total ?? e.total_count ?? 0;
       return (count || 1) * RULES.gift_sub.per_sub_seconds;
     }
-    case 'channel.charity_campaign.donate': {
-      const amount = e.amount?.value ?? 0;   // in minor units
+    case "channel.charity_campaign.donate": {
+      const amount = e.amount?.value ?? 0; // in minor units
       const decimals = e.amount?.decimal_places ?? 2;
       const usd = amount / Math.pow(10, decimals);
       return Math.floor(usd * RULES.charity.per_usd);
     }
-    case 'channel.hype_train.begin':
-    case 'channel.hype_train.progress':
-    case 'channel.hype_train.end':
+    case "channel.hype_train.begin":
+    case "channel.hype_train.progress":
+    case "channel.hype_train.end":
       return 0;
     default:
       return 0;
@@ -856,15 +945,18 @@ function secondsFromEvent(notification) {
 async function handleEventSub(notification) {
   const id = notification?.metadata?.message_id || uuidv4();
   const now = Date.now();
-  if (state.seen.has(id)) return;           // idempotent
+  if (state.seen.has(id)) return; // idempotent
   state.seen.set(id, now + 24 * 3600 * 1000);
 
   const subType = notification?.payload?.subscription?.type;
 
-  if (subType === 'channel.hype_train.begin' || subType === 'channel.hype_train.progress') {
+  if (
+    subType === "channel.hype_train.begin" ||
+    subType === "channel.hype_train.progress"
+  ) {
     setHype(true);
   }
-  if (subType === 'channel.hype_train.end') {
+  if (subType === "channel.hype_train.end") {
     setHype(false);
   }
 
@@ -876,8 +968,12 @@ async function handleEventSub(notification) {
     const remaining = addSeconds(seconds);
     await broadcastToChannel({
       broadcasterId: BROADCASTER_ID,
-      type: 'timer_add',
-      payload: { secondsAdded: seconds, newRemaining: remaining, hype: state.hypeActive }
+      type: "timer_add",
+      payload: {
+        secondsAdded: seconds,
+        newRemaining: remaining,
+        hype: state.hypeActive,
+      },
     });
   }
 }
@@ -888,8 +984,8 @@ if (process.env.BROADCASTER_USER_TOKEN) {
     userAccessToken: process.env.BROADCASTER_USER_TOKEN,
     clientId: process.env.TWITCH_CLIENT_ID,
     broadcasterId: BROADCASTER_ID,
-    onEvent: handleEventSub
-  }).catch(err => console.error('EventSub WS error', err));
+    onEvent: handleEventSub,
+  }).catch((err) => console.error("EventSub WS error", err));
 }
 
 // Server tick → broadcast remaining once per second
@@ -897,15 +993,19 @@ setInterval(async () => {
   const remaining = getRemainingSeconds();
   await broadcastToChannel({
     broadcasterId: BROADCASTER_ID,
-    type: 'timer_tick',
-    payload: { remaining }
+    type: "timer_tick",
+    payload: { remaining },
   }).catch(() => {});
 
   // Fan-out to SSE clients
-  const payload = JSON.stringify({ remaining, hype: state.hypeActive, paused: state.paused });
+  const payload = JSON.stringify({
+    remaining,
+    hype: state.hypeActive,
+    paused: state.paused,
+  });
   for (const client of Array.from(sseClients)) {
     try {
-      client.res.write('event: timer_tick\n');
+      client.res.write("event: timer_tick\n");
       client.res.write(`data: ${payload}\n\n`);
     } catch (e) {
       sseClients.delete(client);

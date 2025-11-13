@@ -621,6 +621,9 @@ app.get("/overlay/config", requireAdmin, (req, res) => {
       <div class="left">Timer Overlay Configurator</div>
       <div class="right">
         <div>Logged in as ${adminName}</div>
+        <a href="https://docs.google.com/forms/d/e/1FAIpQLSdanikaYMRTjwm9TS5HQ4zMMc8tiDRbz9dqyrJ00Zl518hxbw/viewform?usp=dialog" target="_blank" rel="noopener noreferrer" title="Send feedback or report a bug">
+          <button class="secondary">Feedback</button>
+        </a>
         <button id="logout">Logout</button>
       </div>
     </header>

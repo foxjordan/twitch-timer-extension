@@ -4,7 +4,7 @@
   "type": "module",
   "main": "server.js",
   "scripts": {
-    "dev": "node -r newrelic server.js"
+    "dev": "node -r dotenv/config -r newrelic server.js"
   },
   "dependencies": {
     "dotenv": "^16.4.1",

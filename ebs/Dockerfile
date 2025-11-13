@@ -5,9 +5,9 @@ FROM node:20-alpine
 WORKDIR /app
 
 # Install prod deps first for better layer caching
-COPY package.json package-lock.json ./
-# Prefer reproducible installs; fall back to npm install if lock is out of sync
-RUN npm ci --omit=dev || npm install --omit=dev
+COPY package*.json ./
+# Install deps; if lock present and in sync, npm ci will be used locally, but in Docker we use npm install for flexibility
+RUN npm install --omit=dev
 
 # Copy source
 COPY . ./
@@ -17,4 +17,4 @@ ENV DATA_DIR=/data
 RUN mkdir -p /data
 
 EXPOSE 8080
-CMD ["node", "-r", "newrelic", "server.js"]
+CMD ["node", "-r", "dotenv/config", "-r", "newrelic", "server.js"]

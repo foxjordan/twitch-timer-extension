@@ -689,8 +689,8 @@ app.get("/overlay/config", requireAdmin, (req, res) => {
         <div class="control"><label>Time format</label>
           <select id="timeFormat">
             <option value="mm:ss" >mm:ss</option>
-            <option value="hh:mm:ss" selected>hh:mm:ss</option>
-            <option value="auto">auto (hh:mm:ss when hours > 0)</option>
+            <option value="hh:mm:ss">hh:mm:ss</option>
+            <option value="auto" selected>auto (hh:mm:ss when hours > 0)</option>
           </select>
         </div>
         <hr style="border:none;border-top:1px solid #303038;margin:16px 0;" />
@@ -716,7 +716,8 @@ app.get("/overlay/config", requireAdmin, (req, res) => {
             <input id="maxM" type="number" min="0" max="59" step="1" value="0" style="max-width:80px">m
             <input id="maxS" type="number" min="0" max="59" step="1" value="0" style="max-width:80px">s
           </div>
-        </div> <div class="row2">
+        </div> 
+        <div class="row2">
           <button id="startTimer">Start Timer</button>
           <button class="secondary" id="saveDefault">Save Default</button>
         </div>

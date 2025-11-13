@@ -688,20 +688,31 @@ ${isDarkFox ? `        <hr style="border:none;border-top:1px solid #303038;margi
         <div class="hint" style="margin:-4px 0 8px;font-size:12px;opacity:0.75;">Only visible while logged in as DarkFoxLLC</div>
         <div class="row2" id="devTests">
           <button class="secondary" data-test-seconds="${devTest.bitsSeconds}" title="Simulate ${devTest.bitsPer} bits">
-            Sim ${devTest.bitsPer} bits (+${devTest.bitsSeconds}s)
+            Quick: ${devTest.bitsPer} bits (+${devTest.bitsSeconds}s)
           </button>
           <button class="secondary" data-test-seconds="${devTest.subSeconds}" title="Simulate Tier 1 sub">
-            Sim Tier 1 sub (+${devTest.subSeconds}s)
-          </button>
-          <button class="secondary" data-test-seconds="${devTest.resubSeconds}" title="Simulate resub">
-            Sim resub (+${devTest.resubSeconds}s)
+            Quick: 1x T1 sub (+${devTest.subSeconds}s)
           </button>
           <button class="secondary" data-test-seconds="${devTest.giftSeconds}" title="Simulate single gift sub">
-            Sim gift sub (+${devTest.giftSeconds}s)
+            Quick: 1x gift sub (+${devTest.giftSeconds}s)
           </button>
-          <button class="secondary" data-test-seconds="${devTest.charitySeconds}" title="Simulate $${devTest.charityUsd} charity donation">
-            Sim charity $${devTest.charityUsd} (+${devTest.charitySeconds}s)
-          </button>
+        </div>
+        <div class="row2" id="devCustomBits">
+          <input id="devBitsInput" type="number" min="0" step="1" placeholder="Bits amount" style="max-width:150px" />
+          <button class="secondary" id="devApplyBits" title="Apply custom bits based on rules">Apply Bits</button>
+        </div>
+        <div class="row2" id="devCustomSubs">
+          <input id="devSubCount" type="number" min="1" step="1" value="1" style="max-width:100px" />
+          <select id="devSubTier" style="max-width:160px">
+            <option value="1000">Tier 1</option>
+            <option value="2000">Tier 2</option>
+            <option value="3000">Tier 3</option>
+          </select>
+          <button class="secondary" id="devApplySubs" title="Apply N subs">Apply Subs</button>
+        </div>
+        <div class="row2" id="devCustomGifts">
+          <input id="devGiftCount" type="number" min="1" step="1" value="1" style="max-width:100px" />
+          <button class="secondary" id="devApplyGifts" title="Apply N gift subs">Apply Gift Subs</button>
         </div>
         <div class="row2" id="devHypeControls">
           <button class="secondary" id="testHypeOn">Force Hype On</button>
@@ -787,6 +798,12 @@ ${isDarkFox ? `        <hr style="border:none;border-top:1px solid #303038;margi
           });
         } catch (e) {}
       }
+
+      async function getHypeActive() {
+        try { const r = await fetch('/api/hype'); const j = await r.json(); return !!j.hype; } catch(e) { return false; }
+      }
+
+      function num(v, d){ const n = Number(v); return Number.isFinite(n) ? n : d; }
 
       async function saveDefaultInitial() {
         var secs = totalSeconds();
@@ -893,6 +910,8 @@ ${isDarkFox ? `        <hr style="border:none;border-top:1px solid #303038;margi
         document.getElementById('resume').addEventListener('click', async function(e){ e.preventDefault(); const btn=e.currentTarget; flashButton(btn); setBusy(btn,true); try { await fetch('/api/timer/resume', { method: 'POST' }); } catch(e) {} setBusy(btn,false); });
         const devPanel = document.getElementById('devTests');
         if (devPanel) {
+          // Expose rules for client-side calculation
+          window.DEV_RULES = ${rulesSnapshot ? JSON.stringify(rulesSnapshot) : 'null'};
           Array.from(devPanel.querySelectorAll('[data-test-seconds]')).forEach(function(btn){
             btn.addEventListener('click', async function(e){
               e.preventDefault();
@@ -900,9 +919,52 @@ ${isDarkFox ? `        <hr style="border:none;border-top:1px solid #303038;margi
               if (secs <= 0) return;
               flashButton(btn);
               setBusy(btn, true);
+              // Apply hype multiplier if active
+              try {
+                const hype = await getHypeActive();
+                if (hype && window.DEV_RULES && window.DEV_RULES.hypeTrain) {
+                  const mult = Number(window.DEV_RULES.hypeTrain.multiplier) || 1;
+                  secs = Math.floor(secs * mult);
+                }
+              } catch(e) {}
               await addTime(secs);
               setBusy(btn, false);
             });
+          });
+          // Custom bits
+          const bitsBtn = document.getElementById('devApplyBits');
+          if (bitsBtn) bitsBtn.addEventListener('click', async function(e){
+            e.preventDefault();
+            const bits = num(document.getElementById('devBitsInput')?.value, 0);
+            if (!window.DEV_RULES || bits <= 0) return;
+            let secs = Math.floor(bits / (Number(window.DEV_RULES.bits?.per)||100)) * (Number(window.DEV_RULES.bits?.add_seconds)||0);
+            const hype = await getHypeActive();
+            if (hype) { const mult = Number(window.DEV_RULES.hypeTrain?.multiplier)||1; secs = Math.floor(secs * mult); }
+            flashButton(bitsBtn); setBusy(bitsBtn,true); await addTime(secs); setBusy(bitsBtn,false);
+          });
+          // Custom subs
+          const subsBtn = document.getElementById('devApplySubs');
+          if (subsBtn) subsBtn.addEventListener('click', async function(e){
+            e.preventDefault();
+            const count = Math.max(1, num(document.getElementById('devSubCount')?.value, 1));
+            const tier = String(document.getElementById('devSubTier')?.value||'1000');
+            if (!window.DEV_RULES) return;
+            let per = Number((window.DEV_RULES.sub||{})[tier] ?? (window.DEV_RULES.sub||{})['1000'] ?? 0);
+            let secs = Math.floor(count * per);
+            const hype = await getHypeActive();
+            if (hype) { const mult = Number(window.DEV_RULES.hypeTrain?.multiplier)||1; secs = Math.floor(secs * mult); }
+            flashButton(subsBtn); setBusy(subsBtn,true); await addTime(secs); setBusy(subsBtn,false);
+          });
+          // Custom gift subs
+          const giftsBtn = document.getElementById('devApplyGifts');
+          if (giftsBtn) giftsBtn.addEventListener('click', async function(e){
+            e.preventDefault();
+            const count = Math.max(1, num(document.getElementById('devGiftCount')?.value, 1));
+            if (!window.DEV_RULES) return;
+            let secs = Math.floor(count * (Number(window.DEV_RULES.gift_sub?.per_sub_seconds)||0));
+            const hype = await getHypeActive();
+            if (hype) { const mult = Number(window.DEV_RULES.hypeTrain?.multiplier)||1; secs = Math.floor(secs * mult); }
+            flashButton(giftsBtn); setBusy(giftsBtn,true); await addTime(secs); setBusy(giftsBtn,false);
           });
         }
         const hypeOnBtn = document.getElementById('testHypeOn');

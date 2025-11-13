@@ -66,6 +66,8 @@ if (process.env.PANEL_ORIGIN) {
 }
 
 const BROADCASTER_ID = process.env.BROADCASTER_USER_ID;
+let CURRENT_BROADCASTER_ID = BROADCASTER_ID || null;
+let eventSubWS = null;
 const OVERLAY_KEY = process.env.OVERLAY_KEY || "";
 
 // Server-Sent Events (SSE) clients for external overlays
@@ -133,8 +135,11 @@ app.get("/healthz", (_req, res) => res.json({ ok: true }));
 // ---- Helpers ----
 
 // ---- Routes mounting ----
+const getBroadcasterId = () => String(CURRENT_BROADCASTER_ID || BROADCASTER_ID || '');
+
 mountTimerRoutes(app, {
   BROADCASTER_ID,
+  getBroadcasterId,
   sseClients,
   requireOverlayAuth,
   state,
@@ -468,8 +473,27 @@ app.get("/overlay", (req, res) => {
   res.send(html);
 });
 
-// Mount auth routes
-mountAuthRoutes(app);
+// Mount auth routes (notify on admin login to rewire EventSub + broadcaster)
+mountAuthRoutes(app, {
+  onAdminLogin: ({ user, accessToken }) => {
+    try {
+      CURRENT_BROADCASTER_ID = String(user.id);
+      if (eventSubWS && typeof eventSubWS.close === 'function') {
+        try { eventSubWS.close(); } catch {}
+      }
+      if (accessToken && process.env.TWITCH_CLIENT_ID) {
+        connectEventSubWS({
+          userAccessToken: accessToken,
+          clientId: process.env.TWITCH_CLIENT_ID,
+          broadcasterId: CURRENT_BROADCASTER_ID,
+          onEvent: handleEventSub,
+        }).then(ws => { eventSubWS = ws; }).catch((err) => console.error('EventSub WS error', err));
+      }
+    } catch (e) {
+      console.error('onAdminLogin wiring failed', e);
+    }
+  }
+});
 // Mount overlay API routes (style, keys, user settings)
 mountOverlayApiRoutes(app, {
   requireOverlayAuth,
@@ -694,6 +718,9 @@ app.get("/overlay/config", requireAdmin, (req, res) => {
           </div>
         </div>
         <div class="row2">
+          <button class="secondary" id="clearMax" title="Remove the max cap">Clear Max</button>
+        </div>
+        <div class="row2">
           <button class="secondary" id="pause">Pause</button>
           <button class="secondary" id="resume">Resume</button>
         </div>
@@ -844,6 +871,11 @@ ${isDarkFox ? `        <hr style="border:none;border-top:1px solid #303038;margi
         try { await fetch('/api/user/settings', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) }); } catch(e) {}
       }
 
+      async function saveMaxOnly(maxTotal) {
+        const payload = { maxTotalSeconds: Math.max(0, parseInt(maxTotal,10)||0) };
+        try { await fetch('/api/user/settings', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) }); } catch(e) {}
+      }
+
       function fmt(sec) {
         sec = Math.max(0, (parseInt(sec,10) || 0));
         var h = Math.floor(sec/3600), m = Math.floor((sec%3600)/60), s = sec%60;
@@ -954,6 +986,20 @@ ${isDarkFox ? `        <hr style="border:none;border-top:1px solid #303038;margi
         // Timer controls
         document.getElementById('startTimer').addEventListener('click', async function(e){ e.preventDefault(); const btn=e.currentTarget; flashButton(btn); setBusy(btn,true); await startTimer(); await updateCapStatus(); setBusy(btn,false); });
         document.getElementById('saveDefault').addEventListener('click', async function(e){ e.preventDefault(); const btn=e.currentTarget; flashButton(btn); setBusy(btn,true); await saveDefaultInitial(); await updateCapStatus(); setBusy(btn,false); });
+        const clearMaxBtn = document.getElementById('clearMax');
+        if (clearMaxBtn) {
+          clearMaxBtn.addEventListener('click', async function(e){
+            e.preventDefault();
+            flashButton(clearMaxBtn);
+            setBusy(clearMaxBtn, true);
+            document.getElementById('maxH').value = 0;
+            document.getElementById('maxM').value = 0;
+            document.getElementById('maxS').value = 0;
+            await saveMaxOnly(0);
+            await updateCapStatus();
+            setBusy(clearMaxBtn, false);
+          });
+        }
         Array.from(document.querySelectorAll('[data-add]')).forEach(function(btn){
           btn.addEventListener('click', async function(e){ e.preventDefault(); flashButton(btn); var v = parseInt(btn.getAttribute('data-add'),10)||0; if (v>0) { setBusy(btn,true); await addTime(v); await updateCapStatus(); setBusy(btn,false);} });
         });
@@ -1165,7 +1211,7 @@ async function handleEventSub(notification) {
     const remaining = addSeconds(seconds);
     const actual = Math.max(0, remaining - before);
     await broadcastToChannel({
-      broadcasterId: BROADCASTER_ID,
+      broadcasterId: getBroadcasterId(),
       type: "timer_add",
       payload: {
         secondsAdded: actual,
@@ -1181,16 +1227,16 @@ if (process.env.BROADCASTER_USER_TOKEN) {
   connectEventSubWS({
     userAccessToken: process.env.BROADCASTER_USER_TOKEN,
     clientId: process.env.TWITCH_CLIENT_ID,
-    broadcasterId: BROADCASTER_ID,
+    broadcasterId: getBroadcasterId(),
     onEvent: handleEventSub,
-  }).catch((err) => console.error("EventSub WS error", err));
+  }).then(ws => { eventSubWS = ws; }).catch((err) => console.error("EventSub WS error", err));
 }
 
 // Server tick → broadcast remaining once per second
 setInterval(async () => {
   const remaining = getRemainingSeconds();
   await broadcastToChannel({
-    broadcasterId: BROADCASTER_ID,
+    broadcasterId: getBroadcasterId(),
     type: "timer_tick",
     payload: { remaining },
   }).catch(() => {});

@@ -7,7 +7,7 @@ function buildRedirectURI(req) {
   return `${base}/auth/callback`;
 }
 
-export function mountAuthRoutes(app) {
+export function mountAuthRoutes(app, opts = {}) {
   app.get('/auth/login', (req, res) => {
     const clientId = process.env.TWITCH_CLIENT_ID;
     if (!clientId) return res.status(500).send('Missing TWITCH_CLIENT_ID');
@@ -65,6 +65,8 @@ export function mountAuthRoutes(app) {
       req.session.twitchUser = { id: user.id, login: user.login, display_name: user.display_name };
       // ensure a per-user overlay key exists and store in session for convenience
       try { req.session.userOverlayKey = getOrCreateUserKey(user.id); } catch {}
+      // notify host (server) of admin login for dynamic broadcaster/eventsub wiring
+      try { if (opts && typeof opts.onAdminLogin === 'function') opts.onAdminLogin({ user, accessToken }); } catch {}
       const next = req.query.next || '/overlay/config';
       const base = process.env.SERVER_BASE_URL || `${req.protocol}://${req.get('host')}`;
       res.redirect(`${base}${String(next).startsWith('/') ? next : '/overlay/config'}`);

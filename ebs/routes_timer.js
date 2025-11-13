@@ -3,6 +3,7 @@ import { broadcastToChannel } from './broadcast.js';
 export function mountTimerRoutes(app, ctx) {
   const {
     BROADCASTER_ID,
+    getBroadcasterId,
     sseClients,
     requireOverlayAuth,
     state,
@@ -33,7 +34,7 @@ export function mountTimerRoutes(app, ctx) {
     if (typeof setInitialSeconds === 'function') setInitialSeconds(seconds);
     state.timerExpiryEpochMs = Date.now() + seconds * 1000;
     await broadcastToChannel({
-      broadcasterId: BROADCASTER_ID,
+      broadcasterId: (typeof getBroadcasterId === 'function' && getBroadcasterId()) || BROADCASTER_ID,
       type: 'timer_reset',
       payload: { remaining: seconds, paused: state.paused }
     });
@@ -46,7 +47,7 @@ export function mountTimerRoutes(app, ctx) {
     const remaining = addSeconds(seconds);
     const actual = Math.max(0, remaining - before);
     await broadcastToChannel({
-      broadcasterId: BROADCASTER_ID,
+      broadcasterId: (typeof getBroadcasterId === 'function' && getBroadcasterId()) || BROADCASTER_ID,
       type: 'timer_add',
       payload: { secondsAdded: actual, newRemaining: remaining, hype: state.hypeActive, paused: state.paused }
     });
@@ -87,7 +88,7 @@ export function mountTimerRoutes(app, ctx) {
     setHype(active);
     const remaining = getRemainingSeconds();
     await broadcastToChannel({
-      broadcasterId: BROADCASTER_ID,
+      broadcasterId: (typeof getBroadcasterId === 'function' && getBroadcasterId()) || BROADCASTER_ID,
       type: 'timer_add',
       payload: { secondsAdded: 0, newRemaining: remaining, hype: state.hypeActive }
     }).catch(() => {});

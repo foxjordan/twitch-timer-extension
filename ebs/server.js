@@ -732,6 +732,10 @@ app.get("/overlay/config", requireAdmin, (req, res) => {
           <button class="secondary" data-add="600">+10 min</button>
           <button class="secondary" data-add="1800">+30 min</button>
         </div>
+        <div class="row2">
+          <input id="addCustomSeconds" type="number" min="1" step="1" placeholder="Seconds" style="max-width:140px" />
+          <button class="secondary" id="addCustomBtn">Add</button>
+        </div>
         <div class="hint" style="margin-top:8px">Current remaining: <span id="remain">--:--</span></div>
         <div class="hint" id="capStatus" style="margin-top:4px; opacity:0.8"></div>
         <hr style="border:none;border-top:1px solid #303038;margin:16px 0;" />
@@ -1015,6 +1019,23 @@ ${
         Array.from(document.querySelectorAll('[data-add]')).forEach(function(btn){
           btn.addEventListener('click', async function(e){ e.preventDefault(); flashButton(btn); var v = parseInt(btn.getAttribute('data-add'),10)||0; if (v>0) { setBusy(btn,true); await addTime(v); await updateCapStatus(); setBusy(btn,false);} });
         });
+        // Custom add seconds
+        (function(){
+          const input = document.getElementById('addCustomSeconds');
+          const btn = document.getElementById('addCustomBtn');
+          if (!input || !btn) return;
+          const doAdd = async () => {
+            const v = parseInt(input.value, 10) || 0;
+            if (v <= 0) return;
+            flashButton(btn);
+            setBusy(btn, true);
+            await addTime(v);
+            await updateCapStatus();
+            setBusy(btn, false);
+          };
+          btn.addEventListener('click', function(e){ e.preventDefault(); doAdd(); });
+          input.addEventListener('keydown', function(e){ if (e.key === 'Enter') { e.preventDefault(); doAdd(); } });
+        })();
         document.getElementById('pause').addEventListener('click', async function(e){ e.preventDefault(); const btn=e.currentTarget; flashButton(btn); setBusy(btn,true); try { await fetch('/api/timer/pause', { method: 'POST' }); } catch(e) {} setBusy(btn,false); });
         document.getElementById('resume').addEventListener('click', async function(e){ e.preventDefault(); const btn=e.currentTarget; flashButton(btn); setBusy(btn,true); try { await fetch('/api/timer/resume', { method: 'POST' }); } catch(e) {} setBusy(btn,false); });
         const devPanel = document.getElementById('devTests');

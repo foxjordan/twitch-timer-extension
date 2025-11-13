@@ -38,6 +38,7 @@ import { mountTimerRoutes } from "./routes_timer.js";
 import { mountAuthRoutes } from "./routes_auth.js";
 import { mountOverlayApiRoutes } from "./routes_overlay_api.js";
 import { getRules, setRules, loadRules } from "./rules_store.js";
+import "newrelic";
 
 const app = express();
 // honor X-Forwarded-* so req.protocol resolves to https behind Fly
@@ -553,7 +554,8 @@ app.get("/overlay/config", requireAdmin, (req, res) => {
     resubSeconds: safeNum(rulesSnapshot?.resub?.base_seconds, 300),
     giftSeconds: safeNum(rulesSnapshot?.gift_sub?.per_sub_seconds, 300),
     charityUsd: devCharityUsd,
-    charitySeconds: safeNum(rulesSnapshot?.charity?.per_usd, 60) * devCharityUsd,
+    charitySeconds:
+      safeNum(rulesSnapshot?.charity?.per_usd, 60) * devCharityUsd,
   };
   const defSecs = Number(settings.defaultInitialSeconds || 0);
   const defH = Math.floor(defSecs / 3600);
@@ -749,13 +751,19 @@ app.get("/overlay/config", requireAdmin, (req, res) => {
         <hr style="border:none;border-top:1px solid #303038;margin:16px 0;" />
         <div style="margin:4px 0 4px; opacity:0.85; font-weight:600;">Testing Tools</div>
         <div class="row2" id="devTests">
-          <button class="secondary" data-test-seconds="${devTest.bitsSeconds}" title="Simulate ${devTest.bitsPer} bits">
+          <button class="secondary" data-test-seconds="${
+            devTest.bitsSeconds
+          }" title="Simulate ${devTest.bitsPer} bits">
             Quick: ${devTest.bitsPer} bits (+${devTest.bitsSeconds}s)
           </button>
-          <button class="secondary" data-test-seconds="${devTest.subSeconds}" title="Simulate Tier 1 sub">
+          <button class="secondary" data-test-seconds="${
+            devTest.subSeconds
+          }" title="Simulate Tier 1 sub">
             Quick: 1x T1 sub (+${devTest.subSeconds}s)
           </button>
-          <button class="secondary" data-test-seconds="${devTest.giftSeconds}" title="Simulate single gift sub">
+          <button class="secondary" data-test-seconds="${
+            devTest.giftSeconds
+          }" title="Simulate single gift sub">
             Quick: 1x gift sub (+${devTest.giftSeconds}s)
           </button>
         </div>

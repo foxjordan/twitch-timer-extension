@@ -1223,7 +1223,13 @@ function secondsFromEvent(notification) {
     case "channel.bits.use": // Bits in Extensions
     case "channel.cheer": {  // Standard Bits cheers
       const bits = e.bits ?? e.total_bits_used ?? e.total_bits ?? 0;
-      return Math.floor(bits / RULES.bits.per) * RULES.bits.add_seconds;
+      const per = Math.max(1, Number(RULES.bits?.per || 0));
+      const addSec = Math.max(0, Number(RULES.bits?.add_seconds || 0));
+      // Pool partial bits across events
+      state.bitsCarry = Math.max(0, Math.floor((state.bitsCarry || 0) + (Number(bits) || 0)));
+      const units = Math.floor(state.bitsCarry / per);
+      state.bitsCarry = state.bitsCarry % per;
+      return units * addSec;
     }
     case "channel.subscribe": {
       const tier = e.tier || "1000";

@@ -7,7 +7,8 @@ export const state = {
   seen: new Map(),
   initialSeconds: 0,
   additionsTotal: 0,
-  maxTotalSeconds: 0
+  maxTotalSeconds: 0,
+  bitsCarry: 0
 };
 
 export function getRemainingSeconds() {
@@ -59,6 +60,8 @@ export function setInitialSeconds(secs) {
   const s = Math.max(0, Math.floor(Number(secs) || 0));
   state.initialSeconds = s;
   state.additionsTotal = 0;
+  // Reset pooled bits at new stream start
+  state.bitsCarry = 0;
 }
 
 export function setMaxTotalSeconds(secs) {

@@ -5,15 +5,12 @@ import { RULES as DEFAULT_RULES } from './rules.js';
 const DATA_DIR = process.env.DATA_DIR || process.cwd();
 const RULES_PATH = path.resolve(DATA_DIR, 'overlay-rules.json');
 
-let current = { ...DEFAULT_RULES };
+// Store per-user rules. Keys are Twitch user IDs as strings.
+// We still support legacy file shape (single rules object) by treating it as a default.
+let byUser = {}; // { [uid: string]: Rules }
 
-export function getRules() {
-  return current;
-}
-
-export function setRules(patch = {}) {
-  // shallow merge; validate numeric fields
-  const next = JSON.parse(JSON.stringify(current));
+function mergeRules(base, patch = {}) {
+  const next = JSON.parse(JSON.stringify(base));
   if (patch.bits) {
     next.bits = {
       per: numberOr(next.bits.per, patch.bits.per),
@@ -45,30 +42,28 @@ export function setRules(patch = {}) {
       add_seconds: numberOr(next.follow?.add_seconds ?? 600, patch.follow.add_seconds)
     };
   }
-  current = next;
-  persistRules().catch(() => {});
-  return current;
+  return next;
 }
 
 export async function loadRules() {
   try {
     const raw = await readFile(RULES_PATH, 'utf-8');
     const obj = JSON.parse(raw);
-    current = { ...DEFAULT_RULES, ...obj,
-      bits: { ...DEFAULT_RULES.bits, ...(obj.bits||{}) },
-      sub: { ...DEFAULT_RULES.sub, ...(obj.sub||{}) },
-      resub: { ...DEFAULT_RULES.resub, ...(obj.resub||{}) },
-      gift_sub: { ...DEFAULT_RULES.gift_sub, ...(obj.gift_sub||{}) },
-      charity: { ...DEFAULT_RULES.charity, ...(obj.charity||{}) },
-      hypeTrain: { ...DEFAULT_RULES.hypeTrain, ...(obj.hypeTrain||{}) },
-      follow: { ...DEFAULT_RULES.follow, ...(obj.follow||{}) },
-    };
+    if (obj && (obj.bits || obj.sub || obj.hypeTrain)) {
+      // legacy single object; treat as default for everyone under key "default"
+      byUser = { default: mergeRules(DEFAULT_RULES, obj) };
+    } else if (obj && typeof obj === 'object') {
+      byUser = {};
+      for (const [uid, rules] of Object.entries(obj)) {
+        byUser[String(uid)] = mergeRules(DEFAULT_RULES, rules || {});
+      }
+    }
   } catch {}
 }
 
 async function persistRules() {
   try {
-    await writeFile(RULES_PATH, JSON.stringify(current, null, 2), 'utf-8');
+    await writeFile(RULES_PATH, JSON.stringify(byUser, null, 2), 'utf-8');
   } catch {}
 }
 
@@ -77,4 +72,21 @@ function numberOr(base, candidate, min) {
   if (!Number.isFinite(n)) return base;
   if (typeof min === 'number' && n < min) return base;
   return n;
+}
+
+export function getRules(uid) {
+  const id = uid ? String(uid) : null;
+  if (id && byUser[id]) return mergeRules(DEFAULT_RULES, byUser[id]);
+  if (byUser.default) return mergeRules(DEFAULT_RULES, byUser.default);
+  return DEFAULT_RULES;
+}
+
+export function setRules(uid, patch = {}) {
+  const id = String(uid || '').trim();
+  if (!id) throw new Error('User id required');
+  const curr = byUser[id] ? mergeRules(DEFAULT_RULES, byUser[id]) : mergeRules(DEFAULT_RULES, {});
+  const next = mergeRules(curr, patch || {});
+  byUser[id] = next;
+  persistRules().catch(() => {});
+  return next;
 }

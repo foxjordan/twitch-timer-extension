@@ -68,7 +68,8 @@ export function mountOverlayApiRoutes(app, ctx) {
   app.get('/api/rules', (req, res) => {
     if (!req?.session?.isAdmin) return res.status(401).json({ error: 'Admin login required' });
     try {
-      res.json(getRules());
+      const uid = req.session?.twitchUser?.id;
+      res.json(getRules(uid));
     } catch (e) {
       res.status(500).json({ error: 'Failed to load rules' });
     }
@@ -77,7 +78,8 @@ export function mountOverlayApiRoutes(app, ctx) {
   app.post('/api/rules', (req, res) => {
     if (!req?.session?.isAdmin) return res.status(401).json({ error: 'Admin login required' });
     try {
-      const saved = setRules(req.body || {});
+      const uid = req.session?.twitchUser?.id;
+      const saved = setRules(uid, req.body || {});
       res.json(saved);
     } catch (e) {
       res.status(400).json({ error: 'Invalid rules payload' });

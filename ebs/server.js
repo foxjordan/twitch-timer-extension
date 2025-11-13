@@ -548,7 +548,7 @@ app.get("/overlay/config", requireAdmin, (req, res) => {
     const num = Number(val);
     return Number.isFinite(num) ? num : fallback;
   };
-  const rulesSnapshot = getRules();
+  const rulesSnapshot = getRules(req.session?.twitchUser?.id);
   const devCharityUsd = 5;
   const devTest = {
     bitsSeconds: safeNum(rulesSnapshot?.bits?.add_seconds, 60),
@@ -1219,7 +1219,7 @@ app.get("/overlay/config", requireAdmin, (req, res) => {
 function secondsFromEvent(notification) {
   const subType = notification?.payload?.subscription?.type;
   const e = notification?.payload?.event ?? {};
-  const RULES = getRules();
+  const RULES = getRules(CURRENT_BROADCASTER_ID);
   switch (subType) {
     case "channel.bits.use": // Bits in Extensions
     case "channel.cheer": {  // Standard Bits cheers
@@ -1284,7 +1284,8 @@ async function handleEventSub(notification) {
 
   let seconds = secondsFromEvent(notification);
   if (seconds > 0 && state.hypeActive) {
-    seconds = Math.floor(seconds * getRules().hypeTrain.multiplier);
+    const R = getRules(CURRENT_BROADCASTER_ID);
+    seconds = Math.floor(seconds * R.hypeTrain.multiplier);
   }
   if (seconds > 0) {
     const before = getRemainingSeconds();

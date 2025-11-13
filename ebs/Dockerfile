@@ -6,7 +6,8 @@ WORKDIR /app
 
 # Install prod deps first for better layer caching
 COPY package.json package-lock.json ./
-RUN npm ci --omit=dev
+# Prefer reproducible installs; fall back to npm install if lock is out of sync
+RUN npm ci --omit=dev || npm install --omit=dev
 
 # Copy source
 COPY . ./

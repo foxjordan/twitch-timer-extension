@@ -16,6 +16,8 @@ import {
   setHype,
   pauseTimer,
   resumeTimer,
+  setInitialSeconds,
+  setMaxTotalSeconds,
 } from "./state.js";
 import {
   DEFAULT_STYLE,
@@ -103,6 +105,10 @@ function setUserSettings(uid, patch) {
     const v = Number(patch.defaultInitialSeconds);
     if (!Number.isNaN(v) && v >= 0) next.defaultInitialSeconds = v;
   }
+  if (patch && typeof patch.maxTotalSeconds !== "undefined") {
+    const v = Number(patch.maxTotalSeconds);
+    if (!Number.isNaN(v) && v >= 0) next.maxTotalSeconds = v;
+  }
   userSettings.set(id, next);
   persistUserSettings().catch(() => {});
   return next;
@@ -135,6 +141,9 @@ mountTimerRoutes(app, {
   setHype,
   pauseTimer,
   resumeTimer,
+  getUserSettings,
+  setInitialSeconds,
+  setMaxTotalSeconds,
 });
 
 // Get/Set overlay style linked to overlay key
@@ -464,6 +473,7 @@ mountOverlayApiRoutes(app, {
   sseClients,
   getRules,
   setRules,
+  setMaxTotalSeconds,
 });
 
 // Overlay Configurator (no auth; generates URL and previews)
@@ -666,6 +676,13 @@ app.get("/overlay/config", requireAdmin, (req, res) => {
           <button id="startTimer">Start Timer</button>
           <button class="secondary" id="saveDefault">Save Default</button>
         </div>
+        <div class="control"><label>Max Stream Length</label>
+          <div style="display:flex; gap:8px; align-items:center;">
+            <input id="maxH" type="number" min="0" step="1" value="0" style="max-width:80px">h
+            <input id="maxM" type="number" min="0" max="59" step="1" value="0" style="max-width:80px">m
+            <input id="maxS" type="number" min="0" max="59" step="1" value="0" style="max-width:80px">s
+          </div>
+        </div>
         <div class="row2">
           <button class="secondary" id="pause">Pause</button>
           <button class="secondary" id="resume">Resume</button>
@@ -807,7 +824,12 @@ ${isDarkFox ? `        <hr style="border:none;border-top:1px solid #303038;margi
 
       async function saveDefaultInitial() {
         var secs = totalSeconds();
-        const payload = { defaultInitialSeconds: secs };
+        var maxH = parseInt(document.getElementById('maxH').value||'0',10)||0;
+        var maxM = parseInt(document.getElementById('maxM').value||'0',10)||0;
+        var maxS = parseInt(document.getElementById('maxS').value||'0',10)||0;
+        if (maxM > 59) maxM = 59; if (maxS > 59) maxS = 59; if (maxH < 0) maxH = 0; if (maxM < 0) maxM = 0; if (maxS < 0) maxS = 0;
+        var maxTotal = (maxH*3600)+(maxM*60)+maxS;
+        const payload = { defaultInitialSeconds: secs, maxTotalSeconds: maxTotal };
         try { await fetch('/api/user/settings', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) }); } catch(e) {}
       }
 
@@ -978,6 +1000,10 @@ ${isDarkFox ? `        <hr style="border:none;border-top:1px solid #303038;margi
           inputs.h.value = Math.floor(secs/3600);
           inputs.m.value = Math.floor((secs%3600)/60);
           inputs.s.value = secs%60;
+          var max = Number(j.maxTotalSeconds||0);
+          document.getElementById('maxH').value = Math.floor(max/3600);
+          document.getElementById('maxM').value = Math.floor((max%3600)/60);
+          document.getElementById('maxS').value = max%60;
         }).catch(function(){});
 
         // Load current style thresholds to sync controls
@@ -1104,12 +1130,14 @@ async function handleEventSub(notification) {
     seconds = Math.floor(seconds * getRules().hypeTrain.multiplier);
   }
   if (seconds > 0) {
+    const before = getRemainingSeconds();
     const remaining = addSeconds(seconds);
+    const actual = Math.max(0, remaining - before);
     await broadcastToChannel({
       broadcasterId: BROADCASTER_ID,
       type: "timer_add",
       payload: {
-        secondsAdded: seconds,
+        secondsAdded: actual,
         newRemaining: remaining,
         hype: state.hypeActive,
       },

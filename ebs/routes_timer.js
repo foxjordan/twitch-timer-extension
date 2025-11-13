@@ -11,10 +11,24 @@ export function mountTimerRoutes(app, ctx) {
     setHype,
     pauseTimer,
     resumeTimer,
+    getUserSettings,
+    setInitialSeconds,
+    setMaxTotalSeconds,
   } = ctx;
 
   app.post('/api/timer/start', async (req, res) => {
-    const seconds = Number(req.body?.seconds ?? 300);
+    let seconds = Number(req.body?.seconds ?? 300);
+    // Pull current user's max setting, if available
+    try {
+      const uid = req.session?.twitchUser?.id;
+      if (uid && typeof getUserSettings === 'function') {
+        const us = getUserSettings(uid) || {};
+        const max = Math.max(0, Number(us.maxTotalSeconds || 0));
+        if (typeof setMaxTotalSeconds === 'function') setMaxTotalSeconds(max);
+        if (max > 0 && seconds > max) seconds = max;
+      }
+    } catch (e) {}
+    if (typeof setInitialSeconds === 'function') setInitialSeconds(seconds);
     state.timerExpiryEpochMs = Date.now() + seconds * 1000;
     await broadcastToChannel({
       broadcasterId: BROADCASTER_ID,
@@ -26,13 +40,15 @@ export function mountTimerRoutes(app, ctx) {
 
   app.post('/api/timer/add', async (req, res) => {
     const seconds = Number(req.body?.seconds ?? 60);
+    const before = getRemainingSeconds();
     const remaining = addSeconds(seconds);
+    const actual = Math.max(0, remaining - before);
     await broadcastToChannel({
       broadcasterId: BROADCASTER_ID,
       type: 'timer_add',
-      payload: { secondsAdded: seconds, newRemaining: remaining, hype: state.hypeActive, paused: state.paused }
+      payload: { secondsAdded: actual, newRemaining: remaining, hype: state.hypeActive, paused: state.paused }
     });
-    res.json({ remaining });
+    res.json({ remaining, added: actual });
   });
 
   app.get('/api/timer/state', (req, res) => {
@@ -80,4 +96,3 @@ export function mountTimerRoutes(app, ctx) {
     res.json({ hype: state.hypeActive });
   });
 }
-

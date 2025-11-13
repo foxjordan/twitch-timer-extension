@@ -4,7 +4,10 @@ export const state = {
   hypeActive: false,
   paused: false,
   pauseRemaining: 0,
-  seen: new Map()
+  seen: new Map(),
+  initialSeconds: 0,
+  additionsTotal: 0,
+  maxTotalSeconds: 0
 };
 
 export function getRemainingSeconds() {
@@ -15,12 +18,21 @@ export function getRemainingSeconds() {
 
 export function addSeconds(sec) {
   const now = Date.now();
+  let toAdd = Math.floor(Number(sec) || 0);
+  if (toAdd <= 0) return getRemainingSeconds();
+  if (state.maxTotalSeconds > 0) {
+    const used = Math.max(0, Math.floor(state.initialSeconds + state.additionsTotal));
+    const remainingBudget = Math.max(0, state.maxTotalSeconds - used);
+    toAdd = Math.min(toAdd, remainingBudget);
+  }
+  if (toAdd <= 0) return getRemainingSeconds();
   if (state.paused) {
-    state.pauseRemaining = Math.max(0, Math.floor(state.pauseRemaining + sec));
+    state.pauseRemaining = Math.max(0, Math.floor(state.pauseRemaining + toAdd));
   } else {
     const base = Math.max(now, state.timerExpiryEpochMs);
-    state.timerExpiryEpochMs = base + sec * 1000;
+    state.timerExpiryEpochMs = base + toAdd * 1000;
   }
+  state.additionsTotal = Math.max(0, Math.floor(state.additionsTotal + toAdd));
   return getRemainingSeconds();
 }
 
@@ -43,3 +55,20 @@ export function resumeTimer() {
   return getRemainingSeconds();
 }
 
+export function setInitialSeconds(secs) {
+  const s = Math.max(0, Math.floor(Number(secs) || 0));
+  state.initialSeconds = s;
+  state.additionsTotal = 0;
+}
+
+export function setMaxTotalSeconds(secs) {
+  state.maxTotalSeconds = Math.max(0, Math.floor(Number(secs) || 0));
+}
+
+export function getTotals() {
+  return {
+    initialSeconds: Math.max(0, Math.floor(state.initialSeconds || 0)),
+    additionsTotal: Math.max(0, Math.floor(state.additionsTotal || 0)),
+    maxTotalSeconds: Math.max(0, Math.floor(state.maxTotalSeconds || 0))
+  };
+}

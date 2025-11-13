@@ -1,5 +1,5 @@
 export function mountOverlayApiRoutes(app, ctx) {
-  const { requireOverlayAuth, normKey, getSavedStyle, setSavedStyle, getOrCreateUserKey, rotateUserKey, getUserSettings, setUserSettings, sseClients, getRules, setRules } = ctx;
+  const { requireOverlayAuth, normKey, getSavedStyle, setSavedStyle, getOrCreateUserKey, rotateUserKey, getUserSettings, setUserSettings, sseClients, getRules, setRules, setMaxTotalSeconds } = ctx;
 
   // Style read (public to overlays/key holder)
   app.get('/api/overlay/style', (req, res) => {
@@ -59,6 +59,8 @@ export function mountOverlayApiRoutes(app, ctx) {
     const uid = req.session?.twitchUser?.id;
     if (!uid) return res.status(400).json({ error: 'No user in session' });
     const saved = setUserSettings(uid, req.body || {});
+    // propagate max cap into runtime state for immediate effect
+    try { if (typeof setMaxTotalSeconds === 'function') setMaxTotalSeconds(Number(saved.maxTotalSeconds||0)); } catch(e) {}
     res.json(saved);
   });
 

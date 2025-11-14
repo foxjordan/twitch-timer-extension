@@ -17,6 +17,9 @@ function App() {
         const data = JSON.parse(message);
         if (data.type === 'timer_reset' || data.type === 'timer_tick') {
           setRemaining(data.payload.remaining ?? 0);
+          if (typeof data.payload.hype !== 'undefined') {
+            setHype(Boolean(data.payload.hype));
+          }
         } else if (data.type === 'timer_add') {
           setRemaining(data.payload.newRemaining ?? 0);
           setHype(Boolean(data.payload.hype));

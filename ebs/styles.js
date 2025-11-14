@@ -6,7 +6,7 @@ export const STYLES_PATH = path.resolve(DATA_DIR, 'overlay-styles.json');
 
 export const DEFAULT_STYLE = {
   fontSize: 64,
-  color: '#FFFFFF',
+  color: '#000000',
   bg: 'rgba(0,0,0,0)',
   transparent: true,
   font: 'Inter,system-ui,Arial,sans-serif',
@@ -24,7 +24,11 @@ export const DEFAULT_STYLE = {
   dangerUnderSeconds: 60,
   dangerColor: '#FF4D4D',
   flashUnderSeconds: 0,
-  timeFormat: 'mm:ss'
+  timeFormat: 'mm:ss',
+  addEffectEnabled: true,
+  addEffectMode: 'pulse',
+  hypeLabelEnabled: true,
+  hypeLabel: '🔥 Hype Train active'
 };
 
 const overlayStyles = new Map();
@@ -61,6 +65,13 @@ export function setSavedStyle(k, s = {}) {
     const tf = String(s.timeFormat || DEFAULT_STYLE.timeFormat);
     clean.timeFormat = (tf === 'hh:mm:ss' || tf === 'auto') ? tf : 'mm:ss';
   }
+  if ('addEffectEnabled' in s) clean.addEffectEnabled = Boolean(s.addEffectEnabled);
+  if ('addEffectMode' in s) {
+    const m = String(s.addEffectMode || DEFAULT_STYLE.addEffectMode);
+    clean.addEffectMode = ['pulse', 'shake', 'bounce', 'none'].includes(m) ? m : DEFAULT_STYLE.addEffectMode;
+  }
+  if ('hypeLabelEnabled' in s) clean.hypeLabelEnabled = Boolean(s.hypeLabelEnabled);
+  if ('hypeLabel' in s) clean.hypeLabel = String(s.hypeLabel || DEFAULT_STYLE.hypeLabel);
   overlayStyles.set(key, { ...DEFAULT_STYLE, ...clean });
   persistStyles().catch(() => {});
   return overlayStyles.get(key);

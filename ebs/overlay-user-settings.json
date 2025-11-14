@@ -1,5 +1,6 @@
 {
   "74034487": {
-    "defaultInitialSeconds": 14400
+    "defaultInitialSeconds": 14400,
+    "maxTotalSeconds": 0
   }
 }

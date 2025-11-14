@@ -20,6 +20,8 @@ import {
   setMaxTotalSeconds,
   capReached,
   getTotals,
+  loadTimerState,
+  clearTimer,
 } from "./state.js";
 import {
   DEFAULT_STYLE,
@@ -38,6 +40,11 @@ import { mountTimerRoutes } from "./routes_timer.js";
 import { mountAuthRoutes } from "./routes_auth.js";
 import { mountOverlayApiRoutes } from "./routes_overlay_api.js";
 import { getRules, setRules, loadRules } from "./rules_store.js";
+import {
+  addLogEntry,
+  getLogEntries,
+  clearLogEntries,
+} from "./event_log.js";
 
 const app = express();
 // honor X-Forwarded-* so req.protocol resolves to https behind Fly
@@ -78,6 +85,7 @@ const sseClients = new Set();
 loadOverlayKeys().catch(() => {});
 loadStyles().catch(() => {});
 loadRules().catch(() => {});
+loadTimerState().catch(() => {});
 
 // ===== Per-user settings (persisted) =====
 const DATA_DIR = process.env.DATA_DIR || process.cwd();
@@ -155,6 +163,21 @@ mountTimerRoutes(app, {
   setMaxTotalSeconds,
   capReached,
   getTotals,
+  clearTimer,
+});
+
+// Admin-only: event log for counted contributions
+app.get("/api/events/log", (req, res) => {
+  if (!req?.session?.isAdmin)
+    return res.status(401).json({ error: "Admin login required" });
+  res.json({ entries: getLogEntries() });
+});
+
+app.post("/api/events/log/clear", (req, res) => {
+  if (!req?.session?.isAdmin)
+    return res.status(401).json({ error: "Admin login required" });
+  clearLogEntries();
+  res.json({ ok: true });
 });
 
 // Get/Set overlay style linked to overlay key
@@ -242,7 +265,7 @@ app.get("/overlay", (req, res) => {
   if (!requireOverlayAuth(req, res)) return;
   // basic customization via query params
   const fontSize = Number(req.query.fontSize ?? 64);
-  const color = String(req.query.color ?? "#FFFFFF");
+  const color = String(req.query.color ?? "#000000");
   const bg = req.query.transparent
     ? "transparent"
     : String(req.query.bg ?? "rgba(0,0,0,0)");
@@ -300,6 +323,24 @@ app.get("/overlay", (req, res) => {
         100% { opacity: 1; }
       }
       .flash { animation: flash 1s infinite; }
+      @keyframes addPulse {
+        0% { transform: scale(1); }
+        50% { transform: scale(1.06); }
+        100% { transform: scale(1); }
+      }
+      @keyframes addShake {
+        0%,100% { transform: translateX(0); }
+        25% { transform: translateX(-4px); }
+        75% { transform: translateX(4px); }
+      }
+      @keyframes addBounce {
+        0%,100% { transform: translateY(0); }
+        25% { transform: translateY(-6px); }
+        75% { transform: translateY(0); }
+      }
+      .add-pulse { animation: addPulse 0.4s ease-out; }
+      .add-shake { animation: addShake 0.4s ease-out; }
+      .add-bounce { animation: addBounce 0.4s ease-out; }
     </style>
   </head>
   <body>
@@ -315,7 +356,7 @@ app.get("/overlay", (req, res) => {
       ? ` -webkit-text-stroke: ${stroke}px ${strokeColor}; text-stroke: ${stroke}px ${strokeColor};`
       : ""
   }">--:--</div>
-        <div id="hype" class="hype" style="display:none">🔥 Hype Train active</div>
+        <div id="hype" class="hype" style="display:none"></div>
         <div id="paused" class="paused" style="display:none">⏸ Paused</div>
         <div id="cap" class="cap" style="display:none">⏱ Stream has reached maximum length</div>
       </div>
@@ -323,12 +364,17 @@ app.get("/overlay", (req, res) => {
     <script>
       (function(){
         let remaining = 0;
+        let lastRemaining = null;
         let hype = false;
         let tickTimer = null;
         let paused = false;
         let styleThresholds = { warnUnderSeconds: 300, warnColor: '#FFA500', dangerUnderSeconds: 60, dangerColor: '#FF4D4D', flashUnderSeconds: 0 };
         let timeFormat = 'mm:ss';
         let cap = false;
+        let addEffectEnabled = true;
+        let addEffectMode = 'pulse';
+        let hypeLabelEnabled = true;
+        let hypeLabel = '🔥 Hype Train active';
 
         function render() {
           const el = document.getElementById('clock');
@@ -348,7 +394,10 @@ app.get("/overlay", (req, res) => {
             txt = String((Math.floor(r/60))).padStart(2,'0') + ':' + String(r%60).padStart(2,'0');
           }
           el.textContent = txt;
-          document.getElementById('hype').style.display = hype ? 'block' : 'none';
+          const hypeEl = document.getElementById('hype');
+          if (hypeEl) {
+            hypeEl.style.display = hype && hypeLabelEnabled ? 'block' : 'none';
+          }
           document.getElementById('paused').style.display = paused ? 'block' : 'none';
           document.getElementById('cap').style.display = cap ? 'block' : 'none';
 
@@ -368,6 +417,20 @@ app.get("/overlay", (req, res) => {
           } else {
             el.classList.remove('flash');
           }
+        }
+
+        function triggerAddEffect() {
+          if (!addEffectEnabled) return;
+          const el = document.getElementById('clock');
+          if (!el) return;
+          el.classList.remove('add-pulse','add-shake','add-bounce');
+          let cls = null;
+          if (addEffectMode === 'shake') cls = 'add-shake';
+          else if (addEffectMode === 'bounce') cls = 'add-bounce';
+          else if (addEffectMode === 'none') return;
+          else cls = 'add-pulse';
+          void el.offsetWidth;
+          el.classList.add(cls);
         }
 
         function startLocalTick() {
@@ -421,12 +484,23 @@ app.get("/overlay", (req, res) => {
             styleThresholds.dangerColor = s.dangerColor || '#FF4D4D';
             styleThresholds.flashUnderSeconds = Number(s.flashUnderSeconds||0);
             timeFormat = (s.timeFormat==='hh:mm:ss' || s.timeFormat==='auto') ? s.timeFormat : 'mm:ss';
+            if (typeof s.addEffectEnabled === 'boolean') {
+              addEffectEnabled = s.addEffectEnabled;
+            } else {
+              addEffectEnabled = true;
+            }
+            addEffectMode = s.addEffectMode || 'pulse';
+            hypeLabelEnabled = (typeof s.hypeLabelEnabled === 'boolean') ? s.hypeLabelEnabled : true;
+            hypeLabel = s.hypeLabel || '🔥 Hype Train active';
+            const hypeEl = document.getElementById('hype');
+            if (hypeEl) hypeEl.textContent = hypeLabel;
             render();
           } catch (e) {}
         }
 
         fetch('/api/timer/state${qs}').then(r => r.json()).then(s => {
           remaining = Number(s.remaining || 0);
+          lastRemaining = remaining;
           hype = Boolean(s.hype);
           paused = Boolean(s.paused);
           cap = Boolean(s.capReached);
@@ -452,10 +526,15 @@ app.get("/overlay", (req, res) => {
             es.addEventListener('timer_tick', function(ev){
               try {
                 const data = JSON.parse(ev.data);
+                const prev = typeof remaining === 'number' ? remaining : null;
                 if (typeof data.remaining === 'number') { remaining = data.remaining; }
                 if (typeof data.hype === 'boolean') { hype = data.hype; }
                 if (typeof data.paused === 'boolean') { paused = data.paused; }
                 if (typeof data.capReached === 'boolean') { cap = data.capReached; }
+                if (prev !== null && data.remaining > prev) {
+                  triggerAddEffect();
+                }
+                lastRemaining = data.remaining;
                 render();
               } catch (e) {}
             });
@@ -564,7 +643,7 @@ app.get("/overlay/config", requireAdmin, (req, res) => {
   const defS = defSecs % 60;
   const initial = {
     fontSize: Number(req.query.fontSize ?? 64),
-    color: String(req.query.color ?? "#FFFFFF"),
+    color: String(req.query.color ?? "#000000"),
     bg: String(req.query.bg ?? "rgba(0,0,0,0)"),
     transparent: String(req.query.transparent ?? "1") !== "0",
     font: String(req.query.font ?? "Inter,system-ui,Arial,sans-serif"),
@@ -600,9 +679,19 @@ app.get("/overlay/config", requireAdmin, (req, res) => {
       .control label { opacity: 0.8; }
       .preview { flex: 1; min-height: 320px; }
       .row2 { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
-      input[type="text"], input[type="number"], select { width: 100%; padding: 6px 8px; border-radius: 6px; border: 1px solid #3a3a3d; background: #151517; color: #efeff1; }
+      input[type="text"], input[type="number"], select {
+        width: 100%;
+        max-width: 100%;
+        box-sizing: border-box;
+        padding: 6px 8px;
+        border-radius: 6px;
+        border: 1px solid #3a3a3d;
+        background: #151517;
+        color: #efeff1;
+      }
       input[type="checkbox"] { transform: scale(1.1); }
       input[type="color"] { height: 32px; }
+      .time-input { max-width: 50%; }
       button { background: #9146FF; color: white; border: 0; padding: 8px 10px; border-radius: 8px; cursor: pointer; }
       button.secondary { background: #2c2c31; color: #efeff1; border: 1px solid #3a3a3d; }
       button { transition: transform .04s ease, box-shadow .15s ease, filter .15s ease, opacity .2s; }
@@ -614,6 +703,10 @@ app.get("/overlay/config", requireAdmin, (req, res) => {
       .url { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; background: #151517; border: 1px solid #3a3a3d; padding: 8px; border-radius: 8px; overflow: auto; }
       iframe { width: 100%; height: 360px; border: 0; background: #000; }
       .hint { font-size: 12px; opacity: 0.8; }
+      .log-box { margin-top: 8px; padding: 8px; background: #151517; border: 1px solid #3a3a3d; border-radius: 8px; max-height: 160px; overflow-y: auto; font-size: 12px; }
+      .log-line { margin-bottom: 4px; white-space: nowrap; text-overflow: ellipsis; overflow: hidden; }
+      .log-time { opacity: 0.7; margin-right: 6px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+      .log-text { opacity: 0.9; }
     </style>
   </head>
   <body>
@@ -701,45 +794,31 @@ app.get("/overlay/config", requireAdmin, (req, res) => {
         <div class="control"><label>Danger under (sec)</label><input id="dangerUnder" type="number" min="0" step="1" value="60"></div>
         <div class="control"><label>Danger color</label><input id="dangerColor" type="color" value="#FF4D4D"></div>
         <div class="control"><label>Flash under (sec)</label><input id="flashUnder" type="number" min="0" step="1" value="0"></div>
+        <div class="control"><label>Hype text</label>
+          <div style="display:flex; gap:8px; align-items:center;">
+            <label style="display:flex; gap:6px; align-items:center; opacity:.85;">
+              <input id="hypeLabelEnabled" type="checkbox" checked /> Show
+            </label>
+            <input id="hypeLabel" type="text" value="🔥 Hype Train active" />
+          </div>
+        </div>
+        <div class="control"><label>On-add effect</label>
+          <div style="display:flex; gap:8px; align-items:center;">
+            <label style="display:flex; gap:6px; align-items:center; opacity:.85;">
+              <input id="addEffectEnabled" type="checkbox" checked /> Enabled
+            </label>
+            <select id="addEffectMode" style="max-width:180px">
+              <option value="pulse">Pulse</option>
+              <option value="shake">Shake</option>
+              <option value="bounce">Bounce</option>
+              <option value="none">None</option>
+            </select>
+          </div>
+        </div>
         <div class="row2">
           <button id="copy">Copy URL</button>
           <div class="hint">Add as a Browser Source in OBS</div>
         </div>
-        <hr style="border:none;border-top:1px solid #303038;margin:16px 0;" />
-        <div style="margin:4px 0 12px; opacity:0.85; font-weight:600;">Timer Controls</div>
-        <div class="control"><label>Hours</label><input id="h" type="number" min="0" step="1" value="${defH}"></div>
-        <div class="control"><label>Minutes</label><input id="m" type="number" min="0" max="59" step="1" value="${defM}"></div>
-        <div class="control"><label>Seconds</label><input id="s" type="number" min="0" max="59" step="1" value="${defS}"></div>
-       
-        <div class="control"><label>Max Stream Length</label>
-          <div style="display:flex; gap:8px; align-items:center;">
-            <input id="maxH" type="number" min="0" step="1" value="0" style="max-width:80px">h
-            <input id="maxM" type="number" min="0" max="59" step="1" value="0" style="max-width:80px">m
-            <input id="maxS" type="number" min="0" max="59" step="1" value="0" style="max-width:80px">s
-          </div>
-        </div> 
-        <div class="row2">
-          <button id="startTimer">Start Timer</button>
-          <button class="secondary" id="saveDefault">Save Default</button>
-        </div>
-        <div class="row2">
-          <button class="secondary" id="clearMax" title="Remove the max cap">Clear Max</button>
-        </div>
-        <div class="row2">
-          <button class="secondary" id="pause">Pause</button>
-          <button class="secondary" id="resume">Resume</button>
-        </div>
-        <div class="row2">
-          <button class="secondary" data-add="300">+5 min</button>
-          <button class="secondary" data-add="600">+10 min</button>
-          <button class="secondary" data-add="1800">+30 min</button>
-        </div>
-        <div class="row2">
-          <input id="addCustomSeconds" type="number" min="1" step="1" placeholder="Seconds" style="max-width:140px" />
-          <button class="secondary" id="addCustomBtn">Add</button>
-        </div>
-        <div class="hint" style="margin-top:8px">Current remaining: <span id="remain">--:--</span></div>
-        <div class="hint" id="capStatus" style="margin-top:4px; opacity:0.8"></div>
         <hr style="border:none;border-top:1px solid #303038;margin:16px 0;" />
         <div style="margin:4px 0 12px; opacity:0.85; font-weight:600;">Rules</div>
         <div class="control"><label>Min. Bits to Trigger</label><input id="r_bits_per" type="number" min="1" step="1" value="100"></div>
@@ -777,10 +856,6 @@ app.get("/overlay/config", requireAdmin, (req, res) => {
             Quick: 1x gift sub (+${devTest.giftSeconds}s)
           </button>
         </div>
-        <div class="row2" id="devCustomBits">
-          <input id="devBitsInput" type="number" min="0" step="1" placeholder="Bits amount" style="max-width:150px" />
-          <button class="secondary" id="devApplyBits" title="Apply custom bits based on rules">Apply Bits</button>
-        </div>
         <div class="row2" id="devCustomSubs">
           <input id="devSubCount" type="number" min="1" step="1" value="1" style="max-width:100px" />
           <select id="devSubTier" style="max-width:160px">
@@ -804,12 +879,58 @@ app.get("/overlay/config", requireAdmin, (req, res) => {
         <iframe id="preview" referrerpolicy="no-referrer"></iframe>
         <div style="margin-top:8px" class="url" id="url"></div>
         <div style="margin-top:8px" class="hint">Pause/Resume and Start actions update the live overlay immediately.</div>
+        <hr style="border:none;border-top:1px solid #303038;margin:16px 12px;" />
+        <div style="margin:4px 0 12px; opacity:0.85; font-weight:600;">Timer Controls</div>
+        <div class="control"><label>Hours</label><input id="h" class="time-input" type="number" min="0" step="1" value="${defH}"></div>
+        <div class="control"><label>Minutes</label><input id="m" class="time-input" type="number" min="0" max="59" step="1" value="${defM}"></div>
+        <div class="control"><label>Seconds</label><input id="s" class="time-input" type="number" min="0" max="59" step="1" value="${defS}"></div>
+        <div class="control"><label>Max Stream Length</label>
+          <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+            <div style="display:flex; gap:8px; align-items:center;">
+              <input id="maxH" type="number" min="0" step="1" value="0" style="max-width:80px">h
+              <input id="maxM" type="number" min="0" max="59" step="1" value="0" style="max-width:80px">m
+              <input id="maxS" type="number" min="0" max="59" step="1" value="0" style="max-width:80px">s
+            </div>
+            <button class="secondary" id="clearMax" title="Remove the max cap">Clear Max</button>
+          </div>
+        </div> 
+        <div class="row2">
+          <button id="startTimer">Start Timer</button>
+          <button class="secondary" id="pause">Pause</button>
+          <button class="secondary" id="resume">Resume</button>
+          <button class="secondary" id="endTimer">End Timer</button>
+          <button class="secondary" id="restartTimer">Restart Timer</button>
+        </div>
+        <div class="row2">
+          <button class="secondary" id="saveDefault">Save Default</button>
+        </div>
+        <div class="row2" style="margin-top:12px;">
+          <button class="secondary" data-add="300">+5 min</button>
+          <button class="secondary" data-add="600">+10 min</button>
+          <button class="secondary" data-add="1800">+30 min</button>
+        </div>
+        <div class="row2">
+          <input id="addCustomSeconds" type="number" min="1" step="1" placeholder="Seconds" style="max-width:140px" />
+          <button class="secondary" id="addCustomBtn">Add</button>
+        </div>
+        <div class="row2" id="devCustomBits">
+          <input id="devBitsInput" type="number" min="0" step="1" placeholder="Bits amount (testing)" style="max-width:150px" />
+          <button class="secondary" id="devApplyBits" title="Apply custom bits based on rules">Apply Bits</button>
+        </div>
+        <div class="hint" style="margin-top:8px">Current remaining: <span id="remain">--:--</span></div>
+        <div class="hint" id="capStatus" style="margin-top:4px; opacity:0.8"></div>
+        <hr style="border:none;border-top:1px solid #303038;margin:16px 0;" />
+        <div style="margin-top:16px; opacity:0.85; font-weight:600;">Event Log</div>
+        <div id="eventLog" class="log-box"></div>
+        <div class="row2">
+          <button class="secondary" id="clearLog">Clear Log</button>
+        </div>
       </div>
     </div>
     <script>
       const inputs = [
         'key','fontSize','color','transparent','bg','font','label','title','align','weight','shadow','shadowColor','shadowBlur','stroke','strokeColor','timeFormat',
-        'h','m','s'
+        'h','m','s','addEffectEnabled','addEffectMode','hypeLabelEnabled','hypeLabel'
       ].reduce((acc, id) => (acc[id] = document.getElementById(id), acc), {});
 
       function overlayUrl() {
@@ -842,7 +963,11 @@ app.get("/overlay/config", requireAdmin, (req, res) => {
           dangerUnderSeconds: Number(document.getElementById('dangerUnder').value||0),
           dangerColor: document.getElementById('dangerColor').value,
           flashUnderSeconds: Number(document.getElementById('flashUnder').value||0),
-          timeFormat: inputs.timeFormat.value
+          timeFormat: inputs.timeFormat.value,
+          addEffectEnabled: Boolean((document.getElementById('addEffectEnabled')||{}).checked),
+          addEffectMode: (document.getElementById('addEffectMode')||{}).value || 'pulse',
+          hypeLabelEnabled: Boolean((document.getElementById('hypeLabelEnabled')||{}).checked),
+          hypeLabel: (document.getElementById('hypeLabel')||{}).value || '🔥 Hype Train active'
         };
         try { await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) }); } catch(e) {}
       }
@@ -858,14 +983,18 @@ app.get("/overlay/config", requireAdmin, (req, res) => {
         return (h*3600)+(m*60)+s;
       }
 
-      async function startTimer() {
+      async function startTimer(meta) {
         var secs = totalSeconds();
         if (secs <= 0) return;
-        try { await fetch('/api/timer/start', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ seconds: secs }) }); } catch(e) {}
+        const payload = { seconds: secs };
+        if (meta && typeof meta === 'object') payload.meta = meta;
+        try { await fetch('/api/timer/start', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) }); } catch(e) {}
       }
 
-      async function addTime(secs) {
-        try { await fetch('/api/timer/add', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ seconds: secs }) }); } catch(e) {}
+      async function addTime(secs, meta) {
+        const payload = { seconds: secs };
+        if (meta && typeof meta === 'object') payload.meta = meta;
+        try { await fetch('/api/timer/add', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) }); } catch(e) {}
       }
 
       async function setHypeActive(active) {
@@ -875,6 +1004,67 @@ app.get("/overlay/config", requireAdmin, (req, res) => {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ active: !!active })
           });
+        } catch (e) {}
+      }
+
+      function renderLog(entries) {
+        const box = document.getElementById('eventLog');
+        if (!box) return;
+        if (!entries || !entries.length) {
+          box.textContent = 'No entries yet.';
+          return;
+        }
+        box.innerHTML = entries
+          .slice()
+          .reverse()
+          .map(function(e) {
+            var ts = e.ts ? new Date(e.ts) : new Date();
+            var tStr = ts.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+            var src = e.type || e.source || 'event';
+            var label = e.label || '';
+            var base = Number(e.baseSeconds || 0);
+            var applied = Number(e.appliedSeconds || 0);
+            var actual = Number(e.actualSeconds || applied);
+            var hype = Number(e.hypeMultiplier || 1);
+            var capNote = (applied > 0 && actual < applied) ? ' (capped)' : '';
+            var detail = '';
+            if (src === 'channel.cheer' || src === 'channel.bits.use') {
+              var bits = Number(e.bits || 0);
+              if (bits > 0) detail = bits + ' bits';
+            } else if (src === 'channel.subscribe' || src === 'channel.subscription.message') {
+              if (e.subTier) detail = 'Tier ' + String(e.subTier).replace(/^0+/, '') || e.subTier;
+            } else if (src === 'channel.subscription.gift') {
+              var gifts = Number(e.giftCount || 0);
+              if (gifts > 0) detail = gifts + ' gift sub' + (gifts === 1 ? '' : 's');
+            } else if (src === 'channel.charity_campaign.donate') {
+              var amt = Number(e.charityAmount || 0);
+              var dec = Number(e.charityDecimals || 2);
+              if (amt > 0) detail = '$' + (amt / Math.pow(10, dec)).toFixed(dec);
+            } else if (src === 'channel.follow') {
+              detail = 'Follow';
+            } else if (src === 'channel.hype_train.begin') {
+              detail = 'Hype Train started';
+            } else if (src === 'channel.hype_train.progress') {
+              detail = 'Hype Train progress';
+            } else if (src === 'channel.hype_train.end') {
+              detail = 'Hype Train ended';
+            } else if (src === 'manual_start' || src === 'manual_add' || src === 'manual_clear' || src === 'manual_restart') {
+              detail = label || (e.source || 'Manual');
+            }
+            var hypeInfo = hype !== 1 ? (' (base ' + base + 's ×' + hype + ')') : '';
+            return '<div class="log-line"><span class="log-time">' + tStr + '</span><span class="log-text">' +
+              src + (detail ? ' – ' + detail : '') + ': +' + actual + 's' + hypeInfo + capNote +
+              '</span></div>';
+          })
+          .join('');
+      }
+
+      async function fetchLog() {
+        try {
+          const r = await fetch('/api/events/log', { cache: 'no-store' });
+          if (!r.ok) return;
+          const j = await r.json();
+          renderLog(j.entries || []);
         } catch (e) {}
       }
 
@@ -1008,7 +1198,7 @@ app.get("/overlay/config", requireAdmin, (req, res) => {
         });
 
         // Timer controls
-        document.getElementById('startTimer').addEventListener('click', async function(e){ e.preventDefault(); const btn=e.currentTarget; flashButton(btn); setBusy(btn,true); await startTimer(); await updateCapStatus(); setBusy(btn,false); });
+        document.getElementById('startTimer').addEventListener('click', async function(e){ e.preventDefault(); const btn=e.currentTarget; flashButton(btn); setBusy(btn,true); await startTimer({ source: 'panel_start_button', label: 'Start Timer' }); await updateCapStatus(); setBusy(btn,false); });
         document.getElementById('saveDefault').addEventListener('click', async function(e){ e.preventDefault(); const btn=e.currentTarget; flashButton(btn); setBusy(btn,true); await saveDefaultInitial(); await updateCapStatus(); setBusy(btn,false); });
         const clearMaxBtn = document.getElementById('clearMax');
         if (clearMaxBtn) {
@@ -1025,7 +1215,17 @@ app.get("/overlay/config", requireAdmin, (req, res) => {
           });
         }
         Array.from(document.querySelectorAll('[data-add]')).forEach(function(btn){
-          btn.addEventListener('click', async function(e){ e.preventDefault(); flashButton(btn); var v = parseInt(btn.getAttribute('data-add'),10)||0; if (v>0) { setBusy(btn,true); await addTime(v); await updateCapStatus(); setBusy(btn,false);} });
+          btn.addEventListener('click', async function(e){
+            e.preventDefault();
+            flashButton(btn);
+            var v = parseInt(btn.getAttribute('data-add'),10)||0;
+            if (v>0) {
+              setBusy(btn,true);
+              await addTime(v, { source: 'panel_quick_add', label: btn.textContent.trim(), requestedSeconds: v });
+              await updateCapStatus();
+              setBusy(btn,false);
+            }
+          });
         });
         // Custom add seconds
         (function(){
@@ -1037,7 +1237,7 @@ app.get("/overlay/config", requireAdmin, (req, res) => {
             if (v <= 0) return;
             flashButton(btn);
             setBusy(btn, true);
-            await addTime(v);
+            await addTime(v, { source: 'panel_custom_add', label: 'Custom Add', requestedSeconds: v });
             await updateCapStatus();
             setBusy(btn, false);
           };
@@ -1046,6 +1246,30 @@ app.get("/overlay/config", requireAdmin, (req, res) => {
         })();
         document.getElementById('pause').addEventListener('click', async function(e){ e.preventDefault(); const btn=e.currentTarget; flashButton(btn); setBusy(btn,true); try { await fetch('/api/timer/pause', { method: 'POST' }); } catch(e) {} setBusy(btn,false); });
         document.getElementById('resume').addEventListener('click', async function(e){ e.preventDefault(); const btn=e.currentTarget; flashButton(btn); setBusy(btn,true); try { await fetch('/api/timer/resume', { method: 'POST' }); } catch(e) {} setBusy(btn,false); });
+        const endBtn = document.getElementById('endTimer');
+        if (endBtn) {
+          endBtn.addEventListener('click', async function(e){
+            e.preventDefault();
+            const btn = e.currentTarget;
+            flashButton(btn);
+            setBusy(btn,true);
+            try { await fetch('/api/timer/clear', { method: 'POST' }); } catch(e) {}
+            await updateCapStatus();
+            setBusy(btn,false);
+          });
+        }
+        const restartBtn = document.getElementById('restartTimer');
+        if (restartBtn) {
+          restartBtn.addEventListener('click', async function(e){
+            e.preventDefault();
+            const btn = e.currentTarget;
+            flashButton(btn);
+            setBusy(btn,true);
+            try { await fetch('/api/timer/restart', { method: 'POST' }); } catch(e) {}
+            await updateCapStatus();
+            setBusy(btn,false);
+          });
+        }
         const devPanel = document.getElementById('devTests');
         if (devPanel) {
           // Expose rules for client-side calculation
@@ -1057,6 +1281,7 @@ app.get("/overlay/config", requireAdmin, (req, res) => {
               e.preventDefault();
               var secs = parseInt(btn.getAttribute('data-test-seconds'), 10) || 0;
               if (secs <= 0) return;
+              var meta = { source: 'dev_quick_test', label: btn.textContent.trim(), requestedSeconds: secs };
               flashButton(btn);
               setBusy(btn, true);
               // Apply hype multiplier if active
@@ -1064,10 +1289,11 @@ app.get("/overlay/config", requireAdmin, (req, res) => {
                 const hype = await getHypeActive();
                 if (hype && window.DEV_RULES && window.DEV_RULES.hypeTrain) {
                   const mult = Number(window.DEV_RULES.hypeTrain.multiplier) || 1;
+                  meta.hypeMultiplier = mult;
                   secs = Math.floor(secs * mult);
                 }
               } catch(e) {}
-              await addTime(secs);
+              await addTime(secs, meta);
               await updateCapStatus();
               setBusy(btn, false);
             });
@@ -1079,9 +1305,14 @@ app.get("/overlay/config", requireAdmin, (req, res) => {
             const bits = num(document.getElementById('devBitsInput')?.value, 0);
             if (!window.DEV_RULES || bits <= 0) return;
             let secs = Math.floor(bits / (Number(window.DEV_RULES.bits?.per)||100)) * (Number(window.DEV_RULES.bits?.add_seconds)||0);
+            const meta = { source: 'dev_custom_bits', label: 'Custom Bits', bits: bits, requestedSeconds: secs };
             const hype = await getHypeActive();
-            if (hype) { const mult = Number(window.DEV_RULES.hypeTrain?.multiplier)||1; secs = Math.floor(secs * mult); }
-            flashButton(bitsBtn); setBusy(bitsBtn,true); await addTime(secs); await updateCapStatus(); setBusy(bitsBtn,false);
+            if (hype) {
+              const mult = Number(window.DEV_RULES.hypeTrain?.multiplier)||1;
+              meta.hypeMultiplier = mult;
+              secs = Math.floor(secs * mult);
+            }
+            flashButton(bitsBtn); setBusy(bitsBtn,true); await addTime(secs, meta); await updateCapStatus(); setBusy(bitsBtn,false);
           });
           // Custom subs
           const subsBtn = document.getElementById('devApplySubs');
@@ -1093,8 +1324,13 @@ app.get("/overlay/config", requireAdmin, (req, res) => {
             let per = Number((window.DEV_RULES.sub||{})[tier] ?? (window.DEV_RULES.sub||{})['1000'] ?? 0);
             let secs = Math.floor(count * per);
             const hype = await getHypeActive();
-            if (hype) { const mult = Number(window.DEV_RULES.hypeTrain?.multiplier)||1; secs = Math.floor(secs * mult); }
-            flashButton(subsBtn); setBusy(subsBtn,true); await addTime(secs); await updateCapStatus(); setBusy(subsBtn,false);
+            const meta = { source: 'dev_custom_subs', label: 'Custom Subs', subCount: count, subTier: tier, requestedSeconds: secs };
+            if (hype) {
+              const mult = Number(window.DEV_RULES.hypeTrain?.multiplier)||1;
+              meta.hypeMultiplier = mult;
+              secs = Math.floor(secs * mult);
+            }
+            flashButton(subsBtn); setBusy(subsBtn,true); await addTime(secs, meta); await updateCapStatus(); setBusy(subsBtn,false);
           });
           // Custom gift subs
           const giftsBtn = document.getElementById('devApplyGifts');
@@ -1104,8 +1340,13 @@ app.get("/overlay/config", requireAdmin, (req, res) => {
             if (!window.DEV_RULES) return;
             let secs = Math.floor(count * (Number(window.DEV_RULES.gift_sub?.per_sub_seconds)||0));
             const hype = await getHypeActive();
-            if (hype) { const mult = Number(window.DEV_RULES.hypeTrain?.multiplier)||1; secs = Math.floor(secs * mult); }
-            flashButton(giftsBtn); setBusy(giftsBtn,true); await addTime(secs); await updateCapStatus(); setBusy(giftsBtn,false);
+            const meta = { source: 'dev_custom_gifts', label: 'Custom Gift Subs', giftCount: count, requestedSeconds: secs };
+            if (hype) {
+              const mult = Number(window.DEV_RULES.hypeTrain?.multiplier)||1;
+              meta.hypeMultiplier = mult;
+              secs = Math.floor(secs * mult);
+            }
+            flashButton(giftsBtn); setBusy(giftsBtn,true); await addTime(secs, meta); await updateCapStatus(); setBusy(giftsBtn,false);
           });
         }
         const hypeOnBtn = document.getElementById('testHypeOn');
@@ -1138,6 +1379,20 @@ app.get("/overlay/config", requireAdmin, (req, res) => {
               if (typeof s.dangerColor !== 'undefined') document.getElementById('dangerColor').value = s.dangerColor || '#FF4D4D';
               if (typeof s.flashUnderSeconds !== 'undefined') document.getElementById('flashUnder').value = Number(s.flashUnderSeconds)||0;
               if (typeof s.timeFormat !== 'undefined') document.getElementById('timeFormat').value = (s.timeFormat==='hh:mm:ss' || s.timeFormat==='auto') ? s.timeFormat : 'mm:ss';
+              if (document.getElementById('addEffectEnabled')) {
+                document.getElementById('addEffectEnabled').checked =
+                  (typeof s.addEffectEnabled === 'boolean') ? s.addEffectEnabled : true;
+              }
+              if (document.getElementById('addEffectMode')) {
+                document.getElementById('addEffectMode').value = s.addEffectMode || 'pulse';
+              }
+              if (document.getElementById('hypeLabelEnabled')) {
+                document.getElementById('hypeLabelEnabled').checked =
+                  (typeof s.hypeLabelEnabled === 'boolean') ? s.hypeLabelEnabled : true;
+              }
+              if (document.getElementById('hypeLabel')) {
+                document.getElementById('hypeLabel').value = s.hypeLabel || '🔥 Hype Train active';
+              }
             } catch(e) {}
           }).catch(function(){});
         })();
@@ -1200,6 +1455,18 @@ app.get("/overlay/config", requireAdmin, (req, res) => {
         });
 
         // (rules UI removed)
+
+        const clearLogBtn = document.getElementById('clearLog');
+        if (clearLogBtn) {
+          clearLogBtn.addEventListener('click', async function(e) {
+            e.preventDefault();
+            flashButton(clearLogBtn);
+            try { await fetch('/api/events/log/clear', { method: 'POST' }); } catch (err) {}
+            renderLog([]);
+          });
+        }
+
+        setInterval(fetchLog, 5000);
       }
 
       bind();
@@ -1241,8 +1508,17 @@ function secondsFromEvent(notification) {
       return RULES.resub.base_seconds;
     }
     case "channel.subscription.gift": {
-      const count = e.total ?? e.cumulative_total ?? e.total_count ?? 0;
-      return (count || 1) * RULES.gift_sub.per_sub_seconds;
+      // For gift subs, use the per-event total (number of subs in this gift).
+      // Do not use lifetime cumulative totals, or we will miscount.
+      let count = Number(
+        typeof e.total !== "undefined" ? e.total : e.total_count ?? 1
+      );
+      if (!Number.isFinite(count) || count <= 0) count = 1;
+      const perGift = Math.max(
+        0,
+        Number(RULES.gift_sub?.per_sub_seconds || 0)
+      );
+      return count * perGift;
     }
     case "channel.charity_campaign.donate": {
       const amount = e.amount?.value ?? 0; // in minor units
@@ -1270,6 +1546,7 @@ async function handleEventSub(notification) {
   state.seen.set(id, now + 24 * 3600 * 1000);
 
   const subType = notification?.payload?.subscription?.type;
+  const e = notification?.payload?.event ?? {};
 
   if (
     subType === "channel.hype_train.begin" ||
@@ -1281,24 +1558,57 @@ async function handleEventSub(notification) {
     setHype(false);
   }
 
-  let seconds = secondsFromEvent(notification);
-  if (seconds > 0 && state.hypeActive) {
-    const R = getRules(CURRENT_BROADCASTER_ID);
-    seconds = Math.floor(seconds * R.hypeTrain.multiplier);
-  }
-  if (seconds > 0) {
-    const before = getRemainingSeconds();
-    const remaining = addSeconds(seconds);
-    const actual = Math.max(0, remaining - before);
-    await broadcastToChannel({
-      broadcasterId: getBroadcasterId(),
-      type: "timer_add",
-      payload: {
-        secondsAdded: actual,
-        newRemaining: remaining,
-        hype: state.hypeActive,
-      },
+  if (subType === "channel.hype_train.begin" || subType === "channel.hype_train.end") {
+    addLogEntry({
+      type: subType,
+      baseSeconds: 0,
+      appliedSeconds: 0,
+      actualSeconds: 0,
+      hypeMultiplier: 1,
+      hypeLevel: e.level,
+      hypeTotal: e.total,
+      hypeGoal: e.goal,
     });
+  }
+
+  const baseSeconds = secondsFromEvent(notification);
+  let appliedSeconds = baseSeconds;
+  let hypeMultiplier = 1;
+  if (baseSeconds > 0 && state.hypeActive) {
+    const R = getRules(CURRENT_BROADCASTER_ID);
+    hypeMultiplier = Number(R.hypeTrain.multiplier || 1);
+    appliedSeconds = Math.floor(baseSeconds * hypeMultiplier);
+  }
+
+  if (baseSeconds > 0) {
+    const before = getRemainingSeconds();
+    const remaining = addSeconds(appliedSeconds);
+    const actual = Math.max(0, remaining - before);
+
+    addLogEntry({
+      type: subType,
+      baseSeconds,
+      hypeMultiplier,
+      appliedSeconds,
+      actualSeconds: actual,
+      bits: e.bits ?? e.total_bits_used ?? e.total_bits ?? undefined,
+      subTier: e.tier,
+      giftCount: e.total ?? e.cumulative_total ?? e.total_count,
+      charityAmount: e.amount?.value,
+      charityDecimals: e.amount?.decimal_places,
+    });
+
+    if (appliedSeconds > 0) {
+      await broadcastToChannel({
+        broadcasterId: getBroadcasterId(),
+        type: "timer_add",
+        payload: {
+          secondsAdded: actual,
+          newRemaining: remaining,
+          hype: state.hypeActive,
+        },
+      });
+    }
   }
 }
 
@@ -1322,7 +1632,7 @@ setInterval(async () => {
   await broadcastToChannel({
     broadcasterId: getBroadcasterId(),
     type: "timer_tick",
-    payload: { remaining },
+    payload: { remaining, hype: state.hypeActive },
   }).catch(() => {});
 
   // Fan-out to SSE clients

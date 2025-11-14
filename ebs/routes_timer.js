@@ -1,4 +1,5 @@
 import { broadcastToChannel } from './broadcast.js';
+import { addLogEntry } from './event_log.js';
 
 export function mountTimerRoutes(app, ctx) {
   const {
@@ -17,10 +18,12 @@ export function mountTimerRoutes(app, ctx) {
     setMaxTotalSeconds,
     capReached,
     getTotals,
+    clearTimer,
   } = ctx;
 
   app.post('/api/timer/start', async (req, res) => {
     let seconds = Number(req.body?.seconds ?? 300);
+    const meta = (req.body && typeof req.body.meta === 'object' && req.body.meta) || {};
     // Pull current user's max setting, if available
     try {
       const uid = req.session?.twitchUser?.id;
@@ -32,7 +35,18 @@ export function mountTimerRoutes(app, ctx) {
       }
     } catch (e) {}
     if (typeof setInitialSeconds === 'function') setInitialSeconds(seconds);
+    // Manual start/reset: treat requested seconds as the new base
     state.timerExpiryEpochMs = Date.now() + seconds * 1000;
+    addLogEntry({
+      type: 'manual_start',
+      source: String(meta.source || ''),
+      label: String(meta.label || ''),
+      requestedSeconds: Number(meta.requestedSeconds ?? seconds) || seconds,
+      baseSeconds: seconds,
+      appliedSeconds: seconds,
+      actualSeconds: seconds,
+      hypeMultiplier: Number(meta.hypeMultiplier || 1) || 1
+    });
     await broadcastToChannel({
       broadcasterId: (typeof getBroadcasterId === 'function' && getBroadcasterId()) || BROADCASTER_ID,
       type: 'timer_reset',
@@ -43,9 +57,20 @@ export function mountTimerRoutes(app, ctx) {
 
   app.post('/api/timer/add', async (req, res) => {
     const seconds = Number(req.body?.seconds ?? 60);
+    const meta = (req.body && typeof req.body.meta === 'object' && req.body.meta) || {};
     const before = getRemainingSeconds();
     const remaining = addSeconds(seconds);
     const actual = Math.max(0, remaining - before);
+    addLogEntry({
+      type: 'manual_add',
+      source: String(meta.source || ''),
+      label: String(meta.label || ''),
+      requestedSeconds: Number(meta.requestedSeconds ?? seconds) || seconds,
+      baseSeconds: seconds,
+      appliedSeconds: seconds,
+      actualSeconds: actual,
+      hypeMultiplier: Number(meta.hypeMultiplier || 1) || 1
+    });
     await broadcastToChannel({
       broadcasterId: (typeof getBroadcasterId === 'function' && getBroadcasterId()) || BROADCASTER_ID,
       type: 'timer_add',
@@ -67,6 +92,79 @@ export function mountTimerRoutes(app, ctx) {
       try { client.res.write('event: timer_tick\n'); client.res.write(`data: ${payload}\n\n`); } catch (e) { sseClients.delete(client); }
     }
     res.json({ remaining, paused: state.paused });
+  });
+
+  app.post('/api/timer/clear', async (req, res) => {
+    if (!req?.session?.isAdmin) return res.status(401).json({ error: 'Admin login required' });
+    if (typeof clearTimer === 'function') clearTimer();
+    const remaining = getRemainingSeconds();
+    addLogEntry({
+      type: 'manual_clear',
+      source: 'panel_end_timer',
+      label: 'End Timer',
+      requestedSeconds: 0,
+      baseSeconds: 0,
+      appliedSeconds: 0,
+      actualSeconds: 0,
+      hypeMultiplier: 1
+    });
+    const payload = JSON.stringify({ remaining, hype: state.hypeActive, paused: state.paused, capReached: typeof capReached === 'function' ? capReached() : false });
+    for (const client of Array.from(sseClients)) {
+      try { client.res.write('event: timer_tick\n'); client.res.write(`data: ${payload}\n\n`); } catch (e) { sseClients.delete(client); }
+    }
+    await broadcastToChannel({
+      broadcasterId: (typeof getBroadcasterId === 'function' && getBroadcasterId()) || BROADCASTER_ID,
+      type: 'timer_reset',
+      payload: { remaining, paused: state.paused }
+    }).catch(() => {});
+    res.json({ remaining, cleared: true });
+  });
+
+  app.post('/api/timer/restart', async (req, res) => {
+    if (!req?.session?.isAdmin) return res.status(401).json({ error: 'Admin login required' });
+    const secs = Math.max(0, Math.floor(Number(state.initialSeconds || 0)));
+    if (secs <= 0) {
+      if (typeof clearTimer === 'function') clearTimer();
+      const remaining = getRemainingSeconds();
+      addLogEntry({
+        type: 'manual_restart',
+        source: 'panel_restart_timer',
+        label: 'Restart Timer (no initial)',
+        requestedSeconds: 0,
+        baseSeconds: 0,
+        appliedSeconds: 0,
+        actualSeconds: remaining,
+        hypeMultiplier: 1
+      });
+      const payload = JSON.stringify({ remaining, hype: state.hypeActive, paused: state.paused, capReached: typeof capReached === 'function' ? capReached() : false });
+      for (const client of Array.from(sseClients)) {
+        try { client.res.write('event: timer_tick\n'); client.res.write(`data: ${payload}\n\n`); } catch (e) { sseClients.delete(client); }
+      }
+      return res.json({ remaining });
+    }
+    if (typeof setInitialSeconds === 'function') setInitialSeconds(secs);
+    state.timerExpiryEpochMs = Date.now() + secs * 1000;
+    const remaining = getRemainingSeconds();
+    addLogEntry({
+      type: 'manual_restart',
+      source: 'panel_restart_timer',
+      label: 'Restart Timer',
+      requestedSeconds: secs,
+      baseSeconds: secs,
+      appliedSeconds: secs,
+      actualSeconds: remaining,
+      hypeMultiplier: 1
+    });
+    const payload = JSON.stringify({ remaining, hype: state.hypeActive, paused: state.paused, capReached: typeof capReached === 'function' ? capReached() : false });
+    for (const client of Array.from(sseClients)) {
+      try { client.res.write('event: timer_tick\n'); client.res.write(`data: ${payload}\n\n`); } catch (e) { sseClients.delete(client); }
+    }
+    await broadcastToChannel({
+      broadcasterId: (typeof getBroadcasterId === 'function' && getBroadcasterId()) || BROADCASTER_ID,
+      type: 'timer_reset',
+      payload: { remaining, paused: state.paused }
+    }).catch(() => {});
+    res.json({ remaining });
   });
 
   app.post('/api/timer/resume', (req, res) => {

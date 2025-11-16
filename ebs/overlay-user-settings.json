@@ -3,7 +3,7 @@
     "defaultInitialSeconds": 14400,
     "maxTotalSeconds": 0,
     "panelCollapsedSections": {
-      "style": true,
+      "style": false,
       "testing": true
     }
   }

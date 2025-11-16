@@ -21,8 +21,8 @@
     "flashUnderSeconds": 0,
     "timeFormat": "auto",
     "addEffectEnabled": true,
-    "addEffectMode": "bounce",
+    "addEffectMode": "pulse",
     "hypeLabelEnabled": true,
-    "hypeLabel": "🔥 Hype Train Active"
+    "hypeLabel": "🔥 Hype Train active"
   }
 }

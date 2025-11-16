@@ -1,5 +1,6 @@
 import WebSocket from 'ws';
 import fetch from 'node-fetch';
+import { logger } from './logger.js';
 
 const WS_URL = 'wss://eventsub.wss.twitch.tv/ws?keepalive_timeout_seconds=30';
 
@@ -50,13 +51,13 @@ export async function connectEventSubWS({ userAccessToken, clientId, broadcaster
           if (!r.ok && r.status !== 202) {
             const t = await r.text().catch(() => '');
             const info = { type, version, status: r.status, body: t };
-            console.error('EventSub subscribe failed', info);
+            logger.error('eventsub_subscription_failed', info);
           } else {
             // 202 Accepted is typical; Twitch will send a notification once enabled
-            if (process.env.DEBUG) console.log('EventSub subscribe requested', type, version);
+            if (process.env.DEBUG) logger.debug('eventsub_subscription_requested', { type, version });
           }
         } catch (e) {
-          console.error('Failed to create subscription', type, e?.message);
+          logger.error('eventsub_subscription_exception', { type, message: e?.message });
         }
       }
     }
@@ -67,7 +68,7 @@ export async function connectEventSubWS({ userAccessToken, clientId, broadcaster
   });
 
   ws.on('close', () => {
-    console.log('EventSub WS closed');
+    logger.warn('eventsub_ws_closed');
   });
 
   return ws;

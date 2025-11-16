@@ -1,3 +1,5 @@
+import { logger } from './logger.js';
+
 export function mountOverlayApiRoutes(app, ctx) {
   const { requireOverlayAuth, normKey, getSavedStyle, setSavedStyle, getOrCreateUserKey, rotateUserKey, getUserSettings, setUserSettings, sseClients, getRules, setRules, setMaxTotalSeconds } = ctx;
 
@@ -24,6 +26,11 @@ export function mountOverlayApiRoutes(app, ctx) {
         client.res.write(`data: ${JSON.stringify(saved)}\n\n`);
       } catch (e) { try { sseClients.delete(client); } catch {} }
     }
+    logger.info('overlay_style_saved', {
+      requestId: req.requestId,
+      key,
+      userId: req.session?.twitchUser?.id,
+    });
     res.json(saved);
   });
 
@@ -34,6 +41,10 @@ export function mountOverlayApiRoutes(app, ctx) {
     if (!uid) return res.status(400).json({ error: 'No user in session' });
     const key = getOrCreateUserKey(uid);
     req.session.userOverlayKey = key;
+    logger.info('overlay_key_issued', {
+      requestId: req.requestId,
+      userId: uid,
+    });
     res.json({ key });
   });
 
@@ -43,6 +54,10 @@ export function mountOverlayApiRoutes(app, ctx) {
     if (!uid) return res.status(400).json({ error: 'No user in session' });
     const key = rotateUserKey(uid);
     req.session.userOverlayKey = key;
+    logger.info('overlay_key_rotated', {
+      requestId: req.requestId,
+      userId: uid,
+    });
     res.json({ key });
   });
 
@@ -61,6 +76,10 @@ export function mountOverlayApiRoutes(app, ctx) {
     const saved = setUserSettings(uid, req.body || {});
     // propagate max cap into runtime state for immediate effect
     try { if (typeof setMaxTotalSeconds === 'function') setMaxTotalSeconds(Number(saved.maxTotalSeconds||0)); } catch(e) {}
+    logger.info('user_settings_saved', {
+      requestId: req.requestId,
+      userId: uid,
+    });
     res.json(saved);
   });
 
@@ -80,6 +99,10 @@ export function mountOverlayApiRoutes(app, ctx) {
     try {
       const uid = req.session?.twitchUser?.id;
       const saved = setRules(uid, req.body || {});
+      logger.info('rules_saved', {
+        requestId: req.requestId,
+        userId: uid,
+      });
       res.json(saved);
     } catch (e) {
       res.status(400).json({ error: 'Invalid rules payload' });

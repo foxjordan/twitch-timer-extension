@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import ReactDOM from 'react-dom/client';
+import { initializeAnalytics } from './firebase';
 
 function App() {
   const [remaining, setRemaining] = useState(0);
@@ -7,6 +8,8 @@ function App() {
   const tickRef = useRef();
 
   useEffect(() => {
+    initializeAnalytics();
+
     // Twitch extension lifecycle
     window.Twitch?.ext?.onAuthorized(() => {
       // no-op for reads; broadcasts are public

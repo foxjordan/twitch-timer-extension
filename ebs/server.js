@@ -41,6 +41,7 @@ import { mountAuthRoutes } from "./routes_auth.js";
 import { mountOverlayApiRoutes } from "./routes_overlay_api.js";
 import { mountOverlayPageRoutes } from "./routes_overlay_page.js";
 import { mountHomePageRoutes } from "./routes_home_page.js";
+import { logger, requestLogger } from "./logger.js";
 import { getRules, setRules, loadRules } from "./rules_store.js";
 import {
   addLogEntry,
@@ -52,6 +53,7 @@ const app = express();
 // honor X-Forwarded-* so req.protocol resolves to https behind Fly
 app.set("trust proxy", 1);
 app.use(express.json());
+app.use(requestLogger());
 app.use(
   session({
     name: "overlay.sid",
@@ -79,9 +81,18 @@ let CURRENT_BROADCASTER_ID = BROADCASTER_ID || null;
 let CURRENT_BROADCASTER_LOGIN = null;
 let eventSubWS = null;
 const OVERLAY_KEY = process.env.OVERLAY_KEY || "";
+const getBroadcasterId = () =>
+  String(CURRENT_BROADCASTER_ID || BROADCASTER_ID || "");
 
 // Server-Sent Events (SSE) clients for external overlays
 const sseClients = new Set();
+const observability = {
+  lastEventSubEventAt: null,
+  lastEventSubType: null,
+  lastTimerMutationAt: null,
+  lastBroadcastErrorAt: null,
+  totalSseClientsServed: 0,
+};
 
 // Load keys + styles at startup
 loadOverlayKeys().catch(() => {});
@@ -141,14 +152,23 @@ setInterval(() => {
 }, 10 * 60 * 1000);
 
 // Basic health endpoint
-app.get("/healthz", (_req, res) => res.json({ ok: true }));
+app.get("/healthz", (_req, res) => {
+  const eventSubReady =
+    eventSubWS && typeof eventSubWS.readyState === "number"
+      ? eventSubWS.readyState === 1
+      : Boolean(eventSubWS);
+  res.json({
+    ok: true,
+    broadcasterId: getBroadcasterId(),
+    sseClients: sseClients.size,
+    eventSubConnected: eventSubReady,
+    observability,
+  });
+});
 
 // ---- Helpers ----
 
 // ---- Routes mounting ----
-const getBroadcasterId = () =>
-  String(CURRENT_BROADCASTER_ID || BROADCASTER_ID || "");
-
 mountTimerRoutes(app, {
   BROADCASTER_ID,
   getBroadcasterId,
@@ -166,6 +186,12 @@ mountTimerRoutes(app, {
   capReached,
   getTotals,
   clearTimer,
+  onBroadcastError: () => {
+    observability.lastBroadcastErrorAt = new Date().toISOString();
+  },
+  onTimerMutation: () => {
+    observability.lastTimerMutationAt = new Date().toISOString();
+  },
 });
 
 // Admin-only: event log for counted contributions
@@ -239,6 +265,12 @@ app.get("/api/overlay/stream", (req, res) => {
   const key = normKey(req.query.key);
   const client = { res, key };
   sseClients.add(client);
+  observability.totalSseClientsServed += 1;
+  logger.info("sse_client_connected", {
+    requestId: req.requestId,
+    key,
+    activeClients: sseClients.size,
+  });
 
   // Send a ping comment so OBS marks as connected
   res.write(": connected\n\n");
@@ -259,6 +291,10 @@ app.get("/api/overlay/stream", (req, res) => {
 
   req.on("close", () => {
     sseClients.delete(client);
+    logger.info("sse_client_disconnected", {
+      key,
+      activeClients: sseClients.size,
+    });
   });
 });
 
@@ -282,11 +318,16 @@ mountAuthRoutes(app, {
         })
           .then((ws) => {
             eventSubWS = ws;
+             logger.info("eventsub_ws_connected", {
+               broadcasterId: CURRENT_BROADCASTER_ID,
+             });
           })
-          .catch((err) => console.error("EventSub WS error", err));
+          .catch((err) => {
+            logger.error("eventsub_ws_error", { message: err?.message });
+          });
       }
     } catch (e) {
-      console.error("onAdminLogin wiring failed", e);
+      logger.error("admin_login_handler_failed", { message: e?.message });
     }
   },
 });
@@ -390,6 +431,13 @@ async function handleEventSub(notification) {
 
   const subType = notification?.payload?.subscription?.type;
   const e = notification?.payload?.event ?? {};
+  observability.lastEventSubEventAt = new Date().toISOString();
+  observability.lastEventSubType = subType || "unknown";
+  logger.info("eventsub_notification", {
+    eventId: id,
+    type: subType,
+    broadcasterId: getBroadcasterId(),
+  });
 
   if (
     subType === "channel.hype_train.begin" ||
@@ -427,6 +475,7 @@ async function handleEventSub(notification) {
     const before = getRemainingSeconds();
     const remaining = addSeconds(appliedSeconds);
     const actual = Math.max(0, remaining - before);
+    observability.lastTimerMutationAt = new Date().toISOString();
 
     addLogEntry({
       type: subType,
@@ -442,15 +491,24 @@ async function handleEventSub(notification) {
     });
 
     if (appliedSeconds > 0) {
-      await broadcastToChannel({
-        broadcasterId: getBroadcasterId(),
-        type: "timer_add",
-        payload: {
-          secondsAdded: actual,
-          newRemaining: remaining,
-          hype: state.hypeActive,
-        },
-      });
+      try {
+        await broadcastToChannel({
+          broadcasterId: getBroadcasterId(),
+          type: "timer_add",
+          payload: {
+            secondsAdded: actual,
+            newRemaining: remaining,
+            hype: state.hypeActive,
+          },
+        });
+      } catch (err) {
+        observability.lastBroadcastErrorAt = new Date().toISOString();
+        logger.error("broadcast_failed", {
+          reason: err?.message,
+          type: "timer_add",
+          eventId: id,
+        });
+      }
     }
   }
 }
@@ -465,8 +523,13 @@ if (process.env.BROADCASTER_USER_TOKEN) {
   })
     .then((ws) => {
       eventSubWS = ws;
+      logger.info("eventsub_ws_connected", {
+        broadcasterId: getBroadcasterId(),
+      });
     })
-    .catch((err) => console.error("EventSub WS error", err));
+    .catch((err) => {
+      logger.error("eventsub_ws_error", { message: err?.message });
+    });
 }
 
 // Server tick → broadcast remaining once per second
@@ -476,7 +539,13 @@ setInterval(async () => {
     broadcasterId: getBroadcasterId(),
     type: "timer_tick",
     payload: { remaining, hype: state.hypeActive },
-  }).catch(() => {});
+  }).catch((err) => {
+    observability.lastBroadcastErrorAt = new Date().toISOString();
+    logger.error("broadcast_failed", {
+      reason: err?.message,
+      type: "timer_tick",
+    });
+  });
 
   // Fan-out to SSE clients
   const payload = JSON.stringify({

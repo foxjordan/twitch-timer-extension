@@ -1,5 +1,6 @@
 import { broadcastToChannel } from './broadcast.js';
 import { addLogEntry } from './event_log.js';
+import { logger } from './logger.js';
 
 export function mountTimerRoutes(app, ctx) {
   const {
@@ -19,7 +20,31 @@ export function mountTimerRoutes(app, ctx) {
     capReached,
     getTotals,
     clearTimer,
+    onBroadcastError,
+    onTimerMutation,
   } = ctx;
+
+  const markTimerMutation = () => {
+    if (typeof onTimerMutation === 'function') onTimerMutation();
+  };
+
+  async function emitToChannel(eventType, payload) {
+    try {
+      await broadcastToChannel({
+        broadcasterId:
+          (typeof getBroadcasterId === 'function' && getBroadcasterId()) ||
+          BROADCASTER_ID,
+        type: eventType,
+        payload,
+      });
+    } catch (err) {
+      if (typeof onBroadcastError === 'function') onBroadcastError();
+      logger.error('broadcast_failed', {
+        reason: err?.message,
+        type: eventType,
+      });
+    }
+  }
 
   app.post('/api/timer/start', async (req, res) => {
     let seconds = Number(req.body?.seconds ?? 300);
@@ -47,11 +72,13 @@ export function mountTimerRoutes(app, ctx) {
       actualSeconds: seconds,
       hypeMultiplier: Number(meta.hypeMultiplier || 1) || 1
     });
-    await broadcastToChannel({
-      broadcasterId: (typeof getBroadcasterId === 'function' && getBroadcasterId()) || BROADCASTER_ID,
-      type: 'timer_reset',
-      payload: { remaining: seconds, paused: state.paused }
+    logger.info('timer_started', {
+      requestId: req.requestId,
+      seconds,
+      userId: req.session?.twitchUser?.id,
     });
+    markTimerMutation();
+    await emitToChannel('timer_reset', { remaining: seconds, paused: state.paused });
     res.json({ remaining: seconds });
   });
 
@@ -71,11 +98,14 @@ export function mountTimerRoutes(app, ctx) {
       actualSeconds: actual,
       hypeMultiplier: Number(meta.hypeMultiplier || 1) || 1
     });
-    await broadcastToChannel({
-      broadcasterId: (typeof getBroadcasterId === 'function' && getBroadcasterId()) || BROADCASTER_ID,
-      type: 'timer_add',
-      payload: { secondsAdded: actual, newRemaining: remaining, hype: state.hypeActive, paused: state.paused }
+    logger.info('timer_added', {
+      requestId: req.requestId,
+      added: actual,
+      requested: seconds,
+      userId: req.session?.twitchUser?.id,
     });
+    markTimerMutation();
+    await emitToChannel('timer_add', { secondsAdded: actual, newRemaining: remaining, hype: state.hypeActive, paused: state.paused });
     res.json({ remaining, added: actual });
   });
 
@@ -91,6 +121,12 @@ export function mountTimerRoutes(app, ctx) {
     for (const client of Array.from(sseClients)) {
       try { client.res.write('event: timer_tick\n'); client.res.write(`data: ${payload}\n\n`); } catch (e) { sseClients.delete(client); }
     }
+    logger.info('timer_paused', {
+      requestId: req.requestId,
+      userId: req.session?.twitchUser?.id,
+      remaining,
+    });
+    markTimerMutation();
     res.json({ remaining, paused: state.paused });
   });
 
@@ -112,11 +148,9 @@ export function mountTimerRoutes(app, ctx) {
     for (const client of Array.from(sseClients)) {
       try { client.res.write('event: timer_tick\n'); client.res.write(`data: ${payload}\n\n`); } catch (e) { sseClients.delete(client); }
     }
-    await broadcastToChannel({
-      broadcasterId: (typeof getBroadcasterId === 'function' && getBroadcasterId()) || BROADCASTER_ID,
-      type: 'timer_reset',
-      payload: { remaining, paused: state.paused }
-    }).catch(() => {});
+    logger.info('timer_cleared', { requestId: req.requestId, userId: req.session?.twitchUser?.id });
+    markTimerMutation();
+    await emitToChannel('timer_reset', { remaining, paused: state.paused });
     res.json({ remaining, cleared: true });
   });
 
@@ -140,6 +174,7 @@ export function mountTimerRoutes(app, ctx) {
       for (const client of Array.from(sseClients)) {
         try { client.res.write('event: timer_tick\n'); client.res.write(`data: ${payload}\n\n`); } catch (e) { sseClients.delete(client); }
       }
+      markTimerMutation();
       return res.json({ remaining });
     }
     if (typeof setInitialSeconds === 'function') setInitialSeconds(secs);
@@ -159,11 +194,13 @@ export function mountTimerRoutes(app, ctx) {
     for (const client of Array.from(sseClients)) {
       try { client.res.write('event: timer_tick\n'); client.res.write(`data: ${payload}\n\n`); } catch (e) { sseClients.delete(client); }
     }
-    await broadcastToChannel({
-      broadcasterId: (typeof getBroadcasterId === 'function' && getBroadcasterId()) || BROADCASTER_ID,
-      type: 'timer_reset',
-      payload: { remaining, paused: state.paused }
-    }).catch(() => {});
+    logger.info('timer_restarted', {
+      requestId: req.requestId,
+      userId: req.session?.twitchUser?.id,
+      seconds: remaining,
+    });
+    markTimerMutation();
+    await emitToChannel('timer_reset', { remaining, paused: state.paused });
     res.json({ remaining });
   });
 
@@ -174,6 +211,12 @@ export function mountTimerRoutes(app, ctx) {
     for (const client of Array.from(sseClients)) {
       try { client.res.write('event: timer_tick\n'); client.res.write(`data: ${payload}\n\n`); } catch (e) { sseClients.delete(client); }
     }
+    logger.info('timer_resumed', {
+      requestId: req.requestId,
+      userId: req.session?.twitchUser?.id,
+      remaining,
+    });
+    markTimerMutation();
     res.json({ remaining, paused: state.paused });
   });
 
@@ -185,11 +228,13 @@ export function mountTimerRoutes(app, ctx) {
     const active = Boolean(req.body?.active);
     setHype(active);
     const remaining = getRemainingSeconds();
-    await broadcastToChannel({
-      broadcasterId: (typeof getBroadcasterId === 'function' && getBroadcasterId()) || BROADCASTER_ID,
-      type: 'timer_add',
-      payload: { secondsAdded: 0, newRemaining: remaining, hype: state.hypeActive }
-    }).catch(() => {});
+    logger.info('timer_hype_manual', {
+      requestId: req.requestId,
+      userId: req.session?.twitchUser?.id,
+      active,
+    });
+    markTimerMutation();
+    await emitToChannel('timer_add', { secondsAdded: 0, newRemaining: remaining, hype: state.hypeActive });
     const payload = JSON.stringify({ remaining, hype: state.hypeActive, paused: state.paused });
     for (const client of Array.from(sseClients)) {
       try { client.res.write('event: timer_tick\n'); client.res.write(`data: ${payload}\n\n`); } catch (e) { sseClients.delete(client); }

@@ -1,6 +1,10 @@
 {
   "74034487": {
     "defaultInitialSeconds": 14400,
-    "maxTotalSeconds": 0
+    "maxTotalSeconds": 0,
+    "panelCollapsedSections": {
+      "style": true,
+      "testing": true
+    }
   }
 }

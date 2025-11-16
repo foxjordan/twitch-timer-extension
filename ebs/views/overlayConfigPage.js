@@ -36,8 +36,16 @@ export function renderOverlayConfigPage(options = {}) {
     shadowBlur: Number(initialQuery.shadowBlur ?? 8),
     stroke: Number(initialQuery.stroke ?? 0),
     strokeColor: String(initialQuery.strokeColor ?? '#000000'),
+    warnEnabled: String(initialQuery.warnEnabled ?? '1') !== '0',
+    dangerEnabled: String(initialQuery.dangerEnabled ?? '1') !== '0',
+    flashEnabled: String(initialQuery.flashEnabled ?? '1') !== '0',
     key: String(initialQuery.key ?? ''),
   };
+  const collapsedSections = (settings && settings.panelCollapsedSections) || {};
+  const isCollapsed = (id) => Boolean(collapsedSections && collapsedSections[id]);
+  const sectionClass = (id) => `section${isCollapsed(id) ? ' collapsed' : ''}`;
+  const sectionBodyAttr = (id) => (isCollapsed(id) ? 'style="display:none"' : '');
+  const sectionExpandedAttr = (id) => (isCollapsed(id) ? 'false' : 'true');
 
   const html = `\`<!doctype html>
 <html>
@@ -81,12 +89,19 @@ export function renderOverlayConfigPage(options = {}) {
       @keyframes btnpulse { 0% { transform: scale(0.99); } 100% { transform: scale(1); } }
       .btn-click { animation: btnpulse .18s ease; }
       .url { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; background: #151517; border: 1px solid #3a3a3d; padding: 8px; border-radius: 8px; overflow: auto; }
-      iframe { width: 100%; height: 360px; border: 0; background: #000; }
+      iframe { width: 100%; height: 180px; border: 0; background: #000; }
       .hint { font-size: 12px; opacity: 0.8; }
       .log-box { margin-top: 8px; padding: 8px; background: #151517; border: 1px solid #3a3a3d; border-radius: 8px; max-height: 160px; overflow-y: auto; font-size: 12px; }
       .log-line { margin-bottom: 4px; white-space: nowrap; text-overflow: ellipsis; overflow: hidden; }
       .log-time { opacity: 0.7; margin-right: 6px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
       .log-text { opacity: 0.9; }
+      .section { border: 1px solid #303038; border-radius: 12px; margin-bottom: 16px; background: #151517; }
+      .section-toggle { width: 100%; background: none; border: 0; padding: 12px; color: #efeff1; font-size: 15px; font-weight: 600; display: flex; align-items: center; justify-content: space-between; cursor: pointer; }
+      .section-toggle:hover { background: rgba(255,255,255,0.03); }
+      .section-body { padding: 0 12px 12px; }
+      .section-arrow { transition: transform .2s ease; font-size: 12px; opacity: 0.8; }
+      .section.collapsed .section-arrow { transform: rotate(-90deg); }
+      .section.collapsed .section-body { display: none; }
     </style>
   </head>
   <body>
@@ -102,208 +117,219 @@ export function renderOverlayConfigPage(options = {}) {
     </header>
     <div class="row">
       <div class="panel controls">
-        <div class="control"><label>Overlay Key</label>
-          <div style="display:flex; gap:8px; align-items:center;">
-            <input id="key" type="text" value="${userKey}" readonly style="background:#151517; color:#efeff1;">
-            <button class="secondary" id="rotateKey" title="Generate a new overlay key">Rotate</button>
-          </div>
-        </div>
-        <div class="control"><label>Font Size</label><input id="fontSize" type="number" min="10" max="300" step="1" value="${
-          initial.fontSize
-        }"></div>
-        <div class="control"><label>Color</label><input id="color" type="color" value="${
-          initial.color
-        }"></div>
-        <div class="control"><label>Transparent</label><input id="transparent" type="checkbox" ${
-          initial.transparent ? "checked" : ""
-        }></div>
-        <div class="control"><label>Background</label><input id="bg" type="color" value="#000000"></div>
-        <div class="control"><label>Font Family</label><input id="font" type="text" value="${
-          initial.font
-        }"></div>
-        <div class="control"><label>Show Label</label><input id="label" type="checkbox" ${
-          initial.label ? "checked" : ""
-        }></div>
-        <div class="control"><label>Label Text</label><input id="title" type="text" value="${
-          initial.title
-        }"></div>
-        <div class="control"><label>Align</label>
-          <select id="align">
-            <option ${
-              initial.align === "left" ? "selected" : ""
-            } value="left">left</option>
-            <option ${
-              initial.align === "center" ? "selected" : ""
-            } value="center">center</option>
-            <option ${
-              initial.align === "right" ? "selected" : ""
-            } value="right">right</option>
-          </select>
-        </div>
-        <div class="control"><label>Weight</label><input id="weight" type="number" min="100" max="1000" step="100" value="${
-          initial.weight
-        }"></div>
-        <div class="control"><label>Shadow</label><input id="shadow" type="checkbox" ${
-          initial.shadow ? "checked" : ""
-        }></div>
-        <div class="control"><label>Shadow Color</label><input id="shadowColor" type="color" value="#000000"></div>
-        <div class="control"><label>Shadow Blur</label><input id="shadowBlur" type="number" min="0" max="50" step="1" value="${
-          initial.shadowBlur
-        }"></div>
-        <div class="control"><label>Outline Width</label><input id="stroke" type="number" min="0" max="20" step="1" value="${
-          initial.stroke
-        }"></div>
-        <div class="control"><label>Outline Color</label><input id="strokeColor" type="color" value="#000000"></div>
-        <div class="row2">
-          <button class="secondary" id="presetClean">Preset: Clean</button>
-          <button class="secondary" id="presetBold">Preset: Bold White</button>
-          <button class="secondary" id="presetOutline">Preset: Outline</button>
-          <button class="secondary" id="presetShadow">Preset: Shadow</button>
-        </div>
-        <div class="control"><label>Time format</label>
-          <select id="timeFormat">
-            <option value="mm:ss" >mm:ss</option>
-            <option value="hh:mm:ss">hh:mm:ss</option>
-            <option value="auto" selected>auto (hh:mm:ss when hours > 0)</option>
-          </select>
-        </div>
-        <hr style="border:none;border-top:1px solid #303038;margin:16px 0;" />
-        <div style="margin:4px 0 12px; opacity:0.85; font-weight:600;">Threshold Styling</div>
-        <div class="control"><label>Warn under (sec)</label><input id="warnUnder" type="number" min="0" step="1" value="300"></div>
-        <div class="control"><label>Warn color</label><input id="warnColor" type="color" value="#FFA500"></div>
-        <div class="control"><label>Danger under (sec)</label><input id="dangerUnder" type="number" min="0" step="1" value="60"></div>
-        <div class="control"><label>Danger color</label><input id="dangerColor" type="color" value="#FF4D4D"></div>
-        <div class="control"><label>Flash under (sec)</label><input id="flashUnder" type="number" min="0" step="1" value="0"></div>
-        <div class="control"><label>Hype text</label>
-          <div style="display:flex; gap:8px; align-items:center;">
-            <label style="display:flex; gap:6px; align-items:center; opacity:.85;">
-              <input id="hypeLabelEnabled" type="checkbox" checked /> Show
-            </label>
-            <input id="hypeLabel" type="text" value="🔥 Hype Train active" />
-          </div>
-        </div>
-        <div class="control"><label>On-add effect</label>
-          <div style="display:flex; gap:8px; align-items:center;">
-            <label style="display:flex; gap:6px; align-items:center; opacity:.85;">
-              <input id="addEffectEnabled" type="checkbox" checked /> Enabled
-            </label>
-            <select id="addEffectMode" style="max-width:180px">
-              <option value="pulse">Pulse</option>
-              <option value="shake">Shake</option>
-              <option value="bounce">Bounce</option>
-              <option value="none">None</option>
-            </select>
-          </div>
-        </div>
-        <div class="row2">
-          <button id="copy">Copy URL</button>
-          <div class="hint">Add as a Browser Source in OBS</div>
-        </div>
-        <hr style="border:none;border-top:1px solid #303038;margin:16px 0;" />
-        <div style="margin:4px 0 12px; opacity:0.85; font-weight:600;">Rules</div>
-        <div class="control"><label>Min. Bits to Trigger</label><input id="r_bits_per" type="number" min="1" step="1" value="100"></div>
-        <div class="control"><label>Bits add (sec)</label><input id="r_bits_add" type="number" min="0" step="1" value="60"></div>
-        <div class="control"><label>T1 Subs add (sec)</label><input id="r_sub_1000" type="number" min="0" step="1" value="300"></div>
-        <div class="control"><label>T2 Subs add (sec)</label><input id="r_sub_2000" type="number" min="0" step="1" value="600"></div>
-        <div class="control"><label>T3 Subs add (sec)</label><input id="r_sub_3000" type="number" min="0" step="1" value="900"></div>
-        <div class="control"><label>Resub base (sec)</label><input id="r_resub_base" type="number" min="0" step="1" value="300"></div>
-        <div class="control"><label>Gift sub per-sub (sec)</label><input id="r_gift_per" type="number" min="0" step="1" value="300"></div>
-        <div class="control"><label>Charity per $1 (sec)</label><input id="r_charity_per_usd" type="number" min="0" step="1" value="60"></div>
-        <div class="control"><label>Follows add (sec)</label>
-          <div style="display:flex; gap:8px; align-items:center;">
-            <input id="r_follow_add" type="number" min="0" step="1" value="600" style="max-width:140px" />
-            <label style="display:flex; gap:6px; align-items:center; opacity:.85;"><input id="r_follow_enabled" type="checkbox" /> Enabled</label>
-          </div>
-        </div>
-        <div class="control"><label>Hype Train Modifier</label><input id="r_hype" type="number" min="0" step="0.1" value="2"></div>
-        <div class="row2"><button id="saveRules">Save Rules</button></div>
-        <hr style="border:none;border-top:1px solid #303038;margin:16px 0;" />
-        <div style="margin:4px 0 4px; opacity:0.85; font-weight:600;">Testing Tools</div>
-        <div class="row2" id="devTests">
-          <button class="secondary" data-test-seconds="${
-            devTest.bitsSeconds
-          }" title="Simulate ${devTest.bitsPer} bits">
-            Quick: ${devTest.bitsPer} bits (+${devTest.bitsSeconds}s)
+        <div class="${sectionClass('style')}" data-section="style">
+          <button class="section-toggle" data-section-toggle="style" aria-expanded="${sectionExpandedAttr('style')}">
+            <span>Overlay Style</span>
+            <span class="section-arrow">▾</span>
           </button>
-          <button class="secondary" data-test-seconds="${
-            devTest.subSeconds
-          }" title="Simulate Tier 1 sub">
-            Quick: 1x T1 sub (+${devTest.subSeconds}s)
+          <div class="section-body" ${sectionBodyAttr('style')}>
+            <div class="control"><label>Overlay Key</label>
+              <div style="display:flex; gap:8px; align-items:center;">
+                <input id="key" type="text" value="${userKey}" readonly style="background:#151517; color:#efeff1;">
+                <button class="secondary" id="rotateKey" title="Generate a new overlay key">Rotate</button>
+              </div>
+            </div>
+            <div class="control"><label>Font Size</label><input id="fontSize" type="number" min="10" max="300" step="1" value="${initial.fontSize}"></div>
+            <div class="control"><label>Color</label><input id="color" type="color" value="${initial.color}"></div>
+            <div class="control"><label>Transparent</label><input id="transparent" type="checkbox" ${initial.transparent ? "checked" : ""}></div>
+            <div class="control"><label>Background</label><input id="bg" type="color" value="#000000"></div>
+            <div class="control"><label>Font Family</label><input id="font" type="text" value="${initial.font}"></div>
+            <div class="control"><label>Show Label</label><input id="label" type="checkbox" ${initial.label ? "checked" : ""}></div>
+            <div class="control"><label>Label Text</label><input id="title" type="text" value="${initial.title}"></div>
+            <div class="control"><label>Align</label>
+              <select id="align">
+                <option ${initial.align === "left" ? "selected" : ""} value="left">left</option>
+                <option ${initial.align === "center" ? "selected" : ""} value="center">center</option>
+                <option ${initial.align === "right" ? "selected" : ""} value="right">right</option>
+              </select>
+            </div>
+            <div class="control"><label>Weight</label><input id="weight" type="number" min="100" max="1000" step="100" value="${initial.weight}"></div>
+            <div class="control"><label>Shadow</label><input id="shadow" type="checkbox" ${initial.shadow ? "checked" : ""}></div>
+            <div class="control"><label>Shadow Color</label><input id="shadowColor" type="color" value="#000000"></div>
+            <div class="control"><label>Shadow Blur</label><input id="shadowBlur" type="number" min="0" max="50" step="1" value="${initial.shadowBlur}"></div>
+            <div class="control"><label>Outline Width</label><input id="stroke" type="number" min="0" max="20" step="1" value="${initial.stroke}"></div>
+            <div class="control"><label>Outline Color</label><input id="strokeColor" type="color" value="#000000"></div>
+            <div class="control"><label>Time format</label>
+              <select id="timeFormat">
+                <option value="mm:ss" >mm:ss</option>
+                <option value="hh:mm:ss">hh:mm:ss</option>
+                <option value="auto" selected>auto (hh:mm:ss when hours > 0)</option>
+              </select>
+            </div>
+            <div style="margin:12px 0; opacity:0.85; font-weight:600;">Threshold Styling</div>
+            <div class="control"><label>Warn styling</label>
+              <label style="display:flex; gap:6px; align-items:center; opacity:.85;">
+                <input id="warnEnabled" type="checkbox" ${initial.warnEnabled ? "checked" : ""} /> Enabled
+              </label>
+            </div>
+            <div class="control"><label>Warn under (sec)</label><input id="warnUnder" type="number" min="0" step="1" value="300"></div>
+            <div class="control"><label>Warn color</label><input id="warnColor" type="color" value="#FFA500"></div>
+            <div class="control"><label>Danger styling</label>
+              <label style="display:flex; gap:6px; align-items:center; opacity:.85;">
+                <input id="dangerEnabled" type="checkbox" ${initial.dangerEnabled ? "checked" : ""} /> Enabled
+              </label>
+            </div>
+            <div class="control"><label>Danger under (sec)</label><input id="dangerUnder" type="number" min="0" step="1" value="60"></div>
+            <div class="control"><label>Danger color</label><input id="dangerColor" type="color" value="#FF4D4D"></div>
+            <div class="control"><label>Flash effect</label>
+              <label style="display:flex; gap:6px; align-items:center; opacity:.85;">
+                <input id="flashEnabled" type="checkbox" ${initial.flashEnabled ? "checked" : ""} /> Enabled
+              </label>
+            </div>
+            <div class="control"><label>Flash under (sec)</label><input id="flashUnder" type="number" min="0" step="1" value="0"></div>
+            <div class="control"><label>Hype text</label>
+              <div style="display:flex; gap:8px; align-items:center;">
+                <label style="display:flex; gap:6px; align-items:center; opacity:.85;">
+                  <input id="hypeLabelEnabled" type="checkbox" checked /> Show
+                </label>
+                <input id="hypeLabel" type="text" value="🔥 Hype Train active" />
+              </div>
+            </div>
+            <div class="control"><label>On-add effect</label>
+              <div style="display:flex; gap:8px; align-items:center;">
+                <label style="display:flex; gap:6px; align-items:center; opacity:.85;">
+                  <input id="addEffectEnabled" type="checkbox" checked /> Enabled
+                </label>
+                <select id="addEffectMode" style="max-width:180px">
+                  <option value="pulse">Pulse</option>
+                  <option value="shake">Shake</option>
+                  <option value="bounce">Bounce</option>
+                  <option value="none">None</option>
+                </select>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="${sectionClass('rules')}" data-section="rules">
+          <button class="section-toggle" data-section-toggle="rules" aria-expanded="${sectionExpandedAttr('rules')}">
+            <span>Rules</span>
+            <span class="section-arrow">▾</span>
           </button>
-          <button class="secondary" data-test-seconds="${
-            devTest.giftSeconds
-          }" title="Simulate single gift sub">
-            Quick: 1x gift sub (+${devTest.giftSeconds}s)
+          <div class="section-body" ${sectionBodyAttr('rules')}>
+            <div class="control"><label>Min. Bits to Trigger</label><input id="r_bits_per" type="number" min="1" step="1" value="100"></div>
+            <div class="control"><label>Bits add (sec)</label><input id="r_bits_add" type="number" min="0" step="1" value="60"></div>
+            <div class="control"><label>T1 Subs add (sec)</label><input id="r_sub_1000" type="number" min="0" step="1" value="300"></div>
+            <div class="control"><label>T2 Subs add (sec)</label><input id="r_sub_2000" type="number" min="0" step="1" value="600"></div>
+            <div class="control"><label>T3 Subs add (sec)</label><input id="r_sub_3000" type="number" min="0" step="1" value="900"></div>
+            <div class="control"><label>Resub base (sec)</label><input id="r_resub_base" type="number" min="0" step="1" value="300"></div>
+            <div class="control"><label>Gift sub per-sub (sec)</label><input id="r_gift_per" type="number" min="0" step="1" value="300"></div>
+            <div class="control"><label>Charity per $1 (sec)</label><input id="r_charity_per_usd" type="number" min="0" step="1" value="60"></div>
+            <div class="control"><label>Follows add (sec)</label>
+              <div style="display:flex; gap:8px; align-items:center;">
+                <input id="r_follow_add" type="number" min="0" step="1" value="600" style="max-width:140px" />
+                <label style="display:flex; gap:6px; align-items:center; opacity:.85;"><input id="r_follow_enabled" type="checkbox" /> Enabled</label>
+              </div>
+            </div>
+            <div class="control"><label>Hype Train Modifier</label><input id="r_hype" type="number" min="0" step="0.1" value="2"></div>
+            <div class="row2"><button id="saveRules">Save Rules</button></div>
+          </div>
+        </div>
+
+        <div class="${sectionClass('testing')}" data-section="testing">
+          <button class="section-toggle" data-section-toggle="testing" aria-expanded="${sectionExpandedAttr('testing')}">
+            <span>Testing Tools</span>
+            <span class="section-arrow">▾</span>
           </button>
-        </div>
-        <div class="row2" id="devCustomSubs">
-          <input id="devSubCount" type="number" min="1" step="1" value="1" style="max-width:100px" />
-          <select id="devSubTier" style="max-width:160px">
-            <option value="1000">Tier 1</option>
-            <option value="2000">Tier 2</option>
-            <option value="3000">Tier 3</option>
-          </select>
-          <button class="secondary" id="devApplySubs" title="Apply N subs">Apply Subs</button>
-        </div>
-        <div class="row2" id="devCustomGifts">
-          <input id="devGiftCount" type="number" min="1" step="1" value="1" style="max-width:100px" />
-          <button class="secondary" id="devApplyGifts" title="Apply N gift subs">Apply Gift Subs</button>
-        </div>
-        <div class="row2" id="devHypeControls">
-          <button class="secondary" id="testHypeOn">Force Hype On</button>
-          <button class="secondary" id="testHypeOff">Force Hype Off</button>
+          <div class="section-body" ${sectionBodyAttr('testing')}>
+            <div class="row2" id="devTests">
+              <button class="secondary" data-test-seconds="${devTest.bitsSeconds}" title="Simulate ${devTest.bitsPer} bits">
+                Quick: ${devTest.bitsPer} bits (+${devTest.bitsSeconds}s)
+              </button>
+              <button class="secondary" data-test-seconds="${devTest.subSeconds}" title="Simulate Tier 1 sub">
+                Quick: 1x T1 sub (+${devTest.subSeconds}s)
+              </button>
+              <button class="secondary" data-test-seconds="${devTest.giftSeconds}" title="Simulate single gift sub">
+                Quick: 1x gift sub (+${devTest.giftSeconds}s)
+              </button>
+            </div>
+            <div class="row2" id="devCustomSubs">
+              <input id="devSubCount" type="number" min="1" step="1" value="1" style="max-width:100px" />
+              <select id="devSubTier" style="max-width:160px">
+                <option value="1000">Tier 1</option>
+                <option value="2000">Tier 2</option>
+                <option value="3000">Tier 3</option>
+              </select>
+              <button class="secondary" id="devApplySubs" title="Apply N subs">Apply Subs</button>
+            </div>
+            <div class="row2" id="devCustomGifts">
+              <input id="devGiftCount" type="number" min="1" step="1" value="1" style="max-width:100px" />
+              <button class="secondary" id="devApplyGifts" title="Apply N gift subs">Apply Gift Subs</button>
+            </div>
+            <div class="row2" id="devHypeControls">
+              <button class="secondary" id="testHypeOn">Force Hype On</button>
+              <button class="secondary" id="testHypeOff">Force Hype Off</button>
+            </div>
+          </div>
         </div>
       </div>
       <div class="panel preview">
         <div style="margin-bottom:8px; opacity:0.85">Live Preview</div>
         <iframe id="preview" referrerpolicy="no-referrer"></iframe>
         <div style="margin-top:8px" class="url" id="url"></div>
+        <div style="margin-top:8px; display:flex; gap:12px; align-items:center; flex-wrap:wrap;">
+          <button id="copy">Copy URL</button>
+          <div class="hint">Add as a Browser Source in OBS</div>
+        </div>
         <div style="margin-top:8px" class="hint">Pause/Resume and Start actions update the live overlay immediately.</div>
-        <hr style="border:none;border-top:1px solid #303038;margin:16px 12px;" />
-        <div style="margin:4px 0 12px; opacity:0.85; font-weight:600;">Timer Controls</div>
-        <div class="control"><label>Hours</label><input id="h" class="time-input" type="number" min="0" step="1" value="${defH}"></div>
-        <div class="control"><label>Minutes</label><input id="m" class="time-input" type="number" min="0" max="59" step="1" value="${defM}"></div>
-        <div class="control"><label>Seconds</label><input id="s" class="time-input" type="number" min="0" max="59" step="1" value="${defS}"></div>
-        <div class="control"><label>Max Stream Length</label>
-          <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
-            <div style="display:flex; gap:8px; align-items:center;">
-              <input id="maxH" type="number" min="0" step="1" value="0" style="max-width:80px">h
-              <input id="maxM" type="number" min="0" max="59" step="1" value="0" style="max-width:80px">m
-              <input id="maxS" type="number" min="0" max="59" step="1" value="0" style="max-width:80px">s
+        <div class="${sectionClass('timer')}" data-section="timer">
+          <button class="section-toggle" data-section-toggle="timer" aria-expanded="${sectionExpandedAttr('timer')}">
+            <span>Timer Controls</span>
+            <span class="section-arrow">▾</span>
+          </button>
+          <div class="section-body" ${sectionBodyAttr('timer')}>
+            <div class="control"><label>Hours</label><input id="h" class="time-input" type="number" min="0" step="1" value="${defH}"></div>
+            <div class="control"><label>Minutes</label><input id="m" class="time-input" type="number" min="0" max="59" step="1" value="${defM}"></div>
+            <div class="control"><label>Seconds</label><input id="s" class="time-input" type="number" min="0" max="59" step="1" value="${defS}"></div>
+            <div class="control"><label>Max Stream Length</label>
+              <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+                <div style="display:flex; gap:8px; align-items:center;">
+                  <input id="maxH" type="number" min="0" step="1" value="0" style="max-width:80px">h
+                  <input id="maxM" type="number" min="0" max="59" step="1" value="0" style="max-width:80px">m
+                  <input id="maxS" type="number" min="0" max="59" step="1" value="0" style="max-width:80px">s
+                </div>
+                <button class="secondary" id="clearMax" title="Remove the max cap">Clear Max</button>
+              </div>
+            </div> 
+            <div class="row2">
+              <button id="startTimer">Start Timer</button>
+              <button class="secondary" id="pause">Pause</button>
+              <button class="secondary" id="resume">Resume</button>
+              <button class="secondary" id="endTimer">End Timer</button>
+              <button class="secondary" id="restartTimer">Restart Timer</button>
             </div>
-            <button class="secondary" id="clearMax" title="Remove the max cap">Clear Max</button>
+            <div class="row2">
+              <button class="secondary" id="saveDefault">Save Default</button>
+            </div>
+            <div class="row2" style="margin-top:12px;">
+              <button class="secondary" data-add="300">+5 min</button>
+              <button class="secondary" data-add="600">+10 min</button>
+              <button class="secondary" data-add="1800">+30 min</button>
+            </div>
+            <div class="row2">
+              <input id="addCustomSeconds" type="number" min="1" step="1" placeholder="Seconds" style="max-width:140px" />
+              <button class="secondary" id="addCustomBtn">Add</button>
+            </div>
+            <div class="row2" id="devCustomBits">
+              <input id="devBitsInput" type="number" min="0" step="1" placeholder="Bits amount (testing)" style="max-width:150px" />
+              <button class="secondary" id="devApplyBits" title="Apply custom bits based on rules">Apply Bits</button>
+            </div>
+            <div class="hint" style="margin-top:8px">Current remaining: <span id="remain">--:--</span></div>
+            <div class="hint" id="capStatus" style="margin-top:4px; opacity:0.8"></div>
           </div>
-        </div> 
-        <div class="row2">
-          <button id="startTimer">Start Timer</button>
-          <button class="secondary" id="pause">Pause</button>
-          <button class="secondary" id="resume">Resume</button>
-          <button class="secondary" id="endTimer">End Timer</button>
-          <button class="secondary" id="restartTimer">Restart Timer</button>
         </div>
-        <div class="row2">
-          <button class="secondary" id="saveDefault">Save Default</button>
-        </div>
-        <div class="row2" style="margin-top:12px;">
-          <button class="secondary" data-add="300">+5 min</button>
-          <button class="secondary" data-add="600">+10 min</button>
-          <button class="secondary" data-add="1800">+30 min</button>
-        </div>
-        <div class="row2">
-          <input id="addCustomSeconds" type="number" min="1" step="1" placeholder="Seconds" style="max-width:140px" />
-          <button class="secondary" id="addCustomBtn">Add</button>
-        </div>
-        <div class="row2" id="devCustomBits">
-          <input id="devBitsInput" type="number" min="0" step="1" placeholder="Bits amount (testing)" style="max-width:150px" />
-          <button class="secondary" id="devApplyBits" title="Apply custom bits based on rules">Apply Bits</button>
-        </div>
-        <div class="hint" style="margin-top:8px">Current remaining: <span id="remain">--:--</span></div>
-        <div class="hint" id="capStatus" style="margin-top:4px; opacity:0.8"></div>
-        <hr style="border:none;border-top:1px solid #303038;margin:16px 0;" />
-        <div style="margin-top:16px; opacity:0.85; font-weight:600;">Event Log</div>
-        <div id="eventLog" class="log-box"></div>
-        <div class="row2">
-          <button class="secondary" id="clearLog">Clear Log</button>
+
+        <div class="${sectionClass('events')}" data-section="events">
+          <button class="section-toggle" data-section-toggle="events" aria-expanded="${sectionExpandedAttr('events')}">
+            <span>Event Log</span>
+            <span class="section-arrow">▾</span>
+          </button>
+          <div class="section-body" ${sectionBodyAttr('events')}>
+            <div id="eventLog" class="log-box"></div>
+            <div class="row2" style="margin-top:8px;">
+              <button class="secondary" id="clearLog">Clear Log</button>
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -312,6 +338,42 @@ export function renderOverlayConfigPage(options = {}) {
         'key','fontSize','color','transparent','bg','font','label','title','align','weight','shadow','shadowColor','shadowBlur','stroke','strokeColor','timeFormat',
         'h','m','s','addEffectEnabled','addEffectMode','hypeLabelEnabled','hypeLabel'
       ].reduce((acc, id) => (acc[id] = document.getElementById(id), acc), {});
+      const sectionState = ${JSON.stringify(collapsedSections || {})};
+
+      function applySectionState(section, collapsed) {
+        if (!section) return;
+        section.classList.toggle('collapsed', collapsed);
+        const body = section.querySelector('.section-body');
+        if (body) body.style.display = collapsed ? 'none' : '';
+        const toggle = section.querySelector('.section-toggle');
+        if (toggle) toggle.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+      }
+
+      async function persistSectionState(id, collapsed) {
+        try {
+          await fetch('/api/user/settings', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ panelCollapsedSections: { [id]: collapsed } })
+          });
+        } catch (e) {}
+      }
+
+      function initSections() {
+        document.querySelectorAll('[data-section]').forEach((section) => {
+          const id = section.getAttribute('data-section');
+          const collapsed = !!sectionState[id];
+          applySectionState(section, collapsed);
+          const toggle = section.querySelector('.section-toggle');
+          if (!toggle) return;
+          toggle.addEventListener('click', () => {
+            const next = !section.classList.contains('collapsed');
+            applySectionState(section, next);
+            sectionState[id] = next;
+            persistSectionState(id, next);
+          });
+        });
+      }
 
       function overlayUrl() {
         const p = new URLSearchParams();
@@ -338,10 +400,13 @@ export function renderOverlayConfigPage(options = {}) {
           shadowBlur: Number(inputs.shadowBlur.value),
           stroke: Number(inputs.stroke.value),
           strokeColor: inputs.strokeColor.value,
+          warnEnabled: Boolean((document.getElementById('warnEnabled')||{}).checked),
           warnUnderSeconds: Number(document.getElementById('warnUnder').value||0),
           warnColor: document.getElementById('warnColor').value,
+          dangerEnabled: Boolean((document.getElementById('dangerEnabled')||{}).checked),
           dangerUnderSeconds: Number(document.getElementById('dangerUnder').value||0),
           dangerColor: document.getElementById('dangerColor').value,
+          flashEnabled: Boolean((document.getElementById('flashEnabled')||{}).checked),
           flashUnderSeconds: Number(document.getElementById('flashUnder').value||0),
           timeFormat: inputs.timeFormat.value,
           addEffectEnabled: Boolean((document.getElementById('addEffectEnabled')||{}).checked),
@@ -507,6 +572,12 @@ export function renderOverlayConfigPage(options = {}) {
           el.addEventListener('input', () => { saveStyle(); });
           el.addEventListener('change', () => { saveStyle(); });
         }
+        ['warnUnder','warnColor','warnEnabled','dangerUnder','dangerColor','dangerEnabled','flashUnder','flashEnabled'].forEach(function(id){
+          const el = document.getElementById(id);
+          if (!el) return;
+          el.addEventListener('input', () => { saveStyle(); });
+          el.addEventListener('change', () => { saveStyle(); });
+        });
         document.getElementById('logout').addEventListener('click', (e) => {
           e.preventDefault();
           window.location.href = '/auth/logout?next=' + encodeURIComponent('/overlay/config');
@@ -532,51 +603,6 @@ export function renderOverlayConfigPage(options = {}) {
           } catch (e) {}
           setBusy(rotateBtn, false);
         });
-        document.getElementById('presetClean').addEventListener('click', (e) => {
-          e.preventDefault();
-          flashButton(e.currentTarget);
-          inputs.color.value = '#FFFFFF';
-          inputs.transparent.checked = true;
-          inputs.label.checked = false;
-          inputs.shadow.checked = false;
-          inputs.stroke.value = 0;
-          saveStyle();
-        });
-        document.getElementById('presetBold').addEventListener('click', (e) => {
-          e.preventDefault();
-          flashButton(e.currentTarget);
-          inputs.color.value = '#FFFFFF';
-          inputs.weight.value = 900;
-          inputs.fontSize.value = Math.max(64, Number(inputs.fontSize.value)||64);
-          inputs.transparent.checked = true;
-          inputs.stroke.value = 0;
-          inputs.shadow.checked = false;
-          inputs.label.checked = false;
-          saveStyle();
-        });
-        document.getElementById('presetOutline').addEventListener('click', (e) => {
-          e.preventDefault();
-          flashButton(e.currentTarget);
-          inputs.color.value = '#FFFFFF';
-          inputs.stroke.value = 4;
-          inputs.strokeColor.value = '#000000';
-          inputs.shadow.checked = false;
-          inputs.transparent.checked = true;
-          inputs.label.checked = false;
-          saveStyle();
-        });
-        document.getElementById('presetShadow').addEventListener('click', (e) => {
-          e.preventDefault();
-          flashButton(e.currentTarget);
-          inputs.shadow.checked = true;
-          inputs.shadowColor.value = 'rgba(0,0,0,0.75)';
-          inputs.shadowBlur.value = 10;
-          inputs.transparent.checked = true;
-          inputs.stroke.value = 0;
-          inputs.label.checked = false;
-          saveStyle();
-        });
-
         // Timer controls
         document.getElementById('startTimer').addEventListener('click', async function(e){ e.preventDefault(); const btn=e.currentTarget; flashButton(btn); setBusy(btn,true); await startTimer({ source: 'panel_start_button', label: 'Start Timer' }); await updateCapStatus(); setBusy(btn,false); });
         document.getElementById('saveDefault').addEventListener('click', async function(e){ e.preventDefault(); const btn=e.currentTarget; flashButton(btn); setBusy(btn,true); await saveDefaultInitial(); await updateCapStatus(); setBusy(btn,false); });
@@ -755,9 +781,21 @@ export function renderOverlayConfigPage(options = {}) {
             try {
               if (typeof s.warnUnderSeconds !== 'undefined') document.getElementById('warnUnder').value = Number(s.warnUnderSeconds)||0;
               if (typeof s.warnColor !== 'undefined') document.getElementById('warnColor').value = s.warnColor || '#FFA500';
+              if (document.getElementById('warnEnabled')) {
+                document.getElementById('warnEnabled').checked =
+                  (typeof s.warnEnabled === 'boolean') ? s.warnEnabled : true;
+              }
               if (typeof s.dangerUnderSeconds !== 'undefined') document.getElementById('dangerUnder').value = Number(s.dangerUnderSeconds)||0;
               if (typeof s.dangerColor !== 'undefined') document.getElementById('dangerColor').value = s.dangerColor || '#FF4D4D';
+              if (document.getElementById('dangerEnabled')) {
+                document.getElementById('dangerEnabled').checked =
+                  (typeof s.dangerEnabled === 'boolean') ? s.dangerEnabled : true;
+              }
               if (typeof s.flashUnderSeconds !== 'undefined') document.getElementById('flashUnder').value = Number(s.flashUnderSeconds)||0;
+              if (document.getElementById('flashEnabled')) {
+                document.getElementById('flashEnabled').checked =
+                  (typeof s.flashEnabled === 'boolean') ? s.flashEnabled : true;
+              }
               if (typeof s.timeFormat !== 'undefined') document.getElementById('timeFormat').value = (s.timeFormat==='hh:mm:ss' || s.timeFormat==='auto') ? s.timeFormat : 'mm:ss';
               if (document.getElementById('addEffectEnabled')) {
                 document.getElementById('addEffectEnabled').checked =
@@ -849,6 +887,7 @@ export function renderOverlayConfigPage(options = {}) {
         setInterval(fetchLog, 5000);
       }
 
+      initSections();
       bind();
       refresh();
       saveStyle();

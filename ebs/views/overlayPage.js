@@ -96,7 +96,16 @@ export function renderOverlayPage(options = {}) {
         let hype = false;
         let tickTimer = null;
         let paused = false;
-        let styleThresholds = { warnUnderSeconds: 300, warnColor: '#FFA500', dangerUnderSeconds: 60, dangerColor: '#FF4D4D', flashUnderSeconds: 0 };
+        let styleThresholds = {
+          warnEnabled: true,
+          warnUnderSeconds: 300,
+          warnColor: '#FFA500',
+          dangerEnabled: true,
+          dangerUnderSeconds: 60,
+          dangerColor: '#FF4D4D',
+          flashEnabled: true,
+          flashUnderSeconds: 0
+        };
         let timeFormat = 'mm:ss';
         let cap = false;
         let addEffectEnabled = true;
@@ -133,14 +142,14 @@ export function renderOverlayPage(options = {}) {
           var color = el.style.color;
           var w = Number(styleThresholds.warnUnderSeconds||0);
           var d = Number(styleThresholds.dangerUnderSeconds||0);
-          if (d > 0 && remaining <= d) {
+          if (styleThresholds.dangerEnabled && d > 0 && remaining <= d) {
             color = styleThresholds.dangerColor || color;
-          } else if (w > 0 && remaining <= w) {
+          } else if (styleThresholds.warnEnabled && w > 0 && remaining <= w) {
             color = styleThresholds.warnColor || color;
           }
           el.style.color = color;
           var f = Number(styleThresholds.flashUnderSeconds||0);
-          if (f > 0 && remaining <= f) {
+          if (styleThresholds.flashEnabled && f > 0 && remaining <= f) {
             el.classList.add('flash');
           } else {
             el.classList.remove('flash');
@@ -206,10 +215,13 @@ export function renderOverlayPage(options = {}) {
             wrap.style.justifyContent = s.align === 'left' ? 'flex-start' : s.align === 'right' ? 'flex-end' : 'center';
 
             // thresholds
+            styleThresholds.warnEnabled = (typeof s.warnEnabled === 'boolean') ? s.warnEnabled : true;
             styleThresholds.warnUnderSeconds = Number(s.warnUnderSeconds||0);
             styleThresholds.warnColor = s.warnColor || '#FFA500';
+            styleThresholds.dangerEnabled = (typeof s.dangerEnabled === 'boolean') ? s.dangerEnabled : true;
             styleThresholds.dangerUnderSeconds = Number(s.dangerUnderSeconds||0);
             styleThresholds.dangerColor = s.dangerColor || '#FF4D4D';
+            styleThresholds.flashEnabled = (typeof s.flashEnabled === 'boolean') ? s.flashEnabled : true;
             styleThresholds.flashUnderSeconds = Number(s.flashUnderSeconds||0);
             timeFormat = (s.timeFormat==='hh:mm:ss' || s.timeFormat==='auto') ? s.timeFormat : 'mm:ss';
             if (typeof s.addEffectEnabled === 'boolean') {

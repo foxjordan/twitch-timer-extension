@@ -135,6 +135,22 @@ function setUserSettings(uid, patch) {
     const v = Number(patch.maxTotalSeconds);
     if (!Number.isNaN(v) && v >= 0) next.maxTotalSeconds = v;
   }
+  if (
+    patch &&
+    patch.panelCollapsedSections &&
+    typeof patch.panelCollapsedSections === "object"
+  ) {
+    const prev =
+      (typeof next.panelCollapsedSections === "object" &&
+        next.panelCollapsedSections) ||
+      {};
+    const sanitized = {};
+    for (const [key, val] of Object.entries(patch.panelCollapsedSections)) {
+      if (!key) continue;
+      sanitized[String(key)] = Boolean(val);
+    }
+    next.panelCollapsedSections = { ...prev, ...sanitized };
+  }
   userSettings.set(id, next);
   persistUserSettings().catch(() => {});
   return next;

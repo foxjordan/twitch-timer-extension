@@ -19,10 +19,13 @@ export const DEFAULT_STYLE = {
   shadowBlur: 8,
   stroke: 0,
   strokeColor: '#000000',
+  warnEnabled: true,
   warnUnderSeconds: 300,
   warnColor: '#FFA500',
+  dangerEnabled: true,
   dangerUnderSeconds: 60,
   dangerColor: '#FF4D4D',
+  flashEnabled: true,
   flashUnderSeconds: 0,
   timeFormat: 'mm:ss',
   addEffectEnabled: true,
@@ -56,10 +59,13 @@ export function setSavedStyle(k, s = {}) {
   if ('shadowBlur' in s) clean.shadowBlur = Number(s.shadowBlur) || DEFAULT_STYLE.shadowBlur;
   if ('stroke' in s) clean.stroke = Number(s.stroke) || 0;
   if ('strokeColor' in s) clean.strokeColor = String(s.strokeColor || DEFAULT_STYLE.strokeColor);
+  if ('warnEnabled' in s) clean.warnEnabled = Boolean(s.warnEnabled);
   if ('warnUnderSeconds' in s) clean.warnUnderSeconds = Math.max(0, Number(s.warnUnderSeconds) || 0);
   if ('warnColor' in s) clean.warnColor = String(s.warnColor || DEFAULT_STYLE.warnColor);
+  if ('dangerEnabled' in s) clean.dangerEnabled = Boolean(s.dangerEnabled);
   if ('dangerUnderSeconds' in s) clean.dangerUnderSeconds = Math.max(0, Number(s.dangerUnderSeconds) || 0);
   if ('dangerColor' in s) clean.dangerColor = String(s.dangerColor || DEFAULT_STYLE.dangerColor);
+  if ('flashEnabled' in s) clean.flashEnabled = Boolean(s.flashEnabled);
   if ('flashUnderSeconds' in s) clean.flashUnderSeconds = Math.max(0, Number(s.flashUnderSeconds) || 0);
   if ('timeFormat' in s) {
     const tf = String(s.timeFormat || DEFAULT_STYLE.timeFormat);

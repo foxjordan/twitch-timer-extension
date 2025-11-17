@@ -61,6 +61,9 @@ export function renderHomePage(options = {}) {
           <h2>2. Add overlay to OBS</h2>
           <p>Point a Browser Source at the overlay URL. Include your overlay key if one is required.</p>
           <code>${overlayUrl}</code>
+          <p style="margin-top:12px; font-size:14px; opacity:0.85">
+            Goal trackers live at <code>${base}/overlay/goal?goal=GOAL_ID</code>. Create and copy goal-specific URLs inside the configurator to include your overlay key.
+          </p>
           <ul>
             <li>Recommended size: 1920×1080 or match your canvas</li>
             <li>Enable <em>Shutdown source when not visible</em> to save bandwidth</li>

@@ -4,7 +4,8 @@
     "maxTotalSeconds": 0,
     "panelCollapsedSections": {
       "style": false,
-      "testing": true
+      "testing": false,
+      "goals": false
     }
   }
 }

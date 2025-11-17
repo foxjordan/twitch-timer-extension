@@ -9,6 +9,7 @@ Quick Start (Local)
 
 Overlay URL and Styling
 - Base URL: `/overlay` with an optional `?key=...`.
+- Goal overlays live at `/overlay/goal?goal=<goal_id>`; append `&key=...` for protected overlays.
 - Styling now saves server-side per overlay key. The overlay fetches style from `/api/overlay/style` and updates live via SSE; the URL does not need to change when you adjust styling.
 - If you do not use a key, styles are saved under the default profile.
 
@@ -43,6 +44,14 @@ Overlay Configurator
 - The preview uses a stable URL (`/overlay?key=...`) and style changes are saved via `POST /api/overlay/style` and applied live to the overlay (SSE `style_update`).
 - Use presets (Clean, Bold White, Outline, Shadow) as starting points.
  - Time format selector: choose between `mm:ss`, `hh:mm:ss`, or `auto` (auto shows `hh:mm:ss` only when hours > 0).
+
+Goal Tracking Bars
+- The configurator now includes a “Goal Tracking Bars” section. Create as many goals as you need, set start/end windows, and customize colors, layout, and label/legend options per goal.
+- Auto-count subs, resubs, gifts, bits, tips, and charity events independently of the timer. Each goal can define custom tier weights (sub points), bit conversions, and manual unit values.
+- Manual adjustments let you apply missed subs/bits/tips with the same rules the overlay would have used.
+- Every goal exposes a Browser Source URL: `/overlay/goal?goal=<goal_id_or_slug>&key=YOUR_KEY`. Copy it from the configurator and drop it into OBS/Streamlabs.
+- Want a board view? Use `/overlay/goals?goal=all&key=...` or add `mode=board` to show every active goal in one Browser Source.
+- Sub goals (Experimental) now get their own goal type. Use the “New sub goal” button to create one that auto-syncs with your live Twitch subscriber total; no manual adjustments are needed. Make sure you’re logged in so the server can call the Twitch API on your behalf.
 
 Timer Controls
 - In the configurator, set Hours/Minutes/Seconds and click “Start Timer” to initialize the countdown (uses `POST /api/timer/start`).

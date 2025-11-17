@@ -45,3 +45,12 @@ export function keyIsValid(globalKey, candidate) {
   for (const val of overlayKeys.values()) if (val === candidate) return true;
   return false;
 }
+
+export function getUserIdForKey(candidate) {
+  if (!candidate) return null;
+  const key = String(candidate);
+  for (const [uid, saved] of overlayKeys.entries()) {
+    if (saved === key) return uid;
+  }
+  return null;
+}

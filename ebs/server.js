@@ -35,12 +35,14 @@ import {
   getOrCreateUserKey,
   rotateUserKey,
   keyIsValid,
+  getUserIdForKey,
 } from "./keys.js";
 import { mountTimerRoutes } from "./routes_timer.js";
 import { mountAuthRoutes } from "./routes_auth.js";
 import { mountOverlayApiRoutes } from "./routes_overlay_api.js";
 import { mountOverlayPageRoutes } from "./routes_overlay_page.js";
 import { mountHomePageRoutes } from "./routes_home_page.js";
+import { mountGoalRoutes } from "./routes_goals.js";
 import { logger, requestLogger } from "./logger.js";
 import { getRules, setRules, loadRules } from "./rules_store.js";
 import {
@@ -48,6 +50,13 @@ import {
   getLogEntries,
   clearLogEntries,
 } from "./event_log.js";
+import {
+  loadGoals,
+  getPublicGoals,
+  applyAutoContribution as applyGoalAutoContribution,
+  syncSubGoals,
+} from "./goals_store.js";
+import { fetchActiveSubscriberCount } from "./twitch_api.js";
 
 const app = express();
 // honor X-Forwarded-* so req.protocol resolves to https behind Fly
@@ -92,6 +101,7 @@ const observability = {
   lastTimerMutationAt: null,
   lastBroadcastErrorAt: null,
   totalSseClientsServed: 0,
+  lastGoalMutationAt: null,
 };
 
 // Load keys + styles at startup
@@ -99,6 +109,7 @@ loadOverlayKeys().catch(() => {});
 loadStyles().catch(() => {});
 loadRules().catch(() => {});
 loadTimerState().catch(() => {});
+loadGoals().catch(() => {});
 
 // ===== Per-user settings (persisted) =====
 const DATA_DIR = process.env.DATA_DIR || process.cwd();
@@ -270,6 +281,60 @@ function requireOverlayAuth(req, res) {
   return false;
 }
 
+function resolveGoalUserIdFromRequest(req) {
+  if (req?.session?.twitchUser?.id) return String(req.session.twitchUser.id);
+  const key =
+    req?.query && typeof req.query.key !== "undefined"
+      ? normKey(req.query.key)
+      : null;
+  if (key) {
+    const owner = getUserIdForKey(key);
+    if (owner) return String(owner);
+  }
+  if (CURRENT_BROADCASTER_ID) return String(CURRENT_BROADCASTER_ID);
+  if (BROADCASTER_ID) return String(BROADCASTER_ID);
+  return "default";
+}
+
+function broadcastGoalSnapshot(userId, specificClients = null) {
+  const uid = userId ? String(userId) : "default";
+  let goals = [];
+  try {
+    goals = getPublicGoals(uid, { includeInactive: true });
+  } catch {}
+  const payload = JSON.stringify({ userId: uid, goals });
+  const recipients = specificClients
+    ? Array.isArray(specificClients)
+      ? specificClients
+      : [specificClients]
+    : Array.from(sseClients);
+  for (const client of recipients) {
+    if (!client) continue;
+    if (!specificClients && client.goalUserId && client.goalUserId !== uid)
+      continue;
+    try {
+      client.res.write("event: goal_snapshot\n");
+      client.res.write(`data: ${payload}\n\n`);
+    } catch (e) {
+      sseClients.delete(client);
+    }
+  }
+  observability.lastGoalMutationAt = new Date().toISOString();
+}
+
+async function refreshSubGoalCounts() {
+  const broadcasterId = getBroadcasterId();
+  if (!broadcasterId) return;
+  try {
+    const total = await fetchActiveSubscriberCount({ broadcasterId });
+    if (typeof total !== "number") return;
+    const changed = syncSubGoals(broadcasterId, total);
+    if (changed) broadcastGoalSnapshot(broadcasterId);
+  } catch (err) {
+    logger.error("sub_goal_refresh_failed", { message: err?.message });
+  }
+}
+
 // SSE stream for external overlays (OBS/Streamlabs browser source)
 app.get("/api/overlay/stream", (req, res) => {
   if (!requireOverlayAuth(req, res)) return;
@@ -279,7 +344,8 @@ app.get("/api/overlay/stream", (req, res) => {
   res.flushHeaders?.();
 
   const key = normKey(req.query.key);
-  const client = { res, key };
+  const goalUserId = resolveGoalUserIdFromRequest(req);
+  const client = { res, key, goalUserId };
   sseClients.add(client);
   observability.totalSseClientsServed += 1;
   logger.info("sse_client_connected", {
@@ -304,6 +370,10 @@ app.get("/api/overlay/stream", (req, res) => {
   const style = getSavedStyle(key);
   res.write("event: style_update\n");
   res.write(`data: ${JSON.stringify(style)}\n\n`);
+
+  if (goalUserId) {
+    broadcastGoalSnapshot(goalUserId, client);
+  }
 
   req.on("close", () => {
     sseClients.delete(client);
@@ -361,6 +431,13 @@ mountOverlayApiRoutes(app, {
   getRules,
   setRules,
   setMaxTotalSeconds,
+});
+
+mountGoalRoutes(app, {
+  requireOverlayAuth,
+  resolveOverlayUserId: resolveGoalUserIdFromRequest,
+  getSessionUserId: (req) => req.session?.twitchUser?.id,
+  onGoalsChanged: (uid) => broadcastGoalSnapshot(uid),
 });
 
 // Overlay Configurator (no auth; generates URL and previews)
@@ -527,6 +604,21 @@ async function handleEventSub(notification) {
       }
     }
   }
+
+  try {
+    const goalOwnerId = getBroadcasterId() || "default";
+    const applied = applyGoalAutoContribution({
+      uid: goalOwnerId,
+      type: subType,
+      event: e,
+      timestamp: now,
+    });
+    if (applied && applied.length) {
+      broadcastGoalSnapshot(goalOwnerId);
+    }
+  } catch (err) {
+    logger.error("goal_auto_apply_failed", { message: err?.message });
+  }
 }
 
 // Connect to EventSub WS (single channel dev)
@@ -588,6 +680,8 @@ setInterval(async () => {
     }
   }
 }, 1000);
+
+setInterval(refreshSubGoalCounts, 60 * 1000);
 
 const port = process.env.PORT || 8080;
 app.listen(port, () => console.log(`EBS listening on :${port}`));

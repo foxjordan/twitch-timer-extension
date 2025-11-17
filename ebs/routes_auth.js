@@ -3,6 +3,7 @@ import fetch from 'node-fetch';
 import { getOrCreateUserKey } from './keys.js';
 import { renderLoggedOutPage } from './views/loggedOutPage.js';
 import { logger } from './logger.js';
+import { storeUserAccessToken } from './twitch_tokens.js';
 
 function buildRedirectURI(req) {
   const base = process.env.SERVER_BASE_URL || `${req.protocol}://${req.get('host')}`;
@@ -50,6 +51,7 @@ export function mountAuthRoutes(app, opts = {}) {
       });
       const tokenJson = await tokenRes.json();
       const accessToken = tokenJson.access_token;
+      const expiresIn = tokenJson.expires_in;
       if (!accessToken) return res.status(400).send('OAuth token exchange failed');
 
       const userRes = await fetch('https://api.twitch.tv/helix/users', {
@@ -68,6 +70,7 @@ export function mountAuthRoutes(app, opts = {}) {
       req.session.twitchUser = { id: user.id, login: user.login, display_name: user.display_name };
       // ensure a per-user overlay key exists and store in session for convenience
       try { req.session.userOverlayKey = getOrCreateUserKey(user.id); } catch {}
+      try { storeUserAccessToken(user.id, accessToken, expiresIn); } catch {}
       // notify host (server) of admin login for dynamic broadcaster/eventsub wiring
       try { if (opts && typeof opts.onAdminLogin === 'function') opts.onAdminLogin({ user, accessToken }); } catch {}
       const next = req.query.next || '/overlay/config';

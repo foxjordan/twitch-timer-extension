@@ -1,3 +1,10 @@
+import {
+  THEME_CSS_VARS,
+  THEME_TOGGLE_STYLES,
+  renderThemeBootstrapScript,
+  renderThemeToggle,
+} from "./theme.js";
+
 export function renderHomePage(options = {}) {
   const base = String(options.base || "");
   const loginUrl = `${base}/auth/login?next=${encodeURIComponent(
@@ -16,32 +23,39 @@ export function renderHomePage(options = {}) {
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Twitch Timer Extension</title>
+    ${renderThemeBootstrapScript()}
     <style>
-      :root { color-scheme: dark; }
-      body { margin: 0; font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: radial-gradient(circle at top, #1f1f23, #0e0e10); color: #efeff1; display:flex; min-height:100vh; }
+      ${THEME_CSS_VARS}
+      body { margin: 0; font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: var(--home-bg); color: var(--text-color); display:flex; min-height:100vh; }
       main { width: 100%; max-width: 960px; margin: auto; padding: 40px 24px 56px; }
       h1 { margin-top: 0; font-size: 36px; }
-      p { line-height: 1.6; }
+      p { line-height: 1.6; color: var(--text-color); }
+      .top-bar { display: flex; justify-content: flex-end; }
+      .top-bar .theme-toggle { margin-bottom: 8px; }
       .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 18px; margin-top: 28px; }
-      .card { background: #1f1f23; border: 1px solid #2f2f33; border-radius: 14px; padding: 18px; box-shadow: 0 4px 20px rgba(0,0,0,0.3); }
-      .card h2 { margin-top: 0; font-size: 20px; }
+      .card { background: var(--surface-color); border: 1px solid var(--surface-border); border-radius: 14px; padding: 18px; box-shadow: 0 4px 20px var(--goal-card-shadow); }
+      .card h2 { margin-top: 0; font-size: 20px; color: var(--text-color); }
       .cta { display: inline-flex; align-items: center; justify-content: center; gap: 8px; padding: 10px 16px; border-radius: 999px; border: 0; font-weight: 600; font-size: 15px; cursor: pointer; text-decoration: none; transition: transform .1s ease, box-shadow .2s ease, opacity .15s ease; }
       .cta.primary { background: linear-gradient(135deg, #9146FF, #772CE8); color: #fff; box-shadow: 0 6px 18px rgba(145,70,255,0.35); }
-      .cta.secondary { background: rgba(255,255,255,0.08); color: #fff; border: 1px solid rgba(255,255,255,0.1); }
-      .cta:hover { transform: translateY(-1px); box-shadow: 0 10px 24px rgba(0,0,0,0.35); }
+      .cta.secondary { background: var(--secondary-button-bg); color: var(--secondary-button-text); border: 1px solid var(--secondary-button-border); }
+      .cta:hover { transform: translateY(-1px); box-shadow: 0 10px 24px rgba(0,0,0,0.2); }
       .cta:active { transform: translateY(0); }
-      code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; display: block; padding: 10px 12px; border-radius: 8px; background: rgba(0,0,0,0.35); border: 1px solid rgba(255,255,255,0.08); margin: 10px 0; word-break: break-all; font-size: 14px; }
-      ul { padding-left: 20px; margin-top: 8px; }
-      .status { margin-top: 22px; padding: 16px; border-radius: 12px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.08); }
-      .status strong { color: #a970ff; }
+      code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; display: block; padding: 10px 12px; border-radius: 8px; background: var(--code-bg); border: 1px solid var(--code-border); margin: 10px 0; word-break: break-all; font-size: 14px; color: var(--text-color); }
+      ul { padding-left: 20px; margin-top: 8px; color: var(--text-muted); }
+      .status { margin-top: 22px; padding: 16px; border-radius: 12px; background: var(--surface-muted); border: 1px solid var(--surface-border); color: var(--text-color); }
+      .status strong { color: var(--accent-color); }
       @media (max-width: 600px) {
         main { padding: 32px 18px; }
         h1 { font-size: 30px; }
       }
+      ${THEME_TOGGLE_STYLES}
     </style>
   </head>
   <body>
     <main>
+      <div class="top-bar">
+        ${renderThemeToggle({ label: "" })}
+      </div>
       <h1>Timer Overlay backend</h1>
       <p>This service powers your Twitch charity/subathon style timer. Sign in with Twitch to configure the overlay, tune the rules, and monitor inbound events.</p>
 

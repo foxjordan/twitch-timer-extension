@@ -1,3 +1,10 @@
+import {
+  THEME_CSS_VARS,
+  THEME_TOGGLE_STYLES,
+  renderThemeBootstrapScript,
+  renderThemeToggle,
+} from "./theme.js";
+
 export function renderOverlayConfigPage(options = {}) {
   const { base, adminName, userKey, settings, rulesSnapshot, initialQuery = {} } = options;
 
@@ -23,9 +30,9 @@ export function renderOverlayConfigPage(options = {}) {
   const defS = defSecs % 60;
   const initial = {
     fontSize: Number(initialQuery.fontSize ?? 64),
-    color: String(initialQuery.color ?? '#000000'),
-    bg: String(initialQuery.bg ?? 'rgba(0,0,0,0)'),
-    transparent: String(initialQuery.transparent ?? '1') !== '0',
+    color: String(initialQuery.color ?? '#efeff1'),
+    bg: String(initialQuery.bg ?? '#111114'),
+    transparent: String(initialQuery.transparent ?? '0') !== '0',
     font: String(initialQuery.font ?? 'Inter,system-ui,Arial,sans-serif'),
     label: String(initialQuery.label ?? '0') !== '0',
     title: String(initialQuery.title ?? 'Stream Countdown'),
@@ -53,18 +60,19 @@ export function renderOverlayConfigPage(options = {}) {
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Timer Overlay Configurator</title>
+    ${renderThemeBootstrapScript()}
     <style>
-      :root { color-scheme: dark; }
-      body { margin: 0; font-family: Inter, system-ui, Arial, sans-serif; background: #0e0e10; color: #efeff1; }
-      header { display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; background: #1b1b1f; border-bottom: 1px solid #303038; }
+      ${THEME_CSS_VARS}
+      body { margin: 0; font-family: Inter, system-ui, Arial, sans-serif; background: var(--page-bg); color: var(--text-color); }
+      header { display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; background: var(--header-bg); border-bottom: 1px solid var(--header-border); }
       header .left { font-weight: 600; }
-      header .right { display: flex; gap: 12px; align-items: center; opacity: 0.9; }
-      header button { background: #2c2c31; color: #efeff1; border: 1px solid #3a3a3d; padding: 6px 10px; border-radius: 8px; cursor: pointer; }
+      header .right { display: flex; gap: 12px; align-items: center; color: var(--text-muted); }
+      header button { background: var(--secondary-button-bg); color: var(--secondary-button-text); border: 1px solid var(--secondary-button-border); padding: 6px 10px; border-radius: 8px; cursor: pointer; }
       .row { display: flex; gap: 16px; padding: 16px; }
-      .panel { background: #1f1f23; border: 1px solid #303038; border-radius: 12px; padding: 16px; }
+      .panel { background: var(--surface-color); border: 1px solid var(--surface-border); border-radius: 12px; padding: 16px; }
       .controls { width: 420px; }
       .control { display: grid; grid-template-columns: 140px 1fr; align-items: center; gap: 8px; margin-bottom: 10px; }
-      .control label { opacity: 0.8; }
+      .control label { color: var(--text-muted); font-size: 13px; }
       .preview { flex: 1; min-height: 320px; }
       .row2 { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
       input[type="text"], input[type="number"], select, textarea {
@@ -73,75 +81,77 @@ export function renderOverlayConfigPage(options = {}) {
         box-sizing: border-box;
         padding: 6px 8px;
         border-radius: 6px;
-        border: 1px solid #3a3a3d;
-        background: #151517;
-        color: #efeff1;
+        border: 1px solid var(--input-border);
+        background: var(--input-bg);
+        color: var(--text-color);
       }
       input[type="checkbox"] { transform: scale(1.1); }
       input[type="color"] { height: 32px; }
       .time-input { max-width: 50%; }
-      button { background: #9146FF; color: white; border: 0; padding: 8px 10px; border-radius: 8px; cursor: pointer; }
-      button.secondary { background: #2c2c31; color: #efeff1; border: 1px solid #3a3a3d; }
+      button { background: var(--accent-color); color: #ffffff; border: 0; padding: 8px 10px; border-radius: 8px; cursor: pointer; }
+      button.secondary { background: var(--secondary-button-bg); color: var(--secondary-button-text); border: 1px solid var(--secondary-button-border); }
       button { transition: transform .04s ease, box-shadow .15s ease, filter .15s ease, opacity .2s; }
-      button:hover { box-shadow: 0 0 0 1px #4a4a50 inset; filter: brightness(1.02); }
+      button:hover { box-shadow: 0 0 0 1px rgba(0,0,0,0.2) inset; filter: brightness(1.02); }
       button:active { transform: translateY(1px) scale(0.99); filter: brightness(0.98); }
       button:disabled { opacity: 0.5; cursor: not-allowed; }
       @keyframes btnpulse { 0% { transform: scale(0.99); } 100% { transform: scale(1); } }
       .btn-click { animation: btnpulse .18s ease; }
-      .url { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; background: #151517; border: 1px solid #3a3a3d; padding: 8px; border-radius: 8px; overflow: auto; }
-      iframe { width: 100%; height: 180px; border: 0; background: #000; }
+      .url { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; background: var(--code-bg); border: 1px solid var(--code-border); padding: 8px; border-radius: 8px; overflow: auto; }
+      iframe { width: 100%; height: 180px; border: 1px solid var(--surface-border); background: var(--surface-muted); border-radius: 12px; box-shadow: 0 8px 30px var(--goal-card-shadow); }
       .goal-toolbar { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 12px; }
       .goal-list { display: flex; flex-direction: column; gap: 16px; }
-      .goal-card { background: #17171b; border: 1px solid #2d2d30; border-radius: 12px; padding: 16px; display: flex; flex-direction: column; gap: 12px; }
+      .goal-card { background: var(--goal-card-bg); border: 1px solid var(--goal-card-border); border-radius: 12px; padding: 16px; display: flex; flex-direction: column; gap: 12px; box-shadow: 0 12px 30px var(--goal-card-shadow); }
       .goal-card-header { display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; align-items: center; }
-      .goal-card-header .meta { font-size: 12px; opacity: 0.8; display: flex; flex-direction: column; gap: 2px; }
+      .goal-card-header .meta { font-size: 12px; color: var(--text-muted); display: flex; flex-direction: column; gap: 2px; }
       .goal-card-actions { display: flex; gap: 8px; flex-wrap: wrap; }
-      .goal-preview { border: 1px solid rgba(255,255,255,0.08); border-radius: 12px; padding: 12px; background: #111114; display: flex; flex-direction: column; gap: 8px; }
-      .goal-preview-header { display: flex; justify-content: space-between; align-items: center; font-size: 13px; opacity: 0.85; }
-      .goal-preview-canvas { min-height: 140px; border-radius: 10px; background: rgba(0,0,0,0.35); padding: 16px; display: flex; align-items: center; justify-content: center; }
-      .goal-preview-note { font-size: 12px; opacity: 0.75; }
-      .goal-preview-card { width: 100%; display: flex; flex-direction: column; gap: 6px; }
-      .goal-preview-card .goal-preview-title { font-size: 18px; font-weight: 600; margin-bottom: 4px; }
-      .goal-preview-card .goal-preview-values { font-size: 14px; opacity: 0.85; margin-bottom: 10px; display: flex; gap: 12px; flex-wrap: wrap; }
-      .goal-preview-card .goal-preview-track { width: 100%; height: 28px; border-radius: 999px; background: rgba(255,255,255,0.12); overflow: hidden; position: relative; }
+      .goal-preview { border: 1px solid var(--goal-preview-border); border-radius: 12px; padding: 12px; background: var(--goal-preview-bg); display: flex; flex-direction: column; gap: 8px; }
+      .goal-preview-header { display: flex; justify-content: space-between; align-items: center; font-size: 13px; color: var(--text-muted); }
+      .goal-preview-canvas { min-height: 140px; border-radius: 12px; background: var(--surface-muted); padding: 16px; display: flex; align-items: center; justify-content: center; overflow: hidden; box-sizing: border-box; }
+      .goal-preview-note { font-size: 12px; color: var(--text-muted); }
+      .goal-preview-card { width: 100%; display: flex; flex-direction: column; gap: 6px; padding: 16px 28px; border-radius: 12px; box-sizing: border-box; }
+      .goal-preview-card .goal-preview-title { font-size: 18px; font-weight: 600; }
+      .goal-preview-card .goal-preview-values { font-size: 14px; color: var(--text-muted); margin-bottom: 10px; display: flex; gap: 12px; flex-wrap: wrap; }
+      .goal-preview-card .goal-preview-track { width: 100%; height: 28px; border-radius: 999px; background: var(--surface-muted); overflow: hidden; position: relative; margin: 0 8px; }
       .goal-preview-card .goal-preview-fill { position: absolute; left: 0; top: 0; bottom: 0; width: 0%; display: flex; }
-      .goal-preview-card .goal-preview-pct { font-size: 22px; font-weight: 700; margin-top: 8px; }
-      .goal-preview-card .goal-preview-legend { display: flex; flex-wrap: wrap; gap: 6px 12px; font-size: 11px; opacity: 0.8; margin-top: 8px; }
-      .goal-card-section { border: 1px solid rgba(255,255,255,0.05); border-radius: 10px; margin-top: 8px; }
+      .goal-preview-card .goal-preview-pct { font-size: 22px; font-weight: 700; }
+      .goal-preview-card .goal-preview-legend { display: flex; flex-wrap: wrap; gap: 6px 12px; font-size: 11px; color: var(--text-muted); margin-top: 8px; }
+      .goal-card-section { border: 1px solid var(--section-border); border-radius: 10px; margin-top: 8px; background: var(--section-bg); }
       .goal-card-section:first-of-type { margin-top: 0; }
-      .goal-section-toggle { width: 100%; display: flex; justify-content: space-between; align-items: center; padding: 10px 12px; background: rgba(255,255,255,0.02); border: 0; color: inherit; font-weight: 600; cursor: pointer; border-radius: 10px; }
-      .goal-section-toggle span:last-child { font-size: 12px; opacity: 0.7; }
+      .goal-section-toggle { width: 100%; display: flex; justify-content: space-between; align-items: center; padding: 10px 12px; background: transparent; border: 0; color: inherit; font-weight: 600; cursor: pointer; border-radius: 10px; }
+      .goal-section-toggle span:last-child { font-size: 12px; color: var(--text-muted); }
       .goal-section-body { padding: 0 12px 12px; }
       .goal-card-section.collapsed .goal-section-body { display: none; }
       .goal-card-section.collapsed .goal-section-toggle span:last-child { transform: rotate(-90deg); }
       .goal-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; }
       .goal-field { display: flex; flex-direction: column; gap: 4px; font-size: 13px; }
-      .goal-field label { font-size: 11px; letter-spacing: 0.05em; text-transform: uppercase; opacity: 0.75; }
-      .goal-url code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; display: block; margin-top: 4px; }
-      .goal-empty { padding: 14px; border: 1px dashed rgba(255,255,255,0.15); border-radius: 10px; text-align: center; opacity: 0.8; }
+      .goal-field label { font-size: 11px; letter-spacing: 0.05em; text-transform: uppercase; color: var(--text-muted); }
+      .goal-url code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; display: block; margin-top: 4px; background: var(--code-bg); border: 1px solid var(--code-border); padding: 6px 8px; border-radius: 6px; color: var(--text-color); }
+      .goal-empty { padding: 14px; border: 1px dashed var(--empty-border); border-radius: 10px; text-align: center; color: var(--text-muted); }
       .goal-manual { display: flex; flex-direction: column; gap: 6px; }
       .goal-manual-row { display: flex; gap: 8px; flex-wrap: wrap; }
       .goal-manual-row input[type="number"] { max-width: 140px; }
       button.danger { background: #b91c1c; }
-      .goal-pill { padding: 2px 8px; border-radius: 999px; background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.15); font-size: 12px; letter-spacing: 0.05em; text-transform: uppercase; }
-      .hint { font-size: 12px; opacity: 0.8; }
-      .log-box { margin-top: 8px; padding: 8px; background: #151517; border: 1px solid #3a3a3d; border-radius: 8px; max-height: 160px; overflow-y: auto; font-size: 12px; }
+      .goal-pill { padding: 2px 8px; border-radius: 999px; background: var(--pill-bg); border: 1px solid var(--pill-border); font-size: 12px; letter-spacing: 0.05em; text-transform: uppercase; color: var(--text-muted); }
+      .hint { font-size: 12px; color: var(--text-muted); }
+      .log-box { margin-top: 8px; padding: 8px; background: var(--log-bg); border: 1px solid var(--log-border); border-radius: 8px; max-height: 160px; overflow-y: auto; font-size: 12px; }
       .log-line { margin-bottom: 4px; white-space: nowrap; text-overflow: ellipsis; overflow: hidden; }
-      .log-time { opacity: 0.7; margin-right: 6px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
-      .log-text { opacity: 0.9; }
-      .section { border: 1px solid #303038; border-radius: 12px; margin-bottom: 16px; background: #151517; }
-      .section-toggle { width: 100%; background: none; border: 0; padding: 12px; color: #efeff1; font-size: 15px; font-weight: 600; display: flex; align-items: center; justify-content: space-between; cursor: pointer; }
-      .section-toggle:hover { background: rgba(255,255,255,0.03); }
+      .log-time { color: var(--text-muted); margin-right: 6px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+      .log-text { color: var(--text-color); opacity: 0.9; }
+      .section { border: 1px solid var(--section-border); border-radius: 12px; margin-bottom: 16px; background: var(--section-bg); }
+      .section-toggle { width: 100%; background: none; border: 0; padding: 12px; color: var(--text-color); font-size: 15px; font-weight: 600; display: flex; align-items: center; justify-content: space-between; cursor: pointer; }
+      .section-toggle:hover { background: var(--surface-muted); }
       .section-body { padding: 0 12px 12px; }
-      .section-arrow { transition: transform .2s ease; font-size: 12px; opacity: 0.8; }
+      .section-arrow { transition: transform .2s ease; font-size: 12px; color: var(--text-muted); }
       .section.collapsed .section-arrow { transform: rotate(-90deg); }
       .section.collapsed .section-body { display: none; }
+      ${THEME_TOGGLE_STYLES}
     </style>
   </head>
   <body>
     <header>
       <div class="left">Timer Overlay Configurator</div>
       <div class="right">
+        ${renderThemeToggle({ label: "Theme" })}
         <div>Logged in as ${adminName}</div>
         <a href="https://docs.google.com/forms/d/e/1FAIpQLSdanikaYMRTjwm9TS5HQ4zMMc8tiDRbz9dqyrJ00Zl518hxbw/viewform?usp=dialog" target="_blank" rel="noopener noreferrer" title="Send feedback or report a bug">
           <button class="secondary">Feedback</button>
@@ -159,14 +169,14 @@ export function renderOverlayConfigPage(options = {}) {
           <div class="section-body" ${sectionBodyAttr('style')}>
             <div class="control"><label>Overlay Key</label>
               <div style="display:flex; gap:8px; align-items:center;">
-                <input id="key" type="text" value="${userKey}" readonly style="background:#151517; color:#efeff1;">
+                <input id="key" type="text" value="${userKey}" readonly>
                 <button class="secondary" id="rotateKey" title="Generate a new overlay key">Rotate</button>
               </div>
             </div>
             <div class="control"><label>Font Size</label><input id="fontSize" type="number" min="10" max="300" step="1" value="${initial.fontSize}"></div>
             <div class="control"><label>Color</label><input id="color" type="color" value="${initial.color}"></div>
             <div class="control"><label>Transparent</label><input id="transparent" type="checkbox" ${initial.transparent ? "checked" : ""}></div>
-            <div class="control"><label>Background</label><input id="bg" type="color" value="#000000"></div>
+            <div class="control"><label>Background</label><input id="bg" type="color" value="${initial.bg}"></div>
             <div class="control"><label>Font Family</label><input id="font" type="text" value="${initial.font}"></div>
             <div class="control"><label>Show Label</label><input id="label" type="checkbox" ${initial.label ? "checked" : ""}></div>
             <div class="control"><label>Label Text</label><input id="title" type="text" value="${initial.title}"></div>
@@ -728,7 +738,7 @@ export function renderOverlayConfigPage(options = {}) {
         container.className = 'goal-preview-card';
         container.style.color = style.labelColor || '#FFFFFF';
         if (style.backgroundColor) container.style.background = style.backgroundColor;
-        container.style.padding = '8px 0';
+        container.style.padding = '8px 10px';
         container.style.alignItems =
           style.align === 'left' ? 'flex-start' : style.align === 'right' ? 'flex-end' : 'center';
         const title = document.createElement('div');

@@ -1,10 +1,10 @@
 {
-  "timerExpiryEpochMs": 1763357218696,
+  "timerExpiryEpochMs": 0,
   "hypeActive": false,
   "paused": false,
   "pauseRemaining": 0,
-  "initialSeconds": 0,
-  "additionsTotal": 1500,
+  "initialSeconds": 14400,
+  "additionsTotal": 0,
   "maxTotalSeconds": 0,
   "bitsCarry": 0
 }

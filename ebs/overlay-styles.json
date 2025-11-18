@@ -1,9 +1,9 @@
 {
   "1b67141ca50c0b297d4d880c4422dd4e": {
     "fontSize": 64,
-    "color": "#000000",
-    "bg": "#000000",
-    "transparent": true,
+    "color": "#efeff1",
+    "bg": "#111114",
+    "transparent": false,
     "font": "Inter,system-ui,Arial,sans-serif",
     "label": false,
     "title": "Stream Countdown",

@@ -128,23 +128,23 @@ export function renderUtilitiesPage(options = {}) {
         <section class="utility-card" id="wheel-tool" style="grid-column: span 2;">
           <h2>Wheel spinner</h2>
           <p>Enter options and choose colors below. Click spin to animate the wheel.</p>
-          <div class="wheel-wrapper">
-            <div class="wheel-config">
-              <div>
-                <label style="font-size:13px; letter-spacing:.04em; text-transform:uppercase; color:var(--text-muted);">Options</label>
-                <div id="wheelOptionsList" class="wheel-options-list"></div>
-                <button id="addWheelOption" class="secondary wheel-add" type="button">Add option</button>
+            <div class="wheel-wrapper">
+              <div class="wheel-config">
+                <div>
+                  <label style="font-size:13px; letter-spacing:.04em; text-transform:uppercase; color:var(--text-muted);">Options</label>
+                  <div id="wheelOptionsList" class="wheel-options-list"></div>
+                  <button id="addWheelOption" class="secondary wheel-add" type="button">Add option</button>
+                </div>
               </div>
-            </div>
-            <div class="wheel-duration">
-              <label>Spin duration (sec)
-                <input id="wheelDuration" type="number" min="2" max="15" step="0.5" value="4" />
+              <div class="wheel-duration">
+              <label>Spin duration (sec, 2-15)
+                <input id="wheelDuration" type="number" step="0.5" inputmode="decimal" value="4" />
               </label>
               <span>Longer spins are more dramatic but take longer to resolve.</span>
             </div>
-            <button id="spinWheel" class="secondary" type="button">Spin the wheel</button>
-            <canvas id="wheelCanvas" width="360" height="360"></canvas>
-            <div id="wheelResult" class="wheel-result">Awaiting spin…</div>
+              <button id="spinWheel" class="secondary" type="button">Spin the wheel</button>
+              <canvas id="wheelCanvas" width="360" height="360"></canvas>
+              <div id="wheelResult" class="wheel-result">Awaiting spin…</div>
             <div class="wheel-share">
               <button id="copyWheelLink" type="button" class="secondary" ${
                 overlayKey ? "" : "disabled"
@@ -456,6 +456,7 @@ export function renderUtilitiesPage(options = {}) {
           let secs = Number(value);
           if (!Number.isFinite(secs)) secs = Number(options.fallback ?? currentDurationSeconds ?? 4);
           secs = Math.min(15, Math.max(2, secs));
+          secs = Math.round(secs * 2) / 2;
           currentDurationSeconds = secs;
           if (!options.skipWrite && wheelDurationInput) wheelDurationInput.value = String(secs);
           return secs;
@@ -463,8 +464,14 @@ export function renderUtilitiesPage(options = {}) {
 
         if (wheelDurationInput) {
           const applyClamp = () => clampDurationSeconds(wheelDurationInput.value);
-          wheelDurationInput.addEventListener('change', applyClamp);
           wheelDurationInput.addEventListener('blur', applyClamp);
+          wheelDurationInput.addEventListener('keydown', (event) => {
+            if (event.key === 'Enter') {
+              event.preventDefault();
+              applyClamp();
+              wheelDurationInput.blur();
+            }
+          });
           clampDurationSeconds(wheelDurationInput.value);
         }
 

@@ -113,6 +113,11 @@ export function renderWheelOverlayPage(options = {}) {
           drawWheel(wheelRotation);
         }
 
+        function formatDurationSeconds(ms) {
+          const seconds = ms / 1000;
+          return Number.isInteger(seconds) ? String(seconds) : seconds.toFixed(1);
+        }
+
         function drawWheel(angle) {
           if (!ctx || !canvas) return;
           const size = canvas.width;
@@ -179,6 +184,7 @@ export function renderWheelOverlayPage(options = {}) {
           const lapCount = Number(Math.max(2, Number(payload.lapCount || 6)));
           const targetNormalized = Number(payload.targetNormalized);
           const durationMs = Number(payload.durationMs);
+          const durationSeconds = Number(payload.durationSeconds);
           const slice = TWO_PI / wheelSegments.length;
           const currentNormalized = ((wheelRotation % TWO_PI) + TWO_PI) % TWO_PI;
           const normalizedTarget = Number.isFinite(targetNormalized)
@@ -188,16 +194,25 @@ export function renderWheelOverlayPage(options = {}) {
           if (baseDelta < 0) baseDelta += TWO_PI;
           const delta = lapCount * TWO_PI + baseDelta;
           const finalAngle = wheelRotation + delta;
-          const duration = Number.isFinite(durationMs)
-            ? durationMs
-            : Math.max(1000, lapCount * 800);
-          animateWheelTo(finalAngle, duration, () => {
+          let duration = Number.isFinite(durationMs) ? durationMs : NaN;
+          if (!Number.isFinite(duration) && Number.isFinite(durationSeconds)) {
+            duration = durationSeconds * 1000;
+          }
+          if (!Number.isFinite(duration)) {
+            duration = Math.max(1000, lapCount * 800);
+          }
+          duration = Math.max(1000, Math.min(15000, duration));
+          const started = animateWheelTo(finalAngle, duration, () => {
             resultEl.textContent = winnerLabel || wheelSegments[winnerIndex]?.label || '—';
+            if (statusEl) statusEl.textContent = '';
           });
+          if (started && statusEl) {
+            statusEl.textContent = 'Spinning… (' + formatDurationSeconds(duration) + 's)';
+          }
         }
 
         function animateWheelTo(finalAngle, durationMs, onDone) {
-          if (spinning || !ctx) return;
+          if (spinning || !ctx) return false;
           const start = wheelRotation;
           const delta = finalAngle - start;
           const duration = Math.max(1000, Number(durationMs || 3200));
@@ -217,6 +232,7 @@ export function renderWheelOverlayPage(options = {}) {
             }
           }
           requestAnimationFrame(step);
+          return true;
         }
 
         const streamUrl = '/api/overlay/stream?key=' + encodeURIComponent(overlayKey);

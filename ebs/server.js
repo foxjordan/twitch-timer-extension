@@ -327,6 +327,7 @@ app.post("/api/wheel/spin", (req, res) => {
     targetNormalized: normalizedTarget,
     lapCount,
     durationMs,
+    durationSeconds: Number(durationMs / 1000),
     triggeredAt: new Date().toISOString(),
   };
   lastWheelSpinByKey.set(overlayKey, payload);

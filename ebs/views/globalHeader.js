@@ -78,10 +78,10 @@ export function renderGlobalHeader(options = {}) {
 
   const navLinks = [
     { href: homeHref, label: "Home", key: "home" },
+    { href: configHref, label: "Configurator", key: "config" },
     ...(showUtilitiesLink
       ? [{ href: utilitiesHref, label: "Utilities (WIP)", key: "utilities" }]
       : []),
-    { href: configHref, label: "Configurator", key: "config" },
   ]
     .map(
       (link) =>

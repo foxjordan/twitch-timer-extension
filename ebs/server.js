@@ -78,7 +78,9 @@ app.use(
 const assetCandidates = [
   process.env.ASSETS_DIR,
   path.resolve(process.cwd(), "assets"),
+  path.resolve(process.cwd(), "public/assets"),
   path.resolve(process.cwd(), "../assets"),
+  path.resolve(process.cwd(), "../public/assets"),
 ].filter(Boolean);
 const assetsDir = assetCandidates.find((dir) => existsSync(dir));
 if (assetsDir) {

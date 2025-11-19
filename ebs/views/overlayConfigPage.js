@@ -2,11 +2,18 @@ import {
   THEME_CSS_VARS,
   THEME_TOGGLE_STYLES,
   renderThemeBootstrapScript,
-  renderThemeToggle,
 } from "./theme.js";
+import { GLOBAL_HEADER_STYLES, renderGlobalHeader } from "./globalHeader.js";
 
 export function renderOverlayConfigPage(options = {}) {
-  const { base, adminName, userKey, settings, rulesSnapshot, initialQuery = {} } = options;
+  const {
+    base,
+    adminName,
+    userKey,
+    settings,
+    rulesSnapshot,
+    initialQuery = {},
+  } = options;
 
   const safeNum = (val, fallback = 0) => {
     const num = Number(val);
@@ -17,11 +24,12 @@ export function renderOverlayConfigPage(options = {}) {
   const devTest = {
     bitsSeconds: safeNum(rulesSnapshot?.bits?.add_seconds, 60),
     bitsPer: safeNum(rulesSnapshot?.bits?.per, 100),
-    subSeconds: safeNum(rulesSnapshot?.sub?.['1000'], 300),
+    subSeconds: safeNum(rulesSnapshot?.sub?.["1000"], 300),
     resubSeconds: safeNum(rulesSnapshot?.resub?.base_seconds, 300),
     giftSeconds: safeNum(rulesSnapshot?.gift_sub?.per_sub_seconds, 300),
     charityUsd: devCharityUsd,
-    charitySeconds: safeNum(rulesSnapshot?.charity?.per_usd, 60) * devCharityUsd,
+    charitySeconds:
+      safeNum(rulesSnapshot?.charity?.per_usd, 60) * devCharityUsd,
   };
 
   const defSecs = Number(settings.defaultInitialSeconds || 0);
@@ -30,44 +38,45 @@ export function renderOverlayConfigPage(options = {}) {
   const defS = defSecs % 60;
   const initial = {
     fontSize: Number(initialQuery.fontSize ?? 64),
-    color: String(initialQuery.color ?? '#efeff1'),
-    bg: String(initialQuery.bg ?? '#111114'),
-    transparent: String(initialQuery.transparent ?? '0') !== '0',
-    font: String(initialQuery.font ?? 'Inter,system-ui,Arial,sans-serif'),
-    label: String(initialQuery.label ?? '0') !== '0',
-    title: String(initialQuery.title ?? 'Stream Countdown'),
-    align: String(initialQuery.align ?? 'center'),
+    color: String(initialQuery.color ?? "#efeff1"),
+    bg: String(initialQuery.bg ?? "#111114"),
+    transparent: String(initialQuery.transparent ?? "0") !== "0",
+    font: String(initialQuery.font ?? "Inter,system-ui,Arial,sans-serif"),
+    label: String(initialQuery.label ?? "0") !== "0",
+    title: String(initialQuery.title ?? "Stream Countdown"),
+    align: String(initialQuery.align ?? "center"),
     weight: Number(initialQuery.weight ?? 700),
-    shadow: String(initialQuery.shadow ?? '0') !== '0',
-    shadowColor: String(initialQuery.shadowColor ?? 'rgba(0,0,0,0.7)'),
+    shadow: String(initialQuery.shadow ?? "0") !== "0",
+    shadowColor: String(initialQuery.shadowColor ?? "rgba(0,0,0,0.7)"),
     shadowBlur: Number(initialQuery.shadowBlur ?? 8),
     stroke: Number(initialQuery.stroke ?? 0),
-    strokeColor: String(initialQuery.strokeColor ?? '#000000'),
-    warnEnabled: String(initialQuery.warnEnabled ?? '1') !== '0',
-    dangerEnabled: String(initialQuery.dangerEnabled ?? '1') !== '0',
-    flashEnabled: String(initialQuery.flashEnabled ?? '1') !== '0',
-    key: String(initialQuery.key ?? ''),
+    strokeColor: String(initialQuery.strokeColor ?? "#000000"),
+    warnEnabled: String(initialQuery.warnEnabled ?? "1") !== "0",
+    dangerEnabled: String(initialQuery.dangerEnabled ?? "1") !== "0",
+    flashEnabled: String(initialQuery.flashEnabled ?? "1") !== "0",
+    key: String(initialQuery.key ?? ""),
   };
   const collapsedSections = (settings && settings.panelCollapsedSections) || {};
-  const isCollapsed = (id) => Boolean(collapsedSections && collapsedSections[id]);
-  const sectionClass = (id) => `section${isCollapsed(id) ? ' collapsed' : ''}`;
-  const sectionBodyAttr = (id) => (isCollapsed(id) ? 'style="display:none"' : '');
-  const sectionExpandedAttr = (id) => (isCollapsed(id) ? 'false' : 'true');
+  const isCollapsed = (id) =>
+    Boolean(collapsedSections && collapsedSections[id]);
+  const sectionClass = (id) => `section${isCollapsed(id) ? " collapsed" : ""}`;
+  const sectionBodyAttr = (id) =>
+    isCollapsed(id) ? 'style="display:none"' : "";
+  const sectionExpandedAttr = (id) => (isCollapsed(id) ? "false" : "true");
+  const privacyUrl = `${base}/privacy`;
+  const gdprUrl = `${base}/gdpr`;
 
-  const html = `\`<!doctype html>
+  const html = `<!doctype html>
 <html>
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Timer Overlay Configurator</title>
+    <script id="Cookiebot" src="https://consent.cookiebot.com/uc.js" data-cbid="6770198d-2c1f-46f8-af4b-694edc70484c" type="text/javascript"></script>
     ${renderThemeBootstrapScript()}
     <style>
       ${THEME_CSS_VARS}
       body { margin: 0; font-family: Inter, system-ui, Arial, sans-serif; background: var(--page-bg); color: var(--text-color); }
-      header { display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; background: var(--header-bg); border-bottom: 1px solid var(--header-border); }
-      header .left { font-weight: 600; }
-      header .right { display: flex; gap: 12px; align-items: center; color: var(--text-muted); }
-      header button { background: var(--secondary-button-bg); color: var(--secondary-button-text); border: 1px solid var(--secondary-button-border); padding: 6px 10px; border-radius: 8px; cursor: pointer; }
       .row { display: flex; gap: 16px; padding: 16px; }
       .panel { background: var(--surface-color); border: 1px solid var(--surface-border); border-radius: 12px; padding: 16px; }
       .controls { width: 420px; }
@@ -144,54 +153,86 @@ export function renderOverlayConfigPage(options = {}) {
       .section-arrow { transition: transform .2s ease; font-size: 12px; color: var(--text-muted); }
       .section.collapsed .section-arrow { transform: rotate(-90deg); }
       .section.collapsed .section-body { display: none; }
+      .global-footer { margin: 24px 16px 24px; padding: 12px 0; border-top: 1px solid var(--surface-border); text-align: center; font-size: 13px; color: var(--text-muted); }
+      .global-footer a { color: var(--text-muted); text-decoration: none; margin: 0 10px; }
+      .global-footer a:hover { color: var(--accent-color); }
       ${THEME_TOGGLE_STYLES}
+      ${GLOBAL_HEADER_STYLES}
     </style>
   </head>
   <body>
-    <header>
-      <div class="left">Timer Overlay Configurator</div>
-      <div class="right">
-        ${renderThemeToggle({ label: "Theme" })}
-        <div>Logged in as ${adminName}</div>
-        <a href="https://docs.google.com/forms/d/e/1FAIpQLSdanikaYMRTjwm9TS5HQ4zMMc8tiDRbz9dqyrJ00Zl518hxbw/viewform?usp=dialog" target="_blank" rel="noopener noreferrer" title="Send feedback or report a bug">
-          <button class="secondary">Feedback</button>
-        </a>
-        <button id="logout">Logout</button>
-      </div>
-    </header>
+    ${renderGlobalHeader({
+      base,
+      adminName,
+      active: "config",
+      includeThemeToggle: true,
+      showFeedback: true,
+      showLogout: true,
+      showUtilitiesLink: true,
+    })}
     <div class="row">
       <div class="panel controls">
-        <div class="${sectionClass('style')}" data-section="style">
-          <button class="section-toggle" data-section-toggle="style" aria-expanded="${sectionExpandedAttr('style')}">
+        <div class="${sectionClass("style")}" data-section="style">
+          <button class="section-toggle" data-section-toggle="style" aria-expanded="${sectionExpandedAttr(
+            "style"
+          )}">
             <span>Overlay Style</span>
             <span class="section-arrow">▾</span>
           </button>
-          <div class="section-body" ${sectionBodyAttr('style')}>
+          <div class="section-body" ${sectionBodyAttr("style")}>
             <div class="control"><label>Overlay Key</label>
               <div style="display:flex; gap:8px; align-items:center;">
                 <input id="key" type="text" value="${userKey}" readonly>
                 <button class="secondary" id="rotateKey" title="Generate a new overlay key">Rotate</button>
               </div>
             </div>
-            <div class="control"><label>Font Size</label><input id="fontSize" type="number" min="10" max="300" step="1" value="${initial.fontSize}"></div>
-            <div class="control"><label>Color</label><input id="color" type="color" value="${initial.color}"></div>
-            <div class="control"><label>Transparent</label><input id="transparent" type="checkbox" ${initial.transparent ? "checked" : ""}></div>
-            <div class="control"><label>Background</label><input id="bg" type="color" value="${initial.bg}"></div>
-            <div class="control"><label>Font Family</label><input id="font" type="text" value="${initial.font}"></div>
-            <div class="control"><label>Show Label</label><input id="label" type="checkbox" ${initial.label ? "checked" : ""}></div>
-            <div class="control"><label>Label Text</label><input id="title" type="text" value="${initial.title}"></div>
+            <div class="control"><label>Font Size</label><input id="fontSize" type="number" min="10" max="300" step="1" value="${
+              initial.fontSize
+            }"></div>
+            <div class="control"><label>Color</label><input id="color" type="color" value="${
+              initial.color
+            }"></div>
+            <div class="control"><label>Transparent</label><input id="transparent" type="checkbox" ${
+              initial.transparent ? "checked" : ""
+            }></div>
+            <div class="control"><label>Background</label><input id="bg" type="color" value="${
+              initial.bg
+            }"></div>
+            <div class="control"><label>Font Family</label><input id="font" type="text" value="${
+              initial.font
+            }"></div>
+            <div class="control"><label>Show Label</label><input id="label" type="checkbox" ${
+              initial.label ? "checked" : ""
+            }></div>
+            <div class="control"><label>Label Text</label><input id="title" type="text" value="${
+              initial.title
+            }"></div>
             <div class="control"><label>Align</label>
               <select id="align">
-                <option ${initial.align === "left" ? "selected" : ""} value="left">left</option>
-                <option ${initial.align === "center" ? "selected" : ""} value="center">center</option>
-                <option ${initial.align === "right" ? "selected" : ""} value="right">right</option>
+                <option ${
+                  initial.align === "left" ? "selected" : ""
+                } value="left">left</option>
+                <option ${
+                  initial.align === "center" ? "selected" : ""
+                } value="center">center</option>
+                <option ${
+                  initial.align === "right" ? "selected" : ""
+                } value="right">right</option>
               </select>
             </div>
-            <div class="control"><label>Weight</label><input id="weight" type="number" min="100" max="1000" step="100" value="${initial.weight}"></div>
-            <div class="control"><label>Shadow</label><input id="shadow" type="checkbox" ${initial.shadow ? "checked" : ""}></div>
+            <div class="control"><label>Weight</label><input id="weight" type="number" min="100" max="1000" step="100" value="${
+              initial.weight
+            }"></div>
+            <div class="control"><label>Shadow</label><input id="shadow" type="checkbox" ${
+              initial.shadow ? "checked" : ""
+            }></div>
             <div class="control"><label>Shadow Color</label><input id="shadowColor" type="color" value="#000000"></div>
-            <div class="control"><label>Shadow Blur</label><input id="shadowBlur" type="number" min="0" max="50" step="1" value="${initial.shadowBlur}"></div>
-            <div class="control"><label>Outline Width</label><input id="stroke" type="number" min="0" max="20" step="1" value="${initial.stroke}"></div>
+            <div class="control"><label>Shadow Blur</label><input id="shadowBlur" type="number" min="0" max="50" step="1" value="${
+              initial.shadowBlur
+            }"></div>
+            <div class="control"><label>Outline Width</label><input id="stroke" type="number" min="0" max="20" step="1" value="${
+              initial.stroke
+            }"></div>
             <div class="control"><label>Outline Color</label><input id="strokeColor" type="color" value="#000000"></div>
             <div class="control"><label>Time format</label>
               <select id="timeFormat">
@@ -203,21 +244,27 @@ export function renderOverlayConfigPage(options = {}) {
             <div style="margin:12px 0; opacity:0.85; font-weight:600;">Threshold Styling</div>
             <div class="control"><label>Warn styling</label>
               <label style="display:flex; gap:6px; align-items:center; opacity:.85;">
-                <input id="warnEnabled" type="checkbox" ${initial.warnEnabled ? "checked" : ""} /> Enabled
+                <input id="warnEnabled" type="checkbox" ${
+                  initial.warnEnabled ? "checked" : ""
+                } /> Enabled
               </label>
             </div>
             <div class="control"><label>Warn under (sec)</label><input id="warnUnder" type="number" min="0" step="1" value="300"></div>
             <div class="control"><label>Warn color</label><input id="warnColor" type="color" value="#FFA500"></div>
             <div class="control"><label>Danger styling</label>
               <label style="display:flex; gap:6px; align-items:center; opacity:.85;">
-                <input id="dangerEnabled" type="checkbox" ${initial.dangerEnabled ? "checked" : ""} /> Enabled
+                <input id="dangerEnabled" type="checkbox" ${
+                  initial.dangerEnabled ? "checked" : ""
+                } /> Enabled
               </label>
             </div>
             <div class="control"><label>Danger under (sec)</label><input id="dangerUnder" type="number" min="0" step="1" value="60"></div>
             <div class="control"><label>Danger color</label><input id="dangerColor" type="color" value="#FF4D4D"></div>
             <div class="control"><label>Flash effect</label>
               <label style="display:flex; gap:6px; align-items:center; opacity:.85;">
-                <input id="flashEnabled" type="checkbox" ${initial.flashEnabled ? "checked" : ""} /> Enabled
+                <input id="flashEnabled" type="checkbox" ${
+                  initial.flashEnabled ? "checked" : ""
+                } /> Enabled
               </label>
             </div>
             <div class="control"><label>Flash under (sec)</label><input id="flashUnder" type="number" min="0" step="1" value="0"></div>
@@ -245,12 +292,14 @@ export function renderOverlayConfigPage(options = {}) {
           </div>
         </div>
 
-        <div class="${sectionClass('rules')}" data-section="rules">
-          <button class="section-toggle" data-section-toggle="rules" aria-expanded="${sectionExpandedAttr('rules')}">
+        <div class="${sectionClass("rules")}" data-section="rules">
+          <button class="section-toggle" data-section-toggle="rules" aria-expanded="${sectionExpandedAttr(
+            "rules"
+          )}">
             <span>Rules</span>
             <span class="section-arrow">▾</span>
           </button>
-          <div class="section-body" ${sectionBodyAttr('rules')}>
+          <div class="section-body" ${sectionBodyAttr("rules")}>
             <div class="control"><label>Min. Bits to Trigger</label><input id="r_bits_per" type="number" min="1" step="1" value="100"></div>
             <div class="control"><label>Bits add (sec)</label><input id="r_bits_add" type="number" min="0" step="1" value="60"></div>
             <div class="control"><label>T1 Subs add (sec)</label><input id="r_sub_1000" type="number" min="0" step="1" value="300"></div>
@@ -270,20 +319,28 @@ export function renderOverlayConfigPage(options = {}) {
           </div>
         </div>
 
-        <div class="${sectionClass('testing')}" data-section="testing">
-          <button class="section-toggle" data-section-toggle="testing" aria-expanded="${sectionExpandedAttr('testing')}">
+        <div class="${sectionClass("testing")}" data-section="testing">
+          <button class="section-toggle" data-section-toggle="testing" aria-expanded="${sectionExpandedAttr(
+            "testing"
+          )}">
             <span>Testing Tools</span>
             <span class="section-arrow">▾</span>
           </button>
-          <div class="section-body" ${sectionBodyAttr('testing')}>
+          <div class="section-body" ${sectionBodyAttr("testing")}>
             <div class="row2" id="devTests">
-              <button class="secondary" data-test-seconds="${devTest.bitsSeconds}" title="Simulate ${devTest.bitsPer} bits">
+              <button class="secondary" data-test-seconds="${
+                devTest.bitsSeconds
+              }" title="Simulate ${devTest.bitsPer} bits">
                 Quick: ${devTest.bitsPer} bits (+${devTest.bitsSeconds}s)
               </button>
-              <button class="secondary" data-test-seconds="${devTest.subSeconds}" title="Simulate Tier 1 sub">
+              <button class="secondary" data-test-seconds="${
+                devTest.subSeconds
+              }" title="Simulate Tier 1 sub">
                 Quick: 1x T1 sub (+${devTest.subSeconds}s)
               </button>
-              <button class="secondary" data-test-seconds="${devTest.giftSeconds}" title="Simulate single gift sub">
+              <button class="secondary" data-test-seconds="${
+                devTest.giftSeconds
+              }" title="Simulate single gift sub">
                 Quick: 1x gift sub (+${devTest.giftSeconds}s)
               </button>
             </div>
@@ -316,12 +373,14 @@ export function renderOverlayConfigPage(options = {}) {
           <div class="hint">Add as a Browser Source in OBS</div>
         </div>
         <div style="margin-top:8px" class="hint">Pause/Resume and Start actions update the live overlay immediately.</div>
-        <div class="${sectionClass('timer')}" data-section="timer">
-          <button class="section-toggle" data-section-toggle="timer" aria-expanded="${sectionExpandedAttr('timer')}">
+        <div class="${sectionClass("timer")}" data-section="timer">
+          <button class="section-toggle" data-section-toggle="timer" aria-expanded="${sectionExpandedAttr(
+            "timer"
+          )}">
             <span>Timer Controls</span>
             <span class="section-arrow">▾</span>
           </button>
-          <div class="section-body" ${sectionBodyAttr('timer')}>
+          <div class="section-body" ${sectionBodyAttr("timer")}>
             <div class="control"><label>Hours</label><input id="h" class="time-input" type="number" min="0" step="1" value="${defH}"></div>
             <div class="control"><label>Minutes</label><input id="m" class="time-input" type="number" min="0" max="59" step="1" value="${defM}"></div>
             <div class="control"><label>Seconds</label><input id="s" class="time-input" type="number" min="0" max="59" step="1" value="${defS}"></div>
@@ -363,12 +422,14 @@ export function renderOverlayConfigPage(options = {}) {
           </div>
         </div>
 
-        <div class="${sectionClass('events')}" data-section="events">
-          <button class="section-toggle" data-section-toggle="events" aria-expanded="${sectionExpandedAttr('events')}">
+        <div class="${sectionClass("events")}" data-section="events">
+          <button class="section-toggle" data-section-toggle="events" aria-expanded="${sectionExpandedAttr(
+            "events"
+          )}">
             <span>Event Log</span>
             <span class="section-arrow">▾</span>
           </button>
-          <div class="section-body" ${sectionBodyAttr('events')}>
+          <div class="section-body" ${sectionBodyAttr("events")}>
             <div id="eventLog" class="log-box"></div>
             <div class="row2" style="margin-top:8px;">
               <button class="secondary" id="clearLog">Clear Log</button>
@@ -376,12 +437,14 @@ export function renderOverlayConfigPage(options = {}) {
           </div>
         </div>
 
-        <div class="${sectionClass('goals')}" data-section="goals">
-          <button class="section-toggle" data-section-toggle="goals" aria-expanded="${sectionExpandedAttr('goals')}">
+        <div class="${sectionClass("goals")}" data-section="goals">
+          <button class="section-toggle" data-section-toggle="goals" aria-expanded="${sectionExpandedAttr(
+            "goals"
+          )}">
             <span>Goal Tracking Bars (Experimental)</span>
             <span class="section-arrow">▾</span>
           </button>
-          <div class="section-body" ${sectionBodyAttr('goals')}>
+          <div class="section-body" ${sectionBodyAttr("goals")}>
             <p style="opacity:0.85; max-width:640px">
               Create persistent goal bars for subs, bits, or mixed fundraisers. Customize the layout, auto-counting rules, and copy goal-specific Browser Source URLs for OBS or Streamlabs.
             </p>
@@ -397,6 +460,11 @@ export function renderOverlayConfigPage(options = {}) {
         </div>
       </div>
     </div>
+    <footer class="global-footer">
+      
+      <a href="${privacyUrl}">Privacy Policy</a>
+      <a href="${gdprUrl}">GDPR / UK GDPR Disclosure</a>
+    </footer>
     <script>
       const inputs = [
         'key','fontSize','color','transparent','bg','font','label','title','align','weight','shadow','shadowColor','shadowBlur','stroke','strokeColor','timeFormat',
@@ -1736,8 +1804,7 @@ export function renderOverlayConfigPage(options = {}) {
       saveStyle();
     </script>
   </body>
-</html>\`;
-`;
+</html>`;
 
   return html;
 }

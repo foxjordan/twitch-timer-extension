@@ -2,8 +2,11 @@ import {
   THEME_CSS_VARS,
   THEME_TOGGLE_STYLES,
   renderThemeBootstrapScript,
-  renderThemeToggle,
 } from "./theme.js";
+import {
+  GLOBAL_HEADER_STYLES,
+  renderGlobalHeader,
+} from "./globalHeader.js";
 
 export function renderHomePage(options = {}) {
   const base = String(options.base || "");
@@ -16,6 +19,10 @@ export function renderHomePage(options = {}) {
   const adminName = options.adminName
     ? String(options.adminName)
     : "your Twitch account";
+  const privacyUrl = `${base}/privacy`;
+  const gdprUrl = `${base}/gdpr`;
+  const showUtilitiesLink = Boolean(options.showUtilitiesLink);
+  const headerAdminName = isAdmin ? adminName : "";
 
   return `<!doctype html>
 <html>
@@ -23,15 +30,14 @@ export function renderHomePage(options = {}) {
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Twitch Timer Extension</title>
+    <script id="Cookiebot" src="https://consent.cookiebot.com/uc.js" data-cbid="6770198d-2c1f-46f8-af4b-694edc70484c" type="text/javascript"></script>
     ${renderThemeBootstrapScript()}
     <style>
       ${THEME_CSS_VARS}
-      body { margin: 0; font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: var(--home-bg); color: var(--text-color); display:flex; min-height:100vh; }
+      body { margin: 0; font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: var(--home-bg); color: var(--text-color); display:flex; flex-direction:column; min-height:100vh; }
       main { width: 100%; max-width: 960px; margin: auto; padding: 40px 24px 56px; }
       h1 { margin-top: 0; font-size: 36px; }
       p { line-height: 1.6; color: var(--text-color); }
-      .top-bar { display: flex; justify-content: flex-end; }
-      .top-bar .theme-toggle { margin-bottom: 8px; }
       .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 18px; margin-top: 28px; }
       .card { background: var(--surface-color); border: 1px solid var(--surface-border); border-radius: 14px; padding: 18px; box-shadow: 0 4px 20px var(--goal-card-shadow); }
       .card h2 { margin-top: 0; font-size: 20px; color: var(--text-color); }
@@ -44,19 +50,21 @@ export function renderHomePage(options = {}) {
       ul { padding-left: 20px; margin-top: 8px; color: var(--text-muted); }
       .status { margin-top: 22px; padding: 16px; border-radius: 12px; background: var(--surface-muted); border: 1px solid var(--surface-border); color: var(--text-color); }
       .status strong { color: var(--accent-color); }
+      .global-footer { margin-top: 40px; display: flex; flex-wrap: wrap; gap: 16px; font-size: 14px; color: var(--text-muted); }
+      .global-footer a { color: var(--text-muted); text-decoration: none; font-weight: 500; }
+      .global-footer a:hover { color: var(--accent-color); }
       @media (max-width: 600px) {
         main { padding: 32px 18px; }
         h1 { font-size: 30px; }
       }
       ${THEME_TOGGLE_STYLES}
+      ${GLOBAL_HEADER_STYLES}
     </style>
   </head>
   <body>
+    ${renderGlobalHeader({ base, adminName: headerAdminName, active: "home", includeThemeToggle: true, showUtilitiesLink })}
     <main>
-      <div class="top-bar">
-        ${renderThemeToggle({ label: "" })}
-      </div>
-      <h1>Timer Overlay backend</h1>
+      <h1>Hyper Timer Overlay</h1>
       <p>This service powers your Twitch charity/subathon style timer. Sign in with Twitch to configure the overlay, tune the rules, and monitor inbound events.</p>
 
       <div class="grid">
@@ -92,10 +100,18 @@ export function renderHomePage(options = {}) {
       </section>
 
       <div class="status">
-        ${isAdmin
-          ? `<strong>Signed in:</strong> ${adminName}. Your overlay link above already includes your saved key.`
-          : `Not signed in. Use the Sign in button above to manage settings for ${adminName}.`}
+        ${
+          isAdmin
+            ? `<strong>Signed in:</strong> ${adminName}. Your overlay link above already includes your saved key.`
+            : `Not signed in. Use the Sign in button above to manage settings for ${adminName}.`
+        }
       </div>
+
+      <footer class="global-footer">
+        
+        <a href="${privacyUrl}">Privacy Policy</a>
+        <a href="${gdprUrl}">GDPR / UK GDPR Disclosure</a>
+      </footer>
     </main>
   </body>
 </html>`;

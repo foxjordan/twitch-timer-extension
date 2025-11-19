@@ -9,6 +9,7 @@ import fetch from "node-fetch";
 import crypto from "crypto";
 import path from "path";
 import { readFile, writeFile } from "fs/promises";
+import { existsSync } from "fs";
 import {
   state,
   getRemainingSeconds,
@@ -74,6 +75,22 @@ app.use(
   })
 );
 
+const assetCandidates = [
+  process.env.ASSETS_DIR,
+  path.resolve(process.cwd(), "assets"),
+  path.resolve(process.cwd(), "../assets"),
+].filter(Boolean);
+const assetsDir = assetCandidates.find((dir) => existsSync(dir));
+if (assetsDir) {
+  app.use(
+    "/assets",
+    express.static(assetsDir, {
+      maxAge: "7d",
+      etag: true,
+    })
+  );
+}
+
 // CORS for local panel dev
 if (process.env.PANEL_ORIGIN) {
   app.use((req, res, next) => {
@@ -95,6 +112,15 @@ const getBroadcasterId = () =>
 
 // Server-Sent Events (SSE) clients for external overlays
 const sseClients = new Set();
+const lastWheelSpinByKey = new Map();
+const DEFAULT_WHEEL_OPTIONS = [
+  { label: "Heads", color: "#9146FF" },
+  { label: "Tails", color: "#F97316" },
+  { label: "Chat Pick", color: "#3B82F6" },
+  { label: "Streamer Pick", color: "#10B981" },
+];
+const TWO_PI = Math.PI * 2;
+const WHEEL_POINTER_ANGLE = Math.PI * 1.5;
 const observability = {
   lastEventSubEventAt: null,
   lastEventSubType: null,
@@ -266,6 +292,54 @@ app.post("/api/overlay/style", (req, res) => {
   res.json(saved);
 });
 
+app.post("/api/wheel/spin", (req, res) => {
+  if (!req?.session?.isAdmin)
+    return res.status(401).json({ error: "Admin login required" });
+  const overlayKey = normKey(
+    req.body?.overlayKey || req.query.key || req.session?.userOverlayKey || ""
+  );
+  if (!overlayKey)
+    return res.status(400).json({ error: "Overlay key is required" });
+  const providedOptions = sanitizeWheelOptions(req.body?.options || []);
+  const wheelOptions = providedOptions.length
+    ? providedOptions
+    : DEFAULT_WHEEL_OPTIONS;
+  const durationSeconds = Number(req.body?.durationSeconds);
+  const durationMs = Math.max(
+    1000,
+    Math.min(15000, Number.isFinite(durationSeconds) ? durationSeconds * 1000 : 4000)
+  );
+  const winnerIndex = Math.min(
+    wheelOptions.length - 1,
+    Math.max(0, Math.floor(Math.random() * wheelOptions.length))
+  );
+  const slice = wheelOptions.length ? TWO_PI / wheelOptions.length : TWO_PI;
+  const pointerOffset = WHEEL_POINTER_ANGLE - (winnerIndex * slice + slice / 2);
+  const normalizedTarget = ((pointerOffset % TWO_PI) + TWO_PI) % TWO_PI;
+  const lapCount = Math.max(2, Math.floor(durationMs / 800));
+  const payload = {
+    spinId: uuidv4(),
+    options: wheelOptions,
+    winnerIndex,
+    winnerLabel: wheelOptions[winnerIndex]?.label || "",
+    targetNormalized: normalizedTarget,
+    lapCount,
+    durationMs,
+    triggeredAt: new Date().toISOString(),
+  };
+  lastWheelSpinByKey.set(overlayKey, payload);
+  for (const client of Array.from(sseClients)) {
+    if (!client || client.key !== overlayKey) continue;
+    try {
+      client.res.write("event: wheel_spin\n");
+      client.res.write(`data: ${JSON.stringify(payload)}\n\n`);
+    } catch (e) {
+      sseClients.delete(client);
+    }
+  }
+  res.json(payload);
+});
+
 // moved to routes_overlay_api.js
 
 // Timer pause/resume (admin only)
@@ -279,6 +353,17 @@ function requireOverlayAuth(req, res) {
   if (keyIsValid(OVERLAY_KEY, req.query.key)) return true;
   res.status(401).json({ error: "Unauthorized overlay request" });
   return false;
+}
+
+function sanitizeWheelOptions(list) {
+  return (Array.isArray(list) ? list : [])
+    .map((opt, idx) => {
+      const label = String(opt && opt.label ? opt.label : "").trim();
+      const color = String(opt && opt.color ? opt.color : "").trim() ||
+        DEFAULT_WHEEL_OPTIONS[idx % DEFAULT_WHEEL_OPTIONS.length].color;
+      return { label: label || `Option ${idx + 1}`, color };
+    })
+    .filter((opt) => Boolean(opt.label));
 }
 
 function resolveGoalUserIdFromRequest(req) {
@@ -373,6 +458,12 @@ app.get("/api/overlay/stream", (req, res) => {
 
   if (goalUserId) {
     broadcastGoalSnapshot(goalUserId, client);
+  }
+
+  const lastWheel = lastWheelSpinByKey.get(key);
+  if (lastWheel) {
+    res.write("event: wheel_spin\n");
+    res.write(`data: ${JSON.stringify(lastWheel)}\n\n`);
   }
 
   req.on("close", () => {

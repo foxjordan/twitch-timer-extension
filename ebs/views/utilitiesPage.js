@@ -264,6 +264,7 @@ export function renderUtilitiesPage(options = {}) {
         const wheelDurationInput = document.getElementById('wheelDuration');
         const copyWheelLinkBtn = document.getElementById('copyWheelLink');
         const copyWheelStatus = document.getElementById('copyWheelStatus');
+        let currentDurationSeconds = wheelDurationInput ? Number(wheelDurationInput.value) || 4 : 4;
         const ctx = wheelCanvas ? wheelCanvas.getContext('2d') : null;
         const defaultColors = ['#9146FF','#F97316','#3B82F6','#10B981','#EC4899','#FCD34D'];
         const TWO_PI = Math.PI * 2;
@@ -450,16 +451,20 @@ export function renderUtilitiesPage(options = {}) {
           });
         }
 
-        function clampDurationSeconds(value) {
+        function clampDurationSeconds(value, opts) {
+          const options = opts || {};
           let secs = Number(value);
-          if (!Number.isFinite(secs)) secs = 4;
+          if (!Number.isFinite(secs)) secs = Number(options.fallback ?? currentDurationSeconds ?? 4);
           secs = Math.min(15, Math.max(2, secs));
-          if (wheelDurationInput) wheelDurationInput.value = String(secs);
+          currentDurationSeconds = secs;
+          if (!options.skipWrite && wheelDurationInput) wheelDurationInput.value = String(secs);
           return secs;
         }
 
         if (wheelDurationInput) {
-          wheelDurationInput.addEventListener('input', () => clampDurationSeconds(wheelDurationInput.value));
+          const applyClamp = () => clampDurationSeconds(wheelDurationInput.value);
+          wheelDurationInput.addEventListener('change', applyClamp);
+          wheelDurationInput.addEventListener('blur', applyClamp);
           clampDurationSeconds(wheelDurationInput.value);
         }
 
@@ -470,7 +475,8 @@ export function renderUtilitiesPage(options = {}) {
             return;
           }
           const durationSeconds = clampDurationSeconds(
-            wheelDurationInput ? wheelDurationInput.value : 4
+            wheelDurationInput ? wheelDurationInput.value : currentDurationSeconds,
+            { fallback: currentDurationSeconds }
           );
           try {
             const resp = await fetch('/api/wheel/spin', {

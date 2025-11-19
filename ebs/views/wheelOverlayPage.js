@@ -178,6 +178,7 @@ export function renderWheelOverlayPage(options = {}) {
           const winnerIndex = Number(payload.winnerIndex || 0);
           const lapCount = Math.max(2, Number(payload.lapCount || 6));
           const targetNormalized = Number(payload.targetNormalized);
+          const durationMs = Number(payload.durationMs);
           const slice = TWO_PI / wheelSegments.length;
           const currentNormalized = ((wheelRotation % TWO_PI) + TWO_PI) % TWO_PI;
           const normalizedTarget = Number.isFinite(targetNormalized)
@@ -187,8 +188,10 @@ export function renderWheelOverlayPage(options = {}) {
           if (baseDelta < 0) baseDelta += TWO_PI;
           const delta = lapCount * TWO_PI + baseDelta;
           const finalAngle = wheelRotation + delta;
-          const durationMs = Number(payload.durationMs || 3200);
-          animateWheelTo(finalAngle, durationMs, () => {
+          const duration = Number.isFinite(durationMs)
+            ? durationMs
+            : Math.max(1000, lapCount * 800);
+          animateWheelTo(finalAngle, duration, () => {
             resultEl.textContent = winnerLabel || wheelSegments[winnerIndex]?.label || '—';
           });
         }

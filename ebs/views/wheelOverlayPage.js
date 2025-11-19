@@ -187,16 +187,17 @@ export function renderWheelOverlayPage(options = {}) {
           if (baseDelta < 0) baseDelta += TWO_PI;
           const delta = lapCount * TWO_PI + baseDelta;
           const finalAngle = wheelRotation + delta;
-          animateWheelTo(finalAngle, () => {
+          const durationMs = Number(payload.durationMs || 3200);
+          animateWheelTo(finalAngle, durationMs, () => {
             resultEl.textContent = winnerLabel || wheelSegments[winnerIndex]?.label || '—';
           });
         }
 
-        function animateWheelTo(finalAngle, onDone) {
+        function animateWheelTo(finalAngle, durationMs, onDone) {
           if (spinning || !ctx) return;
           const start = wheelRotation;
           const delta = finalAngle - start;
-          const duration = 3200;
+          const duration = Math.max(1000, Number(durationMs || 3200));
           spinning = true;
           const startAt = performance.now();
           function step(now) {

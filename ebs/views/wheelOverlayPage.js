@@ -176,7 +176,7 @@ export function renderWheelOverlayPage(options = {}) {
           }
           const winnerLabel = payload.winnerLabel || '';
           const winnerIndex = Number(payload.winnerIndex || 0);
-          const lapCount = Math.max(2, Number(payload.lapCount || 6));
+          const lapCount = Number(Math.max(2, Number(payload.lapCount || 6)));
           const targetNormalized = Number(payload.targetNormalized);
           const durationMs = Number(payload.durationMs);
           const slice = TWO_PI / wheelSegments.length;

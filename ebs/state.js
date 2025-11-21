@@ -3,37 +3,56 @@ import path from 'path';
 
 const DATA_DIR = process.env.DATA_DIR || process.cwd();
 const TIMER_STATE_PATH = path.resolve(DATA_DIR, 'overlay-timer-state.json');
+const DEFAULT_USER_ID = 'default';
 
-// Timer state and helpers (single-channel dev)
+// Timer state and helpers (per-user)
 export const state = {
-  timerExpiryEpochMs: 0,
-  hypeActive: false,
-  paused: false,
-  pauseRemaining: 0,
-  seen: new Map(),
-  initialSeconds: 0,
-  additionsTotal: 0,
-  maxTotalSeconds: 0,
-  bitsCarry: 0
+  seen: new Map(), // global dedupe for EventSub message IDs
+  users: new Map(), // uid -> timer state
 };
 
-function snapshotTimerState() {
+function ensure(uid) {
+  const id = String(uid || DEFAULT_USER_ID);
+  if (!state.users.has(id)) {
+    state.users.set(id, {
+      timerExpiryEpochMs: 0,
+      hypeActive: false,
+      paused: false,
+      pauseRemaining: 0,
+      initialSeconds: 0,
+      additionsTotal: 0,
+      maxTotalSeconds: 0,
+      bitsCarry: 0,
+    });
+  }
+  return state.users.get(id);
+}
+
+function snapshotUserState(userState) {
   return {
-    timerExpiryEpochMs: Number(state.timerExpiryEpochMs || 0),
-    hypeActive: Boolean(state.hypeActive),
-    paused: Boolean(state.paused),
-    pauseRemaining: Number(state.pauseRemaining || 0),
-    initialSeconds: Number(state.initialSeconds || 0),
-    additionsTotal: Number(state.additionsTotal || 0),
-    maxTotalSeconds: Number(state.maxTotalSeconds || 0),
-    bitsCarry: Number(state.bitsCarry || 0)
+    timerExpiryEpochMs: Number(userState.timerExpiryEpochMs || 0),
+    hypeActive: Boolean(userState.hypeActive),
+    paused: Boolean(userState.paused),
+    pauseRemaining: Number(userState.pauseRemaining || 0),
+    initialSeconds: Number(userState.initialSeconds || 0),
+    additionsTotal: Number(userState.additionsTotal || 0),
+    maxTotalSeconds: Number(userState.maxTotalSeconds || 0),
+    bitsCarry: Number(userState.bitsCarry || 0),
   };
+}
+
+function serializeAllUsers() {
+  const obj = {};
+  for (const [uid, val] of state.users.entries()) {
+    obj[uid] = snapshotUserState(val);
+  }
+  return obj;
 }
 
 async function persistTimerState() {
   try {
-    const snap = snapshotTimerState();
-    await writeFile(TIMER_STATE_PATH, JSON.stringify(snap, null, 2), 'utf-8');
+    const data = { users: serializeAllUsers() };
+    await writeFile(TIMER_STATE_PATH, JSON.stringify(data, null, 2), 'utf-8');
   } catch {}
 }
 
@@ -41,119 +60,135 @@ export async function loadTimerState() {
   try {
     const raw = await readFile(TIMER_STATE_PATH, 'utf-8');
     const obj = JSON.parse(raw);
-    if (!obj || typeof obj !== 'object') return;
-    if (typeof obj.timerExpiryEpochMs === 'number') state.timerExpiryEpochMs = obj.timerExpiryEpochMs;
-    if (typeof obj.hypeActive === 'boolean') state.hypeActive = obj.hypeActive;
-    if (typeof obj.paused === 'boolean') state.paused = obj.paused;
-    if (typeof obj.pauseRemaining === 'number') state.pauseRemaining = obj.pauseRemaining;
-    if (typeof obj.initialSeconds === 'number') state.initialSeconds = obj.initialSeconds;
-    if (typeof obj.additionsTotal === 'number') state.additionsTotal = obj.additionsTotal;
-    if (typeof obj.maxTotalSeconds === 'number') state.maxTotalSeconds = obj.maxTotalSeconds;
-    if (typeof obj.bitsCarry === 'number') state.bitsCarry = obj.bitsCarry;
+    if (!obj || typeof obj !== 'object' || typeof obj.users !== 'object') return;
+    for (const [uid, val] of Object.entries(obj.users)) {
+      if (!val || typeof val !== 'object') continue;
+      const clean = {
+        timerExpiryEpochMs: Number(val.timerExpiryEpochMs || 0),
+        hypeActive: Boolean(val.hypeActive),
+        paused: Boolean(val.paused),
+        pauseRemaining: Number(val.pauseRemaining || 0),
+        initialSeconds: Number(val.initialSeconds || 0),
+        additionsTotal: Number(val.additionsTotal || 0),
+        maxTotalSeconds: Number(val.maxTotalSeconds || 0),
+        bitsCarry: Number(val.bitsCarry || 0),
+      };
+      state.users.set(String(uid || DEFAULT_USER_ID), clean);
+    }
   } catch {}
 }
 
-export function clearTimer() {
-  state.timerExpiryEpochMs = 0;
-  state.hypeActive = false;
-  state.paused = false;
-  state.pauseRemaining = 0;
-  state.initialSeconds = 0;
-  state.additionsTotal = 0;
-  state.bitsCarry = 0;
+export function clearTimer(uid = DEFAULT_USER_ID) {
+  const s = ensure(uid);
+  s.timerExpiryEpochMs = 0;
+  s.hypeActive = false;
+  s.paused = false;
+  s.pauseRemaining = 0;
+  s.initialSeconds = 0;
+  s.additionsTotal = 0;
+  s.bitsCarry = 0;
   persistTimerState().catch(() => {});
 }
 
-export function getRemainingSeconds() {
-  if (state.paused) return Math.max(0, Math.floor(state.pauseRemaining));
-  const ms = Math.max(0, state.timerExpiryEpochMs - Date.now());
+export function getRemainingSeconds(uid = DEFAULT_USER_ID) {
+  const s = ensure(uid);
+  if (s.paused) return Math.max(0, Math.floor(s.pauseRemaining));
+  const ms = Math.max(0, s.timerExpiryEpochMs - Date.now());
   return Math.floor(ms / 1000);
 }
 
-export function addSeconds(sec) {
+export function addSeconds(uid = DEFAULT_USER_ID, sec = 0) {
+  const s = ensure(uid);
   const now = Date.now();
   let toAdd = Math.floor(Number(sec) || 0);
-  if (toAdd <= 0) return getRemainingSeconds();
-  if (state.maxTotalSeconds > 0) {
-    const used = Math.max(0, Math.floor(state.initialSeconds + state.additionsTotal));
-    const remainingBudget = Math.max(0, state.maxTotalSeconds - used);
+  if (toAdd <= 0) return getRemainingSeconds(uid);
+  if (s.maxTotalSeconds > 0) {
+    const used = Math.max(0, Math.floor(s.initialSeconds + s.additionsTotal));
+    const remainingBudget = Math.max(0, s.maxTotalSeconds - used);
     toAdd = Math.min(toAdd, remainingBudget);
   }
-  if (toAdd <= 0) return getRemainingSeconds();
-  if (state.paused) {
-    state.pauseRemaining = Math.max(0, Math.floor(state.pauseRemaining + toAdd));
+  if (toAdd <= 0) return getRemainingSeconds(uid);
+  if (s.paused) {
+    s.pauseRemaining = Math.max(0, Math.floor(s.pauseRemaining + toAdd));
   } else {
-    const base = Math.max(now, state.timerExpiryEpochMs);
-    state.timerExpiryEpochMs = base + toAdd * 1000;
+    const base = Math.max(now, s.timerExpiryEpochMs);
+    s.timerExpiryEpochMs = base + toAdd * 1000;
   }
-  state.additionsTotal = Math.max(0, Math.floor(state.additionsTotal + toAdd));
+  s.additionsTotal = Math.max(0, Math.floor(s.additionsTotal + toAdd));
    // Persist any change to timer tracking
   persistTimerState().catch(() => {});
-  return getRemainingSeconds();
+  return getRemainingSeconds(uid);
 }
 
-export function setHype(active) {
-  state.hypeActive = active;
+export function setHype(uid = DEFAULT_USER_ID, active) {
+  const s = ensure(uid);
+  s.hypeActive = active;
   persistTimerState().catch(() => {});
 }
 
-export function pauseTimer() {
-  if (state.paused) return getRemainingSeconds();
-  state.pauseRemaining = getRemainingSeconds();
-  state.paused = true;
+export function pauseTimer(uid = DEFAULT_USER_ID) {
+  const s = ensure(uid);
+  if (s.paused) return getRemainingSeconds(uid);
+  s.pauseRemaining = getRemainingSeconds(uid);
+  s.paused = true;
   persistTimerState().catch(() => {});
-  return state.pauseRemaining;
+  return s.pauseRemaining;
 }
 
-export function resumeTimer() {
-  if (!state.paused) return getRemainingSeconds();
-  state.timerExpiryEpochMs = Date.now() + Math.max(0, Math.floor(state.pauseRemaining)) * 1000;
-  state.paused = false;
-  state.pauseRemaining = 0;
+export function resumeTimer(uid = DEFAULT_USER_ID) {
+  const s = ensure(uid);
+  if (!s.paused) return getRemainingSeconds(uid);
+  s.timerExpiryEpochMs = Date.now() + Math.max(0, Math.floor(s.pauseRemaining)) * 1000;
+  s.paused = false;
+  s.pauseRemaining = 0;
   persistTimerState().catch(() => {});
-  return getRemainingSeconds();
+  return getRemainingSeconds(uid);
 }
 
-export function setInitialSeconds(secs) {
-  const s = Math.max(0, Math.floor(Number(secs) || 0));
-  state.initialSeconds = s;
-  state.additionsTotal = 0;
+export function setInitialSeconds(uid = DEFAULT_USER_ID, secs) {
+  const s = ensure(uid);
+  const v = Math.max(0, Math.floor(Number(secs) || 0));
+  s.initialSeconds = v;
+  s.additionsTotal = 0;
   // Reset pooled bits at new stream start
-  state.bitsCarry = 0;
+  s.bitsCarry = 0;
   persistTimerState().catch(() => {});
 }
 
-export function setMaxTotalSeconds(secs) {
-  state.maxTotalSeconds = Math.max(0, Math.floor(Number(secs) || 0));
+export function setMaxTotalSeconds(uid = DEFAULT_USER_ID, secs) {
+  const s = ensure(uid);
+  s.maxTotalSeconds = Math.max(0, Math.floor(Number(secs) || 0));
   // If lowering the cap below already scheduled total, clamp current remaining
-  const max = state.maxTotalSeconds|0;
+  const max = s.maxTotalSeconds|0;
   if (max > 0) {
-    const used = Math.max(0, Math.floor((state.initialSeconds||0) + (state.additionsTotal||0)));
+    const used = Math.max(0, Math.floor((s.initialSeconds||0) + (s.additionsTotal||0)));
     const overflow = Math.max(0, used - max);
     if (overflow > 0) {
-      const rem = getRemainingSeconds();
+      const rem = getRemainingSeconds(uid);
       const newRem = Math.max(0, rem - overflow);
-      if (state.paused) {
-        state.pauseRemaining = newRem;
+      if (s.paused) {
+        s.pauseRemaining = newRem;
       } else {
-        state.timerExpiryEpochMs = Date.now() + newRem * 1000;
+        s.timerExpiryEpochMs = Date.now() + newRem * 1000;
       }
     }
   }
   persistTimerState().catch(() => {});
 }
 
-export function getTotals() {
+export function getTotals(uid = DEFAULT_USER_ID) {
+  const s = ensure(uid);
   return {
-    initialSeconds: Math.max(0, Math.floor(state.initialSeconds || 0)),
-    additionsTotal: Math.max(0, Math.floor(state.additionsTotal || 0)),
-    maxTotalSeconds: Math.max(0, Math.floor(state.maxTotalSeconds || 0))
+    initialSeconds: Math.max(0, Math.floor(s.initialSeconds || 0)),
+    additionsTotal: Math.max(0, Math.floor(s.additionsTotal || 0)),
+    maxTotalSeconds: Math.max(0, Math.floor(s.maxTotalSeconds || 0))
   };
 }
 
-export function capReached() {
-  const max = Math.max(0, Math.floor(state.maxTotalSeconds || 0));
+export function capReached(uid = DEFAULT_USER_ID) {
+  const s = ensure(uid);
+  const max = Math.max(0, Math.floor(s.maxTotalSeconds || 0));
   if (max <= 0) return false;
-  const used = Math.max(0, Math.floor((state.initialSeconds || 0) + (state.additionsTotal || 0)));
+  const used = Math.max(0, Math.floor((s.initialSeconds || 0) + (s.additionsTotal || 0)));
   return used >= max;
 }

@@ -271,6 +271,7 @@ mountTimerRoutes(app, {
   onTimerMutation: () => {
     observability.lastTimerMutationAt = new Date().toISOString();
   },
+  resolveTimerUserId: resolveTimerUserIdFromRequest,
 });
 
 // Admin-only: event log for counted contributions
@@ -408,6 +409,21 @@ function resolveGoalUserIdFromRequest(req) {
   return "default";
 }
 
+function resolveTimerUserIdFromRequest(req) {
+  if (req?.session?.twitchUser?.id) return String(req.session.twitchUser.id);
+  const key =
+    req?.query && typeof req.query.key !== "undefined"
+      ? normKey(req.query.key)
+      : null;
+  if (key) {
+    const owner = getUserIdForKey(key);
+    if (owner) return String(owner);
+  }
+  if (CURRENT_BROADCASTER_ID) return String(CURRENT_BROADCASTER_ID);
+  if (BROADCASTER_ID) return String(BROADCASTER_ID);
+  return "default";
+}
+
 function broadcastGoalSnapshot(userId, specificClients = null) {
   const uid = userId ? String(userId) : "default";
   let goals = [];
@@ -457,7 +473,8 @@ app.get("/api/overlay/stream", (req, res) => {
 
   const key = normKey(req.query.key);
   const goalUserId = resolveGoalUserIdFromRequest(req);
-  const client = { res, key, goalUserId };
+  const timerUserId = resolveTimerUserIdFromRequest(req);
+  const client = { res, key, goalUserId, timerUserId };
   sseClients.add(client);
   observability.totalSseClientsServed += 1;
   logger.info("sse_client_connected", {
@@ -471,9 +488,10 @@ app.get("/api/overlay/stream", (req, res) => {
 
   // Send initial snapshot as an event
   const snapshot = {
-    remaining: getRemainingSeconds(),
-    hype: state.hypeActive,
-    paused: state.paused,
+    userId: timerUserId,
+    remaining: getRemainingSeconds(timerUserId),
+    hype: state.users.get(String(timerUserId))?.hypeActive,
+    paused: state.users.get(String(timerUserId))?.paused,
   };
   res.write(`event: timer_tick\n`);
   res.write(`data: ${JSON.stringify(snapshot)}\n\n`);
@@ -570,10 +588,11 @@ mountHomePageRoutes(app);
 
 
 // ---- EventSub integration ----
-function secondsFromEvent(notification) {
+function secondsFromEvent(notification, uid = getBroadcasterId() || "default") {
   const subType = notification?.payload?.subscription?.type;
   const e = notification?.payload?.event ?? {};
   const RULES = getRules(CURRENT_BROADCASTER_ID);
+  const userState = state.users.get(String(uid)) || { bitsCarry: 0 };
   switch (subType) {
     case "channel.bits.use": {
       // Bits in Extensions (disabled by default to avoid double-counting cheers)
@@ -596,9 +615,10 @@ function secondsFromEvent(notification) {
       const per = Math.max(1, Number(RULES.bits?.per || 0));
       const addSec = Math.max(0, Number(RULES.bits?.add_seconds || 0));
       // Pool partial bits across events
-      state.bitsCarry = Math.max(0, Math.floor((state.bitsCarry || 0) + (Number(bits) || 0)));
-      const units = Math.floor(state.bitsCarry / per);
-      state.bitsCarry = state.bitsCarry % per;
+      userState.bitsCarry = Math.max(0, Math.floor((userState.bitsCarry || 0) + (Number(bits) || 0)));
+      state.users.set(String(uid), userState);
+      const units = Math.floor(userState.bitsCarry / per);
+      userState.bitsCarry = userState.bitsCarry % per;
       return units * addSec;
     }
     case "channel.subscribe": {
@@ -661,14 +681,16 @@ async function handleEventSub(notification) {
     logger: "eventsub",
   });
 
+  const timerUid = getBroadcasterId() || "default";
+
   if (
     subType === "channel.hype_train.begin" ||
     subType === "channel.hype_train.progress"
   ) {
-    setHype(true);
+    setHype(timerUid, true);
   }
   if (subType === "channel.hype_train.end") {
-    setHype(false);
+    setHype(timerUid, false);
   }
 
   if (subType === "channel.hype_train.begin" || subType === "channel.hype_train.end") {
@@ -684,18 +706,18 @@ async function handleEventSub(notification) {
     });
   }
 
-  const baseSeconds = secondsFromEvent(notification);
+  const baseSeconds = secondsFromEvent(notification, timerUid);
   let appliedSeconds = baseSeconds;
   let hypeMultiplier = 1;
-  if (baseSeconds > 0 && state.hypeActive) {
+  if (baseSeconds > 0 && state.users.get(String(timerUid))?.hypeActive) {
     const R = getRules(CURRENT_BROADCASTER_ID);
     hypeMultiplier = Number(R.hypeTrain.multiplier || 1);
     appliedSeconds = Math.floor(baseSeconds * hypeMultiplier);
   }
 
   if (baseSeconds > 0) {
-    const before = getRemainingSeconds();
-    const remaining = addSeconds(appliedSeconds);
+    const before = getRemainingSeconds(timerUid);
+    const remaining = addSeconds(timerUid, appliedSeconds);
     const actual = Math.max(0, remaining - before);
     observability.lastTimerMutationAt = new Date().toISOString();
 
@@ -710,6 +732,7 @@ async function handleEventSub(notification) {
       giftCount: e.total ?? e.cumulative_total ?? e.total_count,
       charityAmount: e.amount?.value,
       charityDecimals: e.amount?.decimal_places,
+      userId: timerUid,
     });
 
     if (appliedSeconds > 0) {
@@ -718,9 +741,10 @@ async function handleEventSub(notification) {
           broadcasterId: getBroadcasterId(),
           type: "timer_add",
           payload: {
+            userId: timerUid,
             secondsAdded: actual,
             newRemaining: remaining,
-            hype: state.hypeActive,
+            hype: state.users.get(String(timerUid))?.hypeActive,
           },
         });
       } catch (err) {
@@ -858,13 +882,14 @@ if (process.env.BROADCASTER_USER_TOKEN) {
   startEventSubWS();
 }
 
-// Server tick → broadcast remaining once per second
+// Server tick → broadcast remaining once per second per user/key
 setInterval(async () => {
-  const remaining = getRemainingSeconds();
+  const uid = getBroadcasterId() || "default";
+  const remaining = getRemainingSeconds(uid);
   await broadcastToChannel({
     broadcasterId: getBroadcasterId(),
     type: "timer_tick",
-    payload: { remaining, hype: state.hypeActive },
+    payload: { userId: uid, remaining, hype: state.users.get(String(uid))?.hypeActive },
   }).catch((err) => {
     observability.lastBroadcastErrorAt = new Date().toISOString();
     logger.error("broadcast_failed", {
@@ -873,24 +898,21 @@ setInterval(async () => {
     });
   });
 
-  // Fan-out to SSE clients
-  const payload = JSON.stringify({
-    remaining,
-    hype: state.hypeActive,
-    paused: state.paused,
-    capReached:
-      (state.maxTotalSeconds | 0) > 0
-        ? Math.max(
-            0,
-            (state.initialSeconds | 0) + (state.additionsTotal | 0)
-          ) >=
-          (state.maxTotalSeconds | 0)
-          ? true
-          : false
-        : false,
-  });
+  // Fan-out to SSE clients (per timer user)
   for (const client of Array.from(sseClients)) {
     try {
+      const tid = client.timerUserId || "default";
+      const rem = getRemainingSeconds(tid);
+      const hyp = state.users.get(String(tid))?.hypeActive;
+      const paused = state.users.get(String(tid))?.paused;
+      const cap = capReached(tid);
+      const payload = JSON.stringify({
+        userId: tid,
+        remaining: rem,
+        hype: hyp,
+        paused,
+        capReached: cap,
+      });
       client.res.write("event: timer_tick\n");
       client.res.write(`data: ${payload}\n\n`);
     } catch (e) {

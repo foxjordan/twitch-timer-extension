@@ -108,6 +108,7 @@ const BROADCASTER_ID = process.env.BROADCASTER_USER_ID;
 let CURRENT_BROADCASTER_ID = BROADCASTER_ID || null;
 let CURRENT_BROADCASTER_LOGIN = null;
 let eventSubWS = null;
+let eventSubReconnectTimer = null;
 const OVERLAY_KEY = process.env.OVERLAY_KEY || "";
 const getBroadcasterId = () =>
   String(CURRENT_BROADCASTER_ID || BROADCASTER_ID || "");
@@ -126,6 +127,15 @@ const WHEEL_POINTER_ANGLE = Math.PI * 1.5;
 const observability = {
   lastEventSubEventAt: null,
   lastEventSubType: null,
+  lastEventSubKeepaliveAt: null,
+  lastEventSubSessionId: null,
+  lastEventSubReconnectAt: null,
+  lastEventSubReconnectReason: null,
+  lastEventSubReconnectUrl: null,
+  lastEventSubErrorAt: null,
+  lastEventSubErrorMessage: null,
+  lastEventSubConnectedAt: null,
+  totalEventSubReconnects: 0,
   lastTimerMutationAt: null,
   lastBroadcastErrorAt: null,
   totalSseClientsServed: 0,
@@ -715,23 +725,105 @@ async function handleEventSub(notification) {
   }
 }
 
-// Connect to EventSub WS (single channel dev)
-if (process.env.BROADCASTER_USER_TOKEN) {
+function scheduleEventSubReconnect(reason, url) {
+  if (eventSubReconnectTimer) return;
+  eventSubReconnectTimer = setTimeout(() => {
+    eventSubReconnectTimer = null;
+    startEventSubWS(url);
+  }, 5000);
+  observability.lastEventSubReconnectAt = new Date().toISOString();
+  observability.lastEventSubReconnectReason = reason;
+  observability.lastEventSubReconnectUrl = url || null;
+  observability.totalEventSubReconnects += 1;
+  if (eventSubWS && reason === "session_reconnect") {
+    try {
+      eventSubWS.close();
+    } catch {}
+  }
+}
+
+function startEventSubWS(urlOverride = null) {
+  const token = process.env.BROADCASTER_USER_TOKEN;
+  const clientId = process.env.TWITCH_CLIENT_ID;
+  const broadcasterId = getBroadcasterId();
+  if (!token || !clientId || !broadcasterId) return;
   connectEventSubWS({
-    userAccessToken: process.env.BROADCASTER_USER_TOKEN,
-    clientId: process.env.TWITCH_CLIENT_ID,
-    broadcasterId: getBroadcasterId(),
+    userAccessToken: token,
+    clientId,
+    broadcasterId,
+    url: urlOverride || undefined,
     onEvent: handleEventSub,
+    onStatus: (status = {}) => {
+      const nowIso = new Date().toISOString();
+      switch (status.type) {
+        case "keepalive":
+          observability.lastEventSubKeepaliveAt = nowIso;
+          break;
+        case "welcome":
+          observability.lastEventSubSessionId = status.sessionId || null;
+          observability.lastEventSubConnectedAt = nowIso;
+          break;
+        case "open":
+          observability.lastEventSubConnectedAt = nowIso;
+          break;
+        case "session_reconnect":
+          observability.lastEventSubErrorAt = nowIso;
+          observability.lastEventSubErrorMessage = "session_reconnect_requested";
+          scheduleEventSubReconnect("session_reconnect", status.reconnectUrl);
+          break;
+        case "revocation":
+          observability.lastEventSubErrorAt = nowIso;
+          observability.lastEventSubErrorMessage = "subscription_revoked";
+          scheduleEventSubReconnect("revocation");
+          break;
+        case "subscription_failed":
+        case "subscription_exception":
+          observability.lastEventSubErrorAt = nowIso;
+          observability.lastEventSubErrorMessage =
+            status?.info?.message ||
+            status?.info?.body ||
+            status?.info?.status ||
+            String(status.type);
+          break;
+        case "socket_error":
+          observability.lastEventSubErrorAt = nowIso;
+          observability.lastEventSubErrorMessage =
+            status.message || "socket_error";
+          scheduleEventSubReconnect("socket_error");
+          break;
+        case "closed":
+          observability.lastEventSubErrorAt = nowIso;
+          observability.lastEventSubErrorMessage = "socket_closed";
+          scheduleEventSubReconnect("closed");
+          break;
+        default:
+          break;
+      }
+    },
   })
     .then((ws) => {
+      if (eventSubWS && eventSubWS !== ws) {
+        try {
+          eventSubWS.close();
+        } catch {}
+      }
       eventSubWS = ws;
+      observability.lastEventSubConnectedAt = new Date().toISOString();
       logger.info("eventsub_ws_connected", {
         broadcasterId: getBroadcasterId(),
       });
     })
     .catch((err) => {
+      observability.lastEventSubErrorAt = new Date().toISOString();
+      observability.lastEventSubErrorMessage = err?.message || "connect_failed";
       logger.error("eventsub_ws_error", { message: err?.message });
+      scheduleEventSubReconnect("connect_error");
     });
+}
+
+// Connect to EventSub WS (single channel dev)
+if (process.env.BROADCASTER_USER_TOKEN) {
+  startEventSubWS();
 }
 
 // Server tick → broadcast remaining once per second

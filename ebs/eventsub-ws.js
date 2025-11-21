@@ -4,15 +4,51 @@ import { logger } from './logger.js';
 
 const WS_URL = 'wss://eventsub.wss.twitch.tv/ws?keepalive_timeout_seconds=30';
 
-export async function connectEventSubWS({ userAccessToken, clientId, broadcasterId, onEvent }) {
-  const ws = new WebSocket(WS_URL);
+export async function connectEventSubWS({
+  userAccessToken,
+  clientId,
+  broadcasterId,
+  onEvent,
+  onStatus,
+  url = WS_URL,
+}) {
+  const ws = new WebSocket(url);
   let sessionId = null;
+
+  const emitStatus = (status) => {
+    try {
+      if (typeof onStatus === 'function') onStatus(status);
+    } catch {}
+  };
+
+  ws.on('open', () => {
+    emitStatus({ type: 'open', url });
+  });
 
   ws.on('message', async (buf) => {
     const msg = JSON.parse(buf.toString());
+    const messageType = msg?.metadata?.message_type;
 
-    if (msg.metadata?.message_type === 'session_welcome') {
+    if (messageType === 'session_keepalive') {
+      emitStatus({ type: 'keepalive' });
+      return;
+    }
+
+    if (messageType === 'session_reconnect') {
+      emitStatus({
+        type: 'session_reconnect',
+        reconnectUrl: msg?.payload?.session?.reconnect_url,
+      });
+      return;
+    }
+
+    if (messageType === 'session_welcome') {
       sessionId = msg.payload.session.id;
+      emitStatus({
+        type: 'welcome',
+        sessionId,
+        keepaliveTimeout: msg?.payload?.session?.keepalive_timeout_seconds,
+      });
 
       // Subscribe to common channel events. For standard Bits, use channel.cheer.
       const wants = [
@@ -52,23 +88,39 @@ export async function connectEventSubWS({ userAccessToken, clientId, broadcaster
             const t = await r.text().catch(() => '');
             const info = { type, version, status: r.status, body: t };
             logger.error('eventsub_subscription_failed', info);
+            emitStatus({ type: 'subscription_failed', info });
           } else {
             // 202 Accepted is typical; Twitch will send a notification once enabled
             if (process.env.DEBUG) logger.debug('eventsub_subscription_requested', { type, version });
           }
         } catch (e) {
           logger.error('eventsub_subscription_exception', { type, message: e?.message });
+          emitStatus({ type: 'subscription_exception', info: { type, message: e?.message } });
         }
       }
     }
 
-    if (msg.metadata?.message_type === 'notification') {
+    if (messageType === 'notification') {
       onEvent(msg);
+      return;
     }
+
+    if (messageType === 'revocation') {
+      emitStatus({
+        type: 'revocation',
+        subscription: msg?.payload?.subscription,
+      });
+    }
+  });
+
+  ws.on('error', (err) => {
+    logger.error('eventsub_ws_error_event', { message: err?.message });
+    emitStatus({ type: 'socket_error', message: err?.message });
   });
 
   ws.on('close', () => {
     logger.warn('eventsub_ws_closed');
+    emitStatus({ type: 'closed' });
   });
 
   return ws;

@@ -571,8 +571,20 @@ function secondsFromEvent(notification) {
   const RULES = getRules(CURRENT_BROADCASTER_ID);
   switch (subType) {
     case "channel.bits.use": {
-      // Bits-in-Extensions often mirrors channel.cheer; skip to avoid double-counting.
-      return 0;
+      // Bits in Extensions (disabled by default to avoid double-counting cheers)
+      // If enabled later, de-dupe by transaction id.
+      const tx =
+        e.transaction_id ||
+        e.transactionId ||
+        e.message_id ||
+        e.id ||
+        null;
+      if (tx) {
+        const k = `bitstx:${tx}`;
+        if (state.seen.has(k)) return 0;
+        state.seen.set(k, Date.now() + 24 * 3600 * 1000);
+      }
+      // fallthrough to cheer math
     }
     case "channel.cheer": {  // Standard Bits cheers
       const bits = e.bits ?? e.total_bits_used ?? e.total_bits ?? 0;
@@ -591,6 +603,7 @@ function secondsFromEvent(notification) {
       return RULES.sub[tier] || RULES.sub["1000"];
     }
     case "channel.subscription.message": {
+      if (e.is_gift || e.was_gift) return 0;
       return RULES.resub.base_seconds;
     }
     case "channel.subscription.gift": {

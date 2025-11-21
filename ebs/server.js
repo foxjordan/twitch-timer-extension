@@ -570,7 +570,10 @@ function secondsFromEvent(notification) {
   const e = notification?.payload?.event ?? {};
   const RULES = getRules(CURRENT_BROADCASTER_ID);
   switch (subType) {
-    case "channel.bits.use": // Bits in Extensions
+    case "channel.bits.use": {
+      // Bits-in-Extensions often mirrors channel.cheer; skip to avoid double-counting.
+      return 0;
+    }
     case "channel.cheer": {  // Standard Bits cheers
       const bits = e.bits ?? e.total_bits_used ?? e.total_bits ?? 0;
       const per = Math.max(1, Number(RULES.bits?.per || 0));
@@ -582,6 +585,8 @@ function secondsFromEvent(notification) {
       return units * addSec;
     }
     case "channel.subscribe": {
+      // If Twitch marks this as a gifted sub, ignore; gift events are handled separately.
+      if (e.is_gift || e.was_gift) return 0;
       const tier = e.tier || "1000";
       return RULES.sub[tier] || RULES.sub["1000"];
     }

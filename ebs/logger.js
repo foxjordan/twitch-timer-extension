@@ -3,7 +3,16 @@ import { randomUUID } from "crypto";
 const baseMeta = {
   service: process.env.FLY_APP_NAME || "ebs",
   env: process.env.NODE_ENV || "development",
+  app: process.env.FLY_APP_NAME || "ebs",
 };
+
+let dynamicMeta = {};
+
+export function setLoggerContext(meta = {}) {
+  if (meta && typeof meta === "object") {
+    dynamicMeta = { ...dynamicMeta, ...meta };
+  }
+}
 
 function emit(level, message, meta = {}) {
   const payload = {
@@ -11,6 +20,7 @@ function emit(level, message, meta = {}) {
     level,
     message,
     ...baseMeta,
+    ...dynamicMeta,
     ...meta,
   };
   const line = JSON.stringify(payload);
@@ -34,7 +44,7 @@ export const logger = {
   },
 };
 
-export function requestLogger() {
+export function requestLogger(opts = {}) {
   return function requestLoggerMiddleware(req, res, next) {
     const start = process.hrtime.bigint();
     const reqId = req.headers["x-request-id"] || randomUUID();
@@ -44,6 +54,8 @@ export function requestLogger() {
     res.on("finish", () => {
       const durationNs = Number(process.hrtime.bigint() - start);
       const durationMs = Math.round(durationNs / 1e6);
+      const extra =
+        typeof opts.resolveMeta === "function" ? opts.resolveMeta(req) || {} : {};
       logger.info("http_request_completed", {
         requestId: reqId,
         method: req.method,
@@ -51,6 +63,8 @@ export function requestLogger() {
         status: res.statusCode,
         durationMs,
         userAgent: req.get?.("user-agent"),
+        logger: "http",
+        ...extra,
       });
     });
 

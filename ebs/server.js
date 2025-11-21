@@ -44,7 +44,7 @@ import { mountOverlayApiRoutes } from "./routes_overlay_api.js";
 import { mountOverlayPageRoutes } from "./routes_overlay_page.js";
 import { mountHomePageRoutes } from "./routes_home_page.js";
 import { mountGoalRoutes } from "./routes_goals.js";
-import { logger, requestLogger } from "./logger.js";
+import { logger, requestLogger, setLoggerContext } from "./logger.js";
 import { getRules, setRules, loadRules } from "./rules_store.js";
 import {
   addLogEntry,
@@ -63,7 +63,14 @@ const app = express();
 // honor X-Forwarded-* so req.protocol resolves to https behind Fly
 app.set("trust proxy", 1);
 app.use(express.json());
-app.use(requestLogger());
+app.use(
+  requestLogger({
+    resolveMeta: () => ({
+      channelId: getBroadcasterId() || null,
+      channelLogin: CURRENT_BROADCASTER_LOGIN || null,
+    }),
+  })
+);
 app.use(
   session({
     name: "overlay.sid",
@@ -107,6 +114,7 @@ if (process.env.PANEL_ORIGIN) {
 const BROADCASTER_ID = process.env.BROADCASTER_USER_ID;
 let CURRENT_BROADCASTER_ID = BROADCASTER_ID || null;
 let CURRENT_BROADCASTER_LOGIN = null;
+let CURRENT_BROADCASTER_TOKEN = process.env.BROADCASTER_USER_TOKEN || null;
 let eventSubWS = null;
 let eventSubReconnectTimer = null;
 const OVERLAY_KEY = process.env.OVERLAY_KEY || "";
@@ -141,6 +149,12 @@ const observability = {
   totalSseClientsServed: 0,
   lastGoalMutationAt: null,
 };
+
+// Default logging context for Grafana filters
+setLoggerContext({
+  channelId: getBroadcasterId() || null,
+  channelLogin: CURRENT_BROADCASTER_LOGIN || null,
+});
 
 // Load keys + styles at startup
 loadOverlayKeys().catch(() => {});
@@ -494,27 +508,18 @@ mountAuthRoutes(app, {
     try {
       CURRENT_BROADCASTER_ID = String(user.id);
       CURRENT_BROADCASTER_LOGIN = String(user.login || '').toLowerCase();
+      CURRENT_BROADCASTER_TOKEN = accessToken || CURRENT_BROADCASTER_TOKEN;
+      setLoggerContext({
+        channelId: CURRENT_BROADCASTER_ID,
+        channelLogin: CURRENT_BROADCASTER_LOGIN,
+      });
       if (eventSubWS && typeof eventSubWS.close === "function") {
         try {
           eventSubWS.close();
         } catch {}
       }
       if (accessToken && process.env.TWITCH_CLIENT_ID) {
-        connectEventSubWS({
-          userAccessToken: accessToken,
-          clientId: process.env.TWITCH_CLIENT_ID,
-          broadcasterId: CURRENT_BROADCASTER_ID,
-          onEvent: handleEventSub,
-        })
-          .then((ws) => {
-            eventSubWS = ws;
-             logger.info("eventsub_ws_connected", {
-               broadcasterId: CURRENT_BROADCASTER_ID,
-             });
-          })
-          .catch((err) => {
-            logger.error("eventsub_ws_error", { message: err?.message });
-          });
+        startEventSubWS();
       }
     } catch (e) {
       logger.error("admin_login_handler_failed", { message: e?.message });
@@ -652,6 +657,8 @@ async function handleEventSub(notification) {
     eventId: id,
     type: subType,
     broadcasterId: getBroadcasterId(),
+    channelLogin: CURRENT_BROADCASTER_LOGIN,
+    logger: "eventsub",
   });
 
   if (
@@ -761,7 +768,7 @@ function scheduleEventSubReconnect(reason, url) {
 }
 
 function startEventSubWS(urlOverride = null) {
-  const token = process.env.BROADCASTER_USER_TOKEN;
+  const token = CURRENT_BROADCASTER_TOKEN || process.env.BROADCASTER_USER_TOKEN;
   const clientId = process.env.TWITCH_CLIENT_ID;
   const broadcasterId = getBroadcasterId();
   if (!token || !clientId || !broadcasterId) return;
@@ -829,12 +836,19 @@ function startEventSubWS(urlOverride = null) {
       observability.lastEventSubConnectedAt = new Date().toISOString();
       logger.info("eventsub_ws_connected", {
         broadcasterId: getBroadcasterId(),
+        channelLogin: CURRENT_BROADCASTER_LOGIN,
+        logger: "eventsub",
       });
     })
     .catch((err) => {
       observability.lastEventSubErrorAt = new Date().toISOString();
       observability.lastEventSubErrorMessage = err?.message || "connect_failed";
-      logger.error("eventsub_ws_error", { message: err?.message });
+      logger.error("eventsub_ws_error", {
+        message: err?.message,
+        broadcasterId: getBroadcasterId(),
+        channelLogin: CURRENT_BROADCASTER_LOGIN,
+        logger: "eventsub",
+      });
       scheduleEventSubReconnect("connect_error");
     });
 }

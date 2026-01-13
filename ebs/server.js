@@ -279,7 +279,7 @@ app.get("/healthz", (_req, res) => {
 
 // ---- Routes mounting ----
 mountTimerRoutes(app, {
-  BROADCASTER_ID,
+  BROADCASTER_ID: ENV_BROADCASTER_ID,
   getBroadcasterId,
   sseClients,
   requireOverlayAuth,

@@ -83,6 +83,17 @@ export function mountAuthRoutes(app, opts = {}) {
   });
 
   app.post('/auth/logout', (req, res) => {
+    const userId = req?.session?.twitchUser?.id;
+
+    // Notify server to close EventSub connection for this user
+    if (userId && opts && typeof opts.onUserLogout === 'function') {
+      try {
+        opts.onUserLogout(String(userId));
+      } catch (e) {
+        logger.error('logout_callback_failed', { message: e?.message });
+      }
+    }
+
     const secure = req.secure || req.headers['x-forwarded-proto'] === 'https';
     try { res.clearCookie('overlay.sid', { path: '/', sameSite: 'lax', secure }); } catch {}
     req.session.destroy(() => {
@@ -92,6 +103,17 @@ export function mountAuthRoutes(app, opts = {}) {
 
   // Convenience GET logout that redirects to login
   app.get('/auth/logout', (req, res) => {
+    const userId = req?.session?.twitchUser?.id;
+
+    // Notify server to close EventSub connection for this user
+    if (userId && opts && typeof opts.onUserLogout === 'function') {
+      try {
+        opts.onUserLogout(String(userId));
+      } catch (e) {
+        logger.error('logout_callback_failed', { message: e?.message });
+      }
+    }
+
     const next = req.query.next || '/overlay/config';
     const base = process.env.SERVER_BASE_URL || `${req.protocol}://${req.get('host')}`;
     const secure = req.secure || req.headers['x-forwarded-proto'] === 'https';

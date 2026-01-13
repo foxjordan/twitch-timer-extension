@@ -65,10 +65,18 @@ app.set("trust proxy", 1);
 app.use(express.json());
 app.use(
   requestLogger({
-    resolveMeta: () => ({
-      channelId: getBroadcasterId() || null,
-      channelLogin: CURRENT_BROADCASTER_LOGIN || null,
-    }),
+    resolveMeta: () => {
+      // Get first active broadcaster for logging context (multi-user now)
+      const ids = getAllActiveBroadcasters();
+      if (ids.length > 0) {
+        const connection = getBroadcasterConnection(ids[0]);
+        return {
+          channelId: ids[0],
+          channelLogin: connection?.broadcasterLogin || null,
+        };
+      }
+      return { channelId: null, channelLogin: null };
+    },
   })
 );
 app.use(
@@ -111,15 +119,33 @@ if (process.env.PANEL_ORIGIN) {
   });
 }
 
-const BROADCASTER_ID = process.env.BROADCASTER_USER_ID;
-let CURRENT_BROADCASTER_ID = BROADCASTER_ID || null;
-let CURRENT_BROADCASTER_LOGIN = null;
-let CURRENT_BROADCASTER_TOKEN = process.env.BROADCASTER_USER_TOKEN || null;
-let eventSubWS = null;
-let eventSubReconnectTimer = null;
+// Environment-based broadcaster (for backward compatibility)
+const ENV_BROADCASTER_ID = process.env.BROADCASTER_USER_ID;
+const ENV_BROADCASTER_TOKEN = process.env.BROADCASTER_USER_TOKEN || null;
+
+// Per-user EventSub connections
+// userId -> { broadcasterId, broadcasterLogin, broadcasterToken, ws, reconnectTimer, lastEventAt }
+const broadcasterConnections = new Map();
+
 const OVERLAY_KEY = process.env.OVERLAY_KEY || "";
-const getBroadcasterId = () =>
-  String(CURRENT_BROADCASTER_ID || BROADCASTER_ID || "");
+
+// Helper to get connection for specific user
+function getBroadcasterConnection(userId) {
+  return broadcasterConnections.get(String(userId));
+}
+
+// Helper to get all active broadcaster IDs
+function getAllActiveBroadcasters() {
+  return Array.from(broadcasterConnections.keys());
+}
+
+// Deprecated: for backward compatibility during migration
+const getBroadcasterId = () => {
+  // Try to get first available broadcaster from connections
+  const ids = getAllActiveBroadcasters();
+  if (ids.length > 0) return String(ids[0]);
+  return String(ENV_BROADCASTER_ID || "");
+};
 
 // Server-Sent Events (SSE) clients for external overlays
 const sseClients = new Set();
@@ -150,10 +176,10 @@ const observability = {
   lastGoalMutationAt: null,
 };
 
-// Default logging context for Grafana filters
+// Default logging context for Grafana filters (will be multi-user after login)
 setLoggerContext({
-  channelId: getBroadcasterId() || null,
-  channelLogin: CURRENT_BROADCASTER_LOGIN || null,
+  channelId: null,
+  channelLogin: null,
 });
 
 // Load keys + styles at startup
@@ -232,15 +258,19 @@ setInterval(() => {
 
 // Basic health endpoint
 app.get("/healthz", (_req, res) => {
-  const eventSubReady =
-    eventSubWS && typeof eventSubWS.readyState === "number"
-      ? eventSubWS.readyState === 1
-      : Boolean(eventSubWS);
+  // Check if ANY EventSub connections are active
+  const activeConnections = Array.from(broadcasterConnections.entries()).filter(
+    ([_, conn]) => conn.ws && typeof conn.ws.readyState === "number" && conn.ws.readyState === 1
+  );
+  const eventSubReady = activeConnections.length > 0;
+
   res.json({
     ok: true,
-    broadcasterId: getBroadcasterId(),
+    activeBroadcasters: getAllActiveBroadcasters().length,
+    broadcasterIds: getAllActiveBroadcasters(),
     sseClients: sseClients.size,
     eventSubConnected: eventSubReady,
+    eventSubActiveConnections: activeConnections.length,
     observability,
   });
 });
@@ -404,8 +434,8 @@ function resolveGoalUserIdFromRequest(req) {
     const owner = getUserIdForKey(key);
     if (owner) return String(owner);
   }
-  if (CURRENT_BROADCASTER_ID) return String(CURRENT_BROADCASTER_ID);
-  if (BROADCASTER_ID) return String(BROADCASTER_ID);
+  // Fallback to environment broadcaster if configured
+  if (ENV_BROADCASTER_ID) return String(ENV_BROADCASTER_ID);
   return "default";
 }
 
@@ -419,8 +449,8 @@ function resolveTimerUserIdFromRequest(req) {
     const owner = getUserIdForKey(key);
     if (owner) return String(owner);
   }
-  if (CURRENT_BROADCASTER_ID) return String(CURRENT_BROADCASTER_ID);
-  if (BROADCASTER_ID) return String(BROADCASTER_ID);
+  // Fallback to environment broadcaster if configured
+  if (ENV_BROADCASTER_ID) return String(ENV_BROADCASTER_ID);
   return "default";
 }
 
@@ -524,26 +554,110 @@ app.get("/api/overlay/stream", (req, res) => {
 mountAuthRoutes(app, {
   onAdminLogin: ({ user, accessToken }) => {
     try {
-      CURRENT_BROADCASTER_ID = String(user.id);
-      CURRENT_BROADCASTER_LOGIN = String(user.login || '').toLowerCase();
-      CURRENT_BROADCASTER_TOKEN = accessToken || CURRENT_BROADCASTER_TOKEN;
-      setLoggerContext({
-        channelId: CURRENT_BROADCASTER_ID,
-        channelLogin: CURRENT_BROADCASTER_LOGIN,
-      });
-      if (eventSubWS && typeof eventSubWS.close === "function") {
-        try {
-          eventSubWS.close();
-        } catch {}
+      const userId = String(user.id);
+      const userLogin = String(user.login || '').toLowerCase();
+
+      logger.info("user_login", { userId, userLogin });
+
+      // Add or update this user's connection info
+      let connection = broadcasterConnections.get(userId);
+      if (!connection) {
+        connection = {
+          broadcasterId: userId,
+          broadcasterLogin: userLogin,
+          broadcasterToken: accessToken,
+          ws: null,
+          reconnectTimer: null,
+          lastEventAt: null,
+        };
+        broadcasterConnections.set(userId, connection);
+      } else {
+        // Update existing connection
+        connection.broadcasterLogin = userLogin;
+        connection.broadcasterToken = accessToken;
       }
+
+      // Start EventSub connection for THIS user only (doesn't affect others)
       if (accessToken && process.env.TWITCH_CLIENT_ID) {
-        startEventSubWS();
+        startEventSubForUser(userId);
       }
     } catch (e) {
       logger.error("admin_login_handler_failed", { message: e?.message });
     }
   },
+  onUserLogout: (userId) => {
+    try {
+      logger.info("user_logout", { userId });
+      closeEventSubForUser(userId);
+    } catch (e) {
+      logger.error("logout_handler_failed", { userId, message: e?.message });
+    }
+  },
 });
+
+// Start EventSub WebSocket for specific user
+async function startEventSubForUser(userId) {
+  const connection = broadcasterConnections.get(String(userId));
+  if (!connection) {
+    logger.error("start_eventsub_no_connection", { userId });
+    return;
+  }
+
+  // Close existing connection if any
+  if (connection.ws && typeof connection.ws.close === "function") {
+    try {
+      connection.ws.close();
+    } catch {}
+  }
+
+  // Clear existing reconnect timer
+  if (connection.reconnectTimer) {
+    clearTimeout(connection.reconnectTimer);
+    connection.reconnectTimer = null;
+  }
+
+  try {
+    // Start new WebSocket connection for this broadcaster
+    const ws = await startEventSubWS(
+      connection.broadcasterId,
+      connection.broadcasterToken,
+      (notification) => handleEventSub(notification, userId)
+    );
+    connection.ws = ws;
+    logger.info("eventsub_started", { userId, broadcasterId: connection.broadcasterId });
+  } catch (e) {
+    logger.error("eventsub_start_failed", { userId, message: e?.message });
+
+    // Retry after delay
+    connection.reconnectTimer = setTimeout(() => {
+      startEventSubForUser(userId);
+    }, 30000);
+  }
+}
+
+// Close EventSub connection for specific user
+function closeEventSubForUser(userId) {
+  const connection = broadcasterConnections.get(String(userId));
+  if (!connection) return;
+
+  if (connection.ws && typeof connection.ws.close === "function") {
+    try {
+      connection.ws.close();
+    } catch {}
+  }
+
+  if (connection.reconnectTimer) {
+    clearTimeout(connection.reconnectTimer);
+  }
+
+  // Only remove if NOT the environment broadcaster
+  if (userId !== ENV_BROADCASTER_ID) {
+    broadcasterConnections.delete(String(userId));
+  }
+
+  logger.info("eventsub_closed", { userId });
+}
+
 // Mount overlay API routes (style, keys, user settings)
 mountOverlayApiRoutes(app, {
   requireOverlayAuth,
@@ -588,10 +702,10 @@ mountHomePageRoutes(app);
 
 
 // ---- EventSub integration ----
-function secondsFromEvent(notification, uid = getBroadcasterId() || "default") {
+function secondsFromEvent(notification, uid = "default") {
   const subType = notification?.payload?.subscription?.type;
   const e = notification?.payload?.event ?? {};
-  const RULES = getRules(CURRENT_BROADCASTER_ID);
+  const RULES = getRules(uid);
   const userState = state.users.get(String(uid)) || { bitsCarry: 0 };
   switch (subType) {
     case "channel.bits.use": {
@@ -663,7 +777,7 @@ function secondsFromEvent(notification, uid = getBroadcasterId() || "default") {
   }
 }
 
-async function handleEventSub(notification) {
+async function handleEventSub(notification, expectedUserId = null) {
   const id = notification?.metadata?.message_id || uuidv4();
   const now = Date.now();
   if (state.seen.has(id)) return; // idempotent
@@ -671,17 +785,38 @@ async function handleEventSub(notification) {
 
   const subType = notification?.payload?.subscription?.type;
   const e = notification?.payload?.event ?? {};
-  observability.lastEventSubEventAt = new Date().toISOString();
+
+  // CRITICAL FIX: Extract broadcaster ID from event payload
+  const broadcasterId = notification?.payload?.subscription?.condition?.broadcaster_user_id;
+
+  if (!broadcasterId) {
+    logger.warn("eventsub_missing_broadcaster_id", { type: subType });
+    return;
+  }
+
+  // Verify this broadcaster has an active connection
+  const connection = broadcasterConnections.get(String(broadcasterId));
+  if (!connection) {
+    logger.warn("eventsub_unknown_broadcaster", { broadcasterId, type: subType });
+    return;
+  }
+
+  // Route event to correct user's timer
+  const timerUid = String(broadcasterId);
+
+  // Update last event timestamp
+  connection.lastEventAt = new Date().toISOString();
+
+  observability.lastEventSubEventAt = connection.lastEventAt;
   observability.lastEventSubType = subType || "unknown";
+
   logger.info("eventsub_notification", {
     eventId: id,
     type: subType,
-    broadcasterId: getBroadcasterId(),
-    channelLogin: CURRENT_BROADCASTER_LOGIN,
+    broadcasterId: timerUid,
+    broadcasterLogin: connection.broadcasterLogin,
     logger: "eventsub",
   });
-
-  const timerUid = getBroadcasterId() || "default";
 
   if (
     subType === "channel.hype_train.begin" ||
@@ -716,7 +851,7 @@ async function handleEventSub(notification) {
   let appliedSeconds = baseSeconds;
   let hypeMultiplier = 1;
   if (baseSeconds > 0 && state.users.get(String(timerUid))?.hypeActive) {
-    const R = getRules(CURRENT_BROADCASTER_ID);
+    const R = getRules(timerUid);
     hypeMultiplier = Number(R.hypeTrain.multiplier || 1);
     appliedSeconds = Math.floor(baseSeconds * hypeMultiplier);
   }
@@ -744,7 +879,7 @@ async function handleEventSub(notification) {
     if (appliedSeconds > 0) {
       try {
         await broadcastToChannel({
-          broadcasterId: getBroadcasterId(),
+          broadcasterId: timerUid,
           type: "timer_add",
           payload: {
             userId: timerUid,
@@ -765,7 +900,7 @@ async function handleEventSub(notification) {
   }
 
   try {
-    const goalOwnerId = getBroadcasterId() || "default";
+    const goalOwnerId = timerUid;
     const applied = applyGoalAutoContribution({
       uid: goalOwnerId,
       type: subType,
@@ -797,17 +932,18 @@ function scheduleEventSubReconnect(reason, url) {
   }
 }
 
-function startEventSubWS(urlOverride = null) {
-  const token = CURRENT_BROADCASTER_TOKEN || process.env.BROADCASTER_USER_TOKEN;
+function startEventSubWS(broadcasterId, accessToken, onNotification, urlOverride = null) {
   const clientId = process.env.TWITCH_CLIENT_ID;
-  const broadcasterId = getBroadcasterId();
-  if (!token || !clientId || !broadcasterId) return;
-  connectEventSubWS({
-    userAccessToken: token,
+  if (!accessToken || !clientId || !broadcasterId) {
+    return Promise.reject(new Error("Missing required parameters"));
+  }
+
+  return connectEventSubWS({
+    userAccessToken: accessToken,
     clientId,
     broadcasterId,
     url: urlOverride || undefined,
-    onEvent: handleEventSub,
+    onEvent: onNotification,
     onStatus: (status = {}) => {
       const nowIso = new Date().toISOString();
       switch (status.type) {
@@ -824,12 +960,12 @@ function startEventSubWS(urlOverride = null) {
         case "session_reconnect":
           observability.lastEventSubErrorAt = nowIso;
           observability.lastEventSubErrorMessage = "session_reconnect_requested";
-          scheduleEventSubReconnect("session_reconnect", status.reconnectUrl);
+          logger.warn("eventsub_reconnect_requested", { broadcasterId, reconnectUrl: status.reconnectUrl });
           break;
         case "revocation":
           observability.lastEventSubErrorAt = nowIso;
           observability.lastEventSubErrorMessage = "subscription_revoked";
-          scheduleEventSubReconnect("revocation");
+          logger.error("eventsub_subscription_revoked", { broadcasterId });
           break;
         case "subscription_failed":
         case "subscription_exception":
@@ -844,67 +980,44 @@ function startEventSubWS(urlOverride = null) {
           observability.lastEventSubErrorAt = nowIso;
           observability.lastEventSubErrorMessage =
             status.message || "socket_error";
-          scheduleEventSubReconnect("socket_error");
+          logger.error("eventsub_socket_error", { broadcasterId, message: status.message });
           break;
         case "closed":
           observability.lastEventSubErrorAt = nowIso;
           observability.lastEventSubErrorMessage = "socket_closed";
-          scheduleEventSubReconnect("closed");
+          logger.warn("eventsub_socket_closed", { broadcasterId });
           break;
         default:
           break;
       }
     },
-  })
-    .then((ws) => {
-      if (eventSubWS && eventSubWS !== ws) {
-        try {
-          eventSubWS.close();
-        } catch {}
-      }
-      eventSubWS = ws;
-      observability.lastEventSubConnectedAt = new Date().toISOString();
-      logger.info("eventsub_ws_connected", {
-        broadcasterId: getBroadcasterId(),
-        channelLogin: CURRENT_BROADCASTER_LOGIN,
-        logger: "eventsub",
-      });
-    })
-    .catch((err) => {
-      observability.lastEventSubErrorAt = new Date().toISOString();
-      observability.lastEventSubErrorMessage = err?.message || "connect_failed";
-      logger.error("eventsub_ws_error", {
-        message: err?.message,
-        broadcasterId: getBroadcasterId(),
-        channelLogin: CURRENT_BROADCASTER_LOGIN,
-        logger: "eventsub",
-      });
-      scheduleEventSubReconnect("connect_error");
-    });
-}
-
-// Connect to EventSub WS (single channel dev)
-if (process.env.BROADCASTER_USER_TOKEN) {
-  startEventSubWS();
+  });
 }
 
 // Server tick → broadcast remaining once per second per user/key
 setInterval(async () => {
-  const uid = getBroadcasterId() || "default";
-  const remaining = getRemainingSeconds(uid);
-  await broadcastToChannel({
-    broadcasterId: getBroadcasterId(),
-    type: "timer_tick",
-    payload: { userId: uid, remaining, hype: state.users.get(String(uid))?.hypeActive },
-  }).catch((err) => {
-    observability.lastBroadcastErrorAt = new Date().toISOString();
-    logger.error("broadcast_failed", {
-      reason: err?.message,
-      type: "timer_tick",
-    });
-  });
+  // Broadcast to Twitch Extension PubSub for ALL active broadcasters
+  for (const [userId, connection] of broadcasterConnections) {
+    try {
+      const remaining = getRemainingSeconds(userId);
+      const hype = state.users.get(String(userId))?.hypeActive;
 
-  // Fan-out to SSE clients (per timer user)
+      await broadcastToChannel({
+        broadcasterId: userId,
+        type: "timer_tick",
+        payload: { userId, remaining, hype },
+      });
+    } catch (err) {
+      observability.lastBroadcastErrorAt = new Date().toISOString();
+      logger.error("broadcast_failed", {
+        broadcasterId: userId,
+        reason: err?.message,
+        type: "timer_tick",
+      });
+    }
+  }
+
+  // Fan-out to SSE clients (already handles per-user correctly!)
   for (const client of Array.from(sseClients)) {
     try {
       const tid = client.timerUserId || "default";
@@ -928,6 +1041,22 @@ setInterval(async () => {
 }, 1000);
 
 setInterval(refreshSubGoalCounts, 60 * 1000);
+
+// Initialize environment broadcaster on startup if configured
+if (ENV_BROADCASTER_ID && ENV_BROADCASTER_TOKEN) {
+  logger.info("initializing_env_broadcaster", { broadcasterId: ENV_BROADCASTER_ID });
+
+  broadcasterConnections.set(ENV_BROADCASTER_ID, {
+    broadcasterId: ENV_BROADCASTER_ID,
+    broadcasterLogin: 'env-broadcaster',
+    broadcasterToken: ENV_BROADCASTER_TOKEN,
+    ws: null,
+    reconnectTimer: null,
+    lastEventAt: null,
+  });
+
+  startEventSubForUser(ENV_BROADCASTER_ID);
+}
 
 const port = process.env.PORT || 8080;
 app.listen(port, () => console.log(`EBS listening on :${port}`));

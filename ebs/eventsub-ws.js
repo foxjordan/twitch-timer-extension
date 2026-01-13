@@ -58,9 +58,9 @@ export async function connectEventSubWS({
         { type: 'channel.cheer', version: '1' },
         // Skip channel.bits.use to avoid double-counting standard Cheers; enable later if running a Bits-in-Extensions flow.
         { type: 'channel.charity_campaign.donate', version: '1' },
-        { type: 'channel.hype_train.begin', version: '1' },
-        { type: 'channel.hype_train.progress', version: '1' },
-        { type: 'channel.hype_train.end', version: '1' },
+        { type: 'channel.hype_train.begin', version: '2' },
+        { type: 'channel.hype_train.progress', version: '2' },
+        { type: 'channel.hype_train.end', version: '2' },
         { type: 'channel.follow', version: '2' }
       ];
 

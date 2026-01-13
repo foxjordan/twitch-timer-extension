@@ -703,6 +703,12 @@ async function handleEventSub(notification) {
       hypeLevel: e.level,
       hypeTotal: e.total,
       hypeGoal: e.goal,
+      // v2-specific fields (optional, gracefully handle if missing)
+      isSharedTrain: e.is_shared_train ?? null,
+      trainType: e.type ?? null,
+      allTimeHighLevel: e.all_time_high_level ?? null,
+      allTimeHighTotal: e.all_time_high_total ?? null,
+      sharedTrainParticipants: e.shared_train_participants?.length ?? null,
     });
   }
 

@@ -1,7 +1,19 @@
 import { logger } from './logger.js';
 
 export function mountOverlayApiRoutes(app, ctx) {
-  const { requireOverlayAuth, normKey, getSavedStyle, setSavedStyle, getOrCreateUserKey, rotateUserKey, getUserSettings, setUserSettings, sseClients, getRules, setRules, setMaxTotalSeconds } = ctx;
+  const { requireOverlayAuth, normKey, getSavedStyle, setSavedStyle, getOrCreateUserKey, rotateUserKey, getUserSettings, setUserSettings, sseClients, getRules, setRules, setMaxTotalSeconds, resolveTimerUserId } = ctx;
+
+  // Resolve the broadcaster ID that this user is managing
+  // This ensures rules are saved/loaded for the correct broadcaster
+  const resolveManagedBroadcasterId = (req) => {
+    // If we have a timer user ID resolver, use it (handles overlay key mapping)
+    if (typeof resolveTimerUserId === 'function') {
+      const resolved = resolveTimerUserId(req);
+      if (resolved && resolved !== 'default') return resolved;
+    }
+    // Fall back to the logged-in user's ID
+    return req.session?.twitchUser?.id;
+  };
 
   // Style read (public to overlays/key holder)
   app.get('/api/overlay/style', (req, res) => {
@@ -84,10 +96,12 @@ export function mountOverlayApiRoutes(app, ctx) {
   });
 
   // Rules (admin only)
+  // Uses resolveManagedBroadcasterId to ensure rules are saved/loaded for the
+  // correct broadcaster (the one whose events will trigger the timer)
   app.get('/api/rules', (req, res) => {
     if (!req?.session?.isAdmin) return res.status(401).json({ error: 'Admin login required' });
     try {
-      const uid = req.session?.twitchUser?.id;
+      const uid = resolveManagedBroadcasterId(req);
       res.json(getRules(uid));
     } catch (e) {
       res.status(500).json({ error: 'Failed to load rules' });
@@ -97,11 +111,12 @@ export function mountOverlayApiRoutes(app, ctx) {
   app.post('/api/rules', (req, res) => {
     if (!req?.session?.isAdmin) return res.status(401).json({ error: 'Admin login required' });
     try {
-      const uid = req.session?.twitchUser?.id;
+      const uid = resolveManagedBroadcasterId(req);
       const saved = setRules(uid, req.body || {});
       logger.info('rules_saved', {
         requestId: req.requestId,
-        userId: uid,
+        visitorUserId: req.session?.twitchUser?.id,
+        broadcasterId: uid,
       });
       res.json(saved);
     } catch (e) {

@@ -1,5 +1,6 @@
 import { readFile, writeFile } from 'fs/promises';
 import path from 'path';
+import { logger } from './logger.js';
 
 const DATA_DIR = process.env.DATA_DIR || process.cwd();
 const TIMER_STATE_PATH = path.resolve(DATA_DIR, 'overlay-timer-state.json');
@@ -56,24 +57,46 @@ async function persistTimerState() {
   } catch {}
 }
 
+function parseUserState(val) {
+  if (!val || typeof val !== 'object') return null;
+  return {
+    timerExpiryEpochMs: Number(val.timerExpiryEpochMs || 0),
+    hypeActive: Boolean(val.hypeActive),
+    paused: Boolean(val.paused),
+    pauseRemaining: Number(val.pauseRemaining || 0),
+    initialSeconds: Number(val.initialSeconds || 0),
+    additionsTotal: Number(val.additionsTotal || 0),
+    maxTotalSeconds: Number(val.maxTotalSeconds || 0),
+    bitsCarry: Number(val.bitsCarry || 0),
+  };
+}
+
 export async function loadTimerState() {
   try {
     const raw = await readFile(TIMER_STATE_PATH, 'utf-8');
     const obj = JSON.parse(raw);
-    if (!obj || typeof obj !== 'object' || typeof obj.users !== 'object') return;
-    for (const [uid, val] of Object.entries(obj.users)) {
-      if (!val || typeof val !== 'object') continue;
-      const clean = {
-        timerExpiryEpochMs: Number(val.timerExpiryEpochMs || 0),
-        hypeActive: Boolean(val.hypeActive),
-        paused: Boolean(val.paused),
-        pauseRemaining: Number(val.pauseRemaining || 0),
-        initialSeconds: Number(val.initialSeconds || 0),
-        additionsTotal: Number(val.additionsTotal || 0),
-        maxTotalSeconds: Number(val.maxTotalSeconds || 0),
-        bitsCarry: Number(val.bitsCarry || 0),
-      };
-      state.users.set(String(uid || DEFAULT_USER_ID), clean);
+    if (!obj || typeof obj !== 'object') return;
+
+    // New format: { users: { uid: state, ... } }
+    if (typeof obj.users === 'object') {
+      for (const [uid, val] of Object.entries(obj.users)) {
+        const clean = parseUserState(val);
+        if (clean) state.users.set(String(uid || DEFAULT_USER_ID), clean);
+      }
+      logger.info('timer_state_loaded', { format: 'new', userCount: state.users.size });
+      return;
+    }
+
+    // Legacy format: { timerExpiryEpochMs, hypeActive, ... } (single user, no wrapper)
+    // Detect by checking for known state properties
+    if ('timerExpiryEpochMs' in obj || 'hypeActive' in obj || 'paused' in obj) {
+      const clean = parseUserState(obj);
+      if (clean) {
+        state.users.set(DEFAULT_USER_ID, clean);
+        logger.info('timer_state_loaded', { format: 'legacy', migratedToDefault: true });
+        // Persist in new format for future loads
+        persistTimerState().catch(() => {});
+      }
     }
   } catch {}
 }
@@ -101,11 +124,24 @@ export function addSeconds(uid = DEFAULT_USER_ID, sec = 0) {
   const s = ensure(uid);
   const now = Date.now();
   let toAdd = Math.floor(Number(sec) || 0);
+  const requestedSeconds = toAdd;
   if (toAdd <= 0) return getRemainingSeconds(uid);
   if (s.maxTotalSeconds > 0) {
     const used = Math.max(0, Math.floor(s.initialSeconds + s.additionsTotal));
     const remainingBudget = Math.max(0, s.maxTotalSeconds - used);
-    toAdd = Math.min(toAdd, remainingBudget);
+    const cappedAmount = Math.min(toAdd, remainingBudget);
+    if (cappedAmount < toAdd) {
+      logger.info('timer_add_capped', {
+        userId: uid,
+        requestedSeconds,
+        cappedToSeconds: cappedAmount,
+        maxTotalSeconds: s.maxTotalSeconds,
+        usedSeconds: used,
+        remainingBudget,
+        capReached: remainingBudget <= 0,
+      });
+    }
+    toAdd = cappedAmount;
   }
   if (toAdd <= 0) return getRemainingSeconds(uid);
   if (s.paused) {

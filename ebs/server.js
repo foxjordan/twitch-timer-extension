@@ -672,6 +672,7 @@ mountOverlayApiRoutes(app, {
   getRules,
   setRules,
   setMaxTotalSeconds,
+  resolveTimerUserId: resolveTimerUserIdFromRequest,
 });
 
 mountGoalRoutes(app, {

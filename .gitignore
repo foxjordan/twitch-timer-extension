@@ -1,0 +1,33 @@
+# Environment variables
+.env
+.env.local
+.env.*.local
+
+# Sensitive keys and tokens
+overlay-keys.json
+overlay-user-settings.json
+overlay-rules.json
+overlay-goals.json
+overlay-timer-state.json
+overlay-styles.json
+
+# Dependencies
+node_modules/
+
+# Build outputs
+dist/
+build/
+
+# Logs
+*.log
+firebase-debug.log
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo

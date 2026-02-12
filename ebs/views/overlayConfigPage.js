@@ -458,10 +458,34 @@ export function renderOverlayConfigPage(options = {}) {
             </div>
           </div>
         </div>
+
+        <div class="${sectionClass("sounds")}" data-section="sounds">
+          <button class="section-toggle" data-section-toggle="sounds" aria-expanded="${sectionExpandedAttr(
+            "sounds"
+          )}">
+            <span>Sound Alerts (Bits Extension)</span>
+            <span class="section-arrow">▾</span>
+          </button>
+          <div class="section-body" ${sectionBodyAttr("sounds")}>
+            <p style="opacity:0.85; max-width:640px">
+              Viewers can spend Bits to trigger sound alerts on your stream. Sounds are configured in the
+              <strong>Twitch Extension config view</strong> (Extensions → My Extensions → Configure).
+              Add the OBS Browser Source URL below to play alerts on stream.
+            </p>
+            <div style="margin-top:10px">
+              <label style="font-size:13px; font-weight:600; display:block; margin-bottom:4px;">Sound Alert Browser Source URL</label>
+              <code id="soundOverlayUrl" style="display:block; padding:8px 10px; background:var(--surface-muted,#1a1a1e); border-radius:6px; font-size:12px; word-break:break-all;"></code>
+              <div style="margin-top:8px; display:flex; gap:12px; align-items:center;">
+                <button id="copySoundUrl">Copy URL</button>
+                <div class="hint">Add as a Browser Source in OBS (width: 800, height: 200)</div>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
     <footer class="global-footer">
-      
+
       <a href="${privacyUrl}">Privacy Policy</a>
       <a href="${gdprUrl}">GDPR / UK GDPR Disclosure</a>
     </footer>
@@ -698,10 +722,18 @@ export function renderOverlayConfigPage(options = {}) {
         return (h>0? (h+':') : '') + mm + ':' + ss;
       }
 
+      function soundOverlayUrl() {
+        const p = new URLSearchParams();
+        if (inputs.key.value) p.set('key', inputs.key.value.trim());
+        return '${base}/overlay/sounds' + (p.toString() ? ('?' + p.toString()) : '');
+      }
+
       function refresh() {
         const url = overlayUrl();
         document.getElementById('url').textContent = url;
         document.getElementById('preview').src = url;
+        const soundUrlEl = document.getElementById('soundOverlayUrl');
+        if (soundUrlEl) soundUrlEl.textContent = soundOverlayUrl();
       }
 
       const htmlEscapeMap = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
@@ -1473,6 +1505,16 @@ export function renderOverlayConfigPage(options = {}) {
           try { await navigator.clipboard.writeText(url); copyBtn.textContent = 'Copied!'; } catch(e) { copyBtn.textContent = 'Copy failed'; }
           setTimeout(() => { copyBtn.textContent = old; }, 900);
         });
+        const copySoundBtn = document.getElementById('copySoundUrl');
+        if (copySoundBtn) {
+          copySoundBtn.addEventListener('click', async (e) => {
+            flashButton(copySoundBtn);
+            const url = document.getElementById('soundOverlayUrl').textContent;
+            const old = copySoundBtn.textContent;
+            try { await navigator.clipboard.writeText(url); copySoundBtn.textContent = 'Copied!'; } catch(e) { copySoundBtn.textContent = 'Copy failed'; }
+            setTimeout(() => { copySoundBtn.textContent = old; }, 900);
+          });
+        }
         const rotateBtn = document.getElementById('rotateKey');
         rotateBtn.addEventListener('click', async (e) => {
           e.preventDefault();

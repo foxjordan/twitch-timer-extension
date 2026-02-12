@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import ReactDOM from 'react-dom/client';
-import { initializeAnalytics } from './firebase';
 
 const EBS_BASE =
   import.meta.env.VITE_EBS_BASE || 'https://twitch-timer-extension.fly.dev';
@@ -46,8 +45,6 @@ function App() {
   }, []);
 
   useEffect(() => {
-    initializeAnalytics();
-
     // Twitch extension lifecycle
     window.Twitch?.ext?.onAuthorized((authData) => {
       authRef.current = authData;

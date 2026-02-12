@@ -228,6 +228,28 @@ export function mountSoundRoutes(app, deps = {}) {
 
   // ===== Public endpoints =====
 
+  // Preview a sound (Extension JWT auth — any viewer/broadcaster/mod)
+  app.get("/api/sounds/preview/:soundId", (req, res) => {
+    const claims = requireExtensionAuth(req, res);
+    if (!claims) return;
+    const channelId = req.query.channelId || claims.channel_id;
+    if (!channelId) {
+      return res.status(400).json({ error: "channelId required" });
+    }
+    const sound = getSound(String(channelId), req.params.soundId);
+    if (!sound || !sound.enabled) {
+      return res.status(404).json({ error: "Sound not found or disabled" });
+    }
+    const filePath = getSoundFilePath(String(channelId), sound);
+    res.setHeader("Content-Type", sound.mimeType);
+    res.setHeader("Cache-Control", "public, max-age=3600");
+    res.sendFile(filePath, (err) => {
+      if (err && !res.headersSent) {
+        res.status(404).json({ error: "Sound file not found" });
+      }
+    });
+  });
+
   // Get enabled sounds for a channel (viewer panel)
   app.get("/api/sounds/public", (req, res) => {
     const claims = verifyExtensionJwt(req);

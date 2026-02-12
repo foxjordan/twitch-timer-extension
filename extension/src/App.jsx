@@ -27,6 +27,8 @@ function App() {
   const pendingSoundRef = useRef(null);
   const [cooldowns, setCooldowns] = useState({});
   const [lastPlayed, setLastPlayed] = useState(null);
+  const [previewing, setPreviewing] = useState(null);
+  const previewAudioRef = useRef(null);
 
   const fetchSounds = useCallback((token, channelId) => {
     fetch(`${EBS_BASE}/api/sounds/public?channelId=${channelId}`, {
@@ -118,6 +120,45 @@ function App() {
     if (!bitsEnabled) return;
     pendingSoundRef.current = sound;
     window.Twitch.ext.bits.useBits(sound.tier);
+  }
+
+  function handlePreview(e, sound) {
+    e.stopPropagation();
+    const auth = authRef.current;
+    if (!auth) return;
+
+    // If already previewing this sound, stop it
+    if (previewAudioRef.current) {
+      previewAudioRef.current.pause();
+      previewAudioRef.current = null;
+      if (previewing === sound.id) {
+        setPreviewing(null);
+        return;
+      }
+    }
+
+    setPreviewing(sound.id);
+    fetch(
+      `${EBS_BASE}/api/sounds/preview/${sound.id}?channelId=${auth.channelId}`,
+      { headers: { Authorization: `Bearer ${auth.token}` } }
+    )
+      .then((r) => {
+        if (!r.ok) throw new Error('fetch failed');
+        return r.blob();
+      })
+      .then((blob) => {
+        const url = URL.createObjectURL(blob);
+        const audio = new Audio(url);
+        audio.volume = 0.5;
+        previewAudioRef.current = audio;
+        audio.onended = () => {
+          setPreviewing(null);
+          previewAudioRef.current = null;
+          URL.revokeObjectURL(url);
+        };
+        audio.play().catch(() => setPreviewing(null));
+      })
+      .catch(() => setPreviewing(null));
   }
 
   function getCost(tier) {
@@ -228,50 +269,81 @@ function App() {
             const onCooldown =
               cooldowns[sound.id] && Date.now() < cooldowns[sound.id];
             const disabled = !bitsEnabled || onCooldown;
+            const isPreviewPlaying = previewing === sound.id;
             return (
-              <button
+              <div
                 key={sound.id}
-                disabled={disabled}
-                onClick={() => handleSoundClick(sound)}
                 style={{
                   display: 'flex',
-                  justifyContent: 'space-between',
                   alignItems: 'center',
-                  width: '100%',
-                  padding: '8px 12px',
-                  background: disabled ? '#16161a' : '#2a2a32',
-                  border: '1px solid #303038',
-                  borderRadius: 8,
-                  color: '#efeff1',
-                  cursor: disabled ? 'not-allowed' : 'pointer',
-                  opacity: disabled ? 0.5 : 1,
-                  fontSize: 13,
-                  transition: 'background 0.15s',
+                  gap: 4,
                 }}
               >
-                <span style={{ fontWeight: 600 }}>{sound.name}</span>
-                <span
+                <button
+                  onClick={(e) => handlePreview(e, sound)}
+                  title={isPreviewPlaying ? 'Stop preview' : 'Preview sound'}
                   style={{
-                    fontSize: 12,
-                    opacity: 0.7,
+                    flexShrink: 0,
+                    width: 32,
+                    height: 36,
                     display: 'flex',
                     alignItems: 'center',
-                    gap: 4,
+                    justifyContent: 'center',
+                    background: isPreviewPlaying ? '#9146FF33' : '#2a2a32',
+                    border: '1px solid #303038',
+                    borderRadius: 8,
+                    color: isPreviewPlaying ? '#bf94ff' : '#efeff1',
+                    cursor: 'pointer',
+                    fontSize: 14,
+                    padding: 0,
+                    transition: 'background 0.15s',
                   }}
                 >
+                  {isPreviewPlaying ? '\u25A0' : '\u25B6'}
+                </button>
+                <button
+                  disabled={disabled}
+                  onClick={() => handleSoundClick(sound)}
+                  style={{
+                    flex: 1,
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    padding: '8px 12px',
+                    background: disabled ? '#16161a' : '#2a2a32',
+                    border: '1px solid #303038',
+                    borderRadius: 8,
+                    color: '#efeff1',
+                    cursor: disabled ? 'not-allowed' : 'pointer',
+                    opacity: disabled ? 0.5 : 1,
+                    fontSize: 13,
+                    transition: 'background 0.15s',
+                  }}
+                >
+                  <span style={{ fontWeight: 600 }}>{sound.name}</span>
                   <span
                     style={{
-                      display: 'inline-block',
-                      width: 12,
-                      height: 12,
-                      borderRadius: '50%',
-                      background:
-                        'linear-gradient(135deg, #9146FF, #772CE8)',
+                      fontSize: 12,
+                      opacity: 0.7,
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 4,
                     }}
-                  />
-                  {getCost(sound.tier)}
-                </span>
-              </button>
+                  >
+                    <span
+                      style={{
+                        display: 'inline-block',
+                        width: 12,
+                        height: 12,
+                        borderRadius: '50%',
+                        background:
+                          'linear-gradient(135deg, #9146FF, #772CE8)',
+                      }}
+                    />
+                    {getCost(sound.tier)}
+                  </span>
+                </button>
+              </div>
             );
           })}
         </div>

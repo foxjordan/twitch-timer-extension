@@ -58,6 +58,8 @@ import {
   syncSubGoals,
 } from "./goals_store.js";
 import { fetchActiveSubscriberCount } from "./twitch_api.js";
+import { mountSoundRoutes } from "./routes_sounds.js";
+import { loadSoundAlerts } from "./sounds_store.js";
 
 const app = express();
 // honor X-Forwarded-* so req.protocol resolves to https behind Fly
@@ -108,16 +110,21 @@ if (assetsDir) {
   );
 }
 
-// CORS for local panel dev
-if (process.env.PANEL_ORIGIN) {
-  app.use((req, res, next) => {
-    res.setHeader("Access-Control-Allow-Origin", process.env.PANEL_ORIGIN);
-    res.setHeader("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
+// CORS for Twitch extension iframes and local dev
+app.use((req, res, next) => {
+  const origin = req.headers.origin;
+  if (
+    origin &&
+    (origin.endsWith(".ext-twitch.tv") ||
+      origin === process.env.PANEL_ORIGIN)
+  ) {
+    res.setHeader("Access-Control-Allow-Origin", origin);
+    res.setHeader("Access-Control-Allow-Methods", "GET,POST,PUT,DELETE,OPTIONS");
     res.setHeader("Access-Control-Allow-Headers", "Content-Type,Authorization");
-    if (req.method === "OPTIONS") return res.sendStatus(204);
-    next();
-  });
-}
+  }
+  if (req.method === "OPTIONS") return res.sendStatus(204);
+  next();
+});
 
 // Environment-based broadcaster (for backward compatibility)
 const ENV_BROADCASTER_ID = process.env.BROADCASTER_USER_ID;
@@ -188,6 +195,7 @@ loadStyles().catch(() => {});
 loadRules().catch(() => {});
 loadTimerState().catch(() => {});
 loadGoals().catch(() => {});
+loadSoundAlerts().catch(() => {});
 
 // ===== Per-user settings (persisted) =====
 const DATA_DIR = process.env.DATA_DIR || process.cwd();
@@ -680,6 +688,45 @@ mountGoalRoutes(app, {
   resolveOverlayUserId: resolveGoalUserIdFromRequest,
   getSessionUserId: (req) => req.session?.twitchUser?.id,
   onGoalsChanged: (uid) => broadcastGoalSnapshot(uid),
+});
+
+mountSoundRoutes(app, {
+  requireOverlayAuth,
+  getSessionUserId: (req) => req.session?.twitchUser?.id,
+  getUserIdForKey,
+  onSoundAlert: ({ channelId, soundId, soundName, txId }) => {
+    const payload = JSON.stringify({
+      soundId,
+      soundName,
+      channelId,
+      txId,
+      ts: Date.now(),
+    });
+    for (const client of Array.from(sseClients)) {
+      if (
+        client.timerUserId &&
+        String(client.timerUserId) !== String(channelId)
+      )
+        continue;
+      try {
+        client.res.write("event: sound_alert\n");
+        client.res.write(`data: ${payload}\n\n`);
+      } catch (e) {
+        sseClients.delete(client);
+      }
+    }
+    broadcastToChannel({
+      broadcasterId: channelId,
+      type: "sound_alert",
+      payload: { soundId, soundName },
+    }).catch(() => {});
+  },
+  deduplicateTx: (txId) => {
+    const key = `soundtx:${txId}`;
+    if (state.seen.has(key)) return true;
+    state.seen.set(key, Date.now() + 24 * 3600 * 1000);
+    return false;
+  },
 });
 
 // Overlay Configurator (no auth; generates URL and previews)

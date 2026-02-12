@@ -12,6 +12,7 @@
     "express-session": "^1.17.3",
     "firebase": "^12.6.0",
     "jsonwebtoken": "^9.0.2",
+    "multer": "^2.0.2",
     "node-fetch": "^3.3.2",
     "uuid": "^9.0.1",
     "ws": "^8.18.0"

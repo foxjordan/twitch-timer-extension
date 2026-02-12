@@ -2,6 +2,7 @@ import { renderOverlayPage } from "./views/overlayPage.js";
 import { renderOverlayConfigPage } from "./views/overlayConfigPage.js";
 import { renderGoalsOverlayPage } from "./views/goalsOverlayPage.js";
 import { renderWheelOverlayPage } from "./views/wheelOverlayPage.js";
+import { renderSoundAlertOverlayPage } from "./views/soundAlertOverlayPage.js";
 
 export function mountOverlayPageRoutes(app, deps) {
   const { requireOverlayAuth, requireAdmin, getUserSettings, getRules } =
@@ -35,6 +36,16 @@ export function mountOverlayPageRoutes(app, deps) {
   app.get("/overlay/wheel", (req, res) => {
     if (!requireOverlayAuth(req, res)) return;
     const html = renderWheelOverlayPage();
+    res.setHeader("Content-Type", "text/html; charset=utf-8");
+    res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+    res.setHeader("Pragma", "no-cache");
+    res.setHeader("Expires", "0");
+    res.send(html);
+  });
+
+  app.get("/overlay/sounds", (req, res) => {
+    if (!requireOverlayAuth(req, res)) return;
+    const html = renderSoundAlertOverlayPage();
     res.setHeader("Content-Type", "text/html; charset=utf-8");
     res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
     res.setHeader("Pragma", "no-cache");

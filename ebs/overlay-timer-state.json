@@ -1,10 +1,24 @@
 {
-  "timerExpiryEpochMs": 1763458173055,
-  "hypeActive": false,
-  "paused": false,
-  "pauseRemaining": 0,
-  "initialSeconds": 14400,
-  "additionsTotal": 0,
-  "maxTotalSeconds": 0,
-  "bitsCarry": 0
+  "users": {
+    "74034487": {
+      "timerExpiryEpochMs": 0,
+      "hypeActive": false,
+      "paused": false,
+      "pauseRemaining": 0,
+      "initialSeconds": 0,
+      "additionsTotal": 0,
+      "maxTotalSeconds": 0,
+      "bitsCarry": 0
+    },
+    "default": {
+      "timerExpiryEpochMs": 1763458173055,
+      "hypeActive": false,
+      "paused": false,
+      "pauseRemaining": 0,
+      "initialSeconds": 14400,
+      "additionsTotal": 0,
+      "maxTotalSeconds": 0,
+      "bitsCarry": 0
+    }
+  }
 }

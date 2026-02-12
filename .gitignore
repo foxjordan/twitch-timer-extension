@@ -10,6 +10,7 @@ overlay-rules.json
 overlay-goals.json
 overlay-timer-state.json
 overlay-styles.json
+overlay-sound-alerts.json
 
 # Dependencies
 node_modules/

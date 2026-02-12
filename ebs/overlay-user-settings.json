@@ -5,7 +5,7 @@
     "panelCollapsedSections": {
       "style": false,
       "testing": false,
-      "goals": false
+      "goals": true
     }
   }
 }

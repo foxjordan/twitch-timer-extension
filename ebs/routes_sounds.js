@@ -83,10 +83,10 @@ export function mountSoundRoutes(app, deps = {}) {
     return null;
   }
 
-  const notify = (channelId, soundId, soundName, txId, viewerUserId) => {
+  const notify = (channelId, soundId, soundName, tier, txId, viewerUserId) => {
     try {
       if (typeof onSoundAlert === "function") {
-        onSoundAlert({ channelId, soundId, soundName, txId, viewerUserId });
+        onSoundAlert({ channelId, soundId, soundName, tier, txId, viewerUserId });
       }
     } catch {}
   };
@@ -222,7 +222,7 @@ export function mountSoundRoutes(app, deps = {}) {
     if (!uid) return;
     const sound = getSound(uid, req.params.soundId);
     if (!sound) return res.status(404).json({ error: "Sound not found" });
-    notify(String(uid), sound.id, sound.name, null, null);
+    notify(String(uid), sound.id, sound.name, sound.tier, null, null);
     res.json({ ok: true, sound: { id: sound.id, name: sound.name } });
   });
 
@@ -357,7 +357,7 @@ export function mountSoundRoutes(app, deps = {}) {
       viewerUserId: claims.user_id,
     });
 
-    notify(String(channelId), sound.id, sound.name, txId, claims.user_id);
+    notify(String(channelId), sound.id, sound.name, sound.tier, txId, claims.user_id);
 
     res.json({ ok: true, sound: { id: sound.id, name: sound.name } });
   });

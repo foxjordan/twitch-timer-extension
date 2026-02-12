@@ -2,6 +2,50 @@ import fetch from "node-fetch";
 import { getUserAccessToken } from "./twitch_tokens.js";
 import { logger } from "./logger.js";
 
+// Simple in-memory cache for display names (5 min TTL)
+const displayNameCache = new Map();
+const DISPLAY_NAME_TTL = 5 * 60 * 1000;
+
+export async function fetchUserDisplayName(userId) {
+  if (!userId) return null;
+  const uid = String(userId);
+
+  // Check cache
+  const cached = displayNameCache.get(uid);
+  if (cached && Date.now() < cached.expiresAt) return cached.name;
+
+  const clientId = process.env.TWITCH_CLIENT_ID;
+  // Use broadcaster token or any available app token
+  const broadcasterId = process.env.BROADCASTER_USER_ID;
+  const token =
+    (broadcasterId && getUserAccessToken(broadcasterId)) ||
+    process.env.BROADCASTER_USER_TOKEN ||
+    null;
+  if (!clientId || !token) return null;
+
+  try {
+    const res = await fetch(
+      `https://api.twitch.tv/helix/users?id=${encodeURIComponent(uid)}`,
+      {
+        headers: {
+          "Client-Id": clientId,
+          Authorization: `Bearer ${token}`,
+        },
+      }
+    );
+    if (!res.ok) return null;
+    const json = await res.json();
+    const name = json.data?.[0]?.display_name || json.data?.[0]?.login || null;
+    if (name) {
+      displayNameCache.set(uid, { name, expiresAt: Date.now() + DISPLAY_NAME_TTL });
+    }
+    return name;
+  } catch (err) {
+    logger.warn("display_name_fetch_error", { userId: uid, message: err?.message });
+    return null;
+  }
+}
+
 export async function fetchActiveSubscriberCount({ broadcasterId }) {
   const id = broadcasterId ? String(broadcasterId) : null;
   if (!id) return null;

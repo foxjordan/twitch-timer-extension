@@ -4,7 +4,8 @@ import session from "express-session";
 import { v4 as uuidv4 } from "uuid";
 import { RULES } from "./rules.js";
 import { connectEventSubWS } from "./eventsub-ws.js";
-import { broadcastToChannel } from "./broadcast.js";
+import { broadcastToChannel, sendExtensionChatMessage } from "./broadcast.js";
+import { fetchUserDisplayName } from "./twitch_api.js";
 import fetch from "node-fetch";
 import crypto from "crypto";
 import path from "path";
@@ -694,7 +695,7 @@ mountSoundRoutes(app, {
   requireOverlayAuth,
   getSessionUserId: (req) => req.session?.twitchUser?.id,
   getUserIdForKey,
-  onSoundAlert: ({ channelId, soundId, soundName, txId, viewerUserId }) => {
+  onSoundAlert: ({ channelId, soundId, soundName, tier, txId, viewerUserId }) => {
     addLogEntry({
       type: "sound_alert",
       soundId,
@@ -727,6 +728,19 @@ mountSoundRoutes(app, {
       type: "sound_alert",
       payload: { soundId, soundName },
     }).catch(() => {});
+
+    // Post to chat (async, best-effort)
+    if (viewerUserId && tier) {
+      const bits = tier.replace("sound_", "");
+      (async () => {
+        const displayName = await fetchUserDisplayName(viewerUserId);
+        const who = displayName || `User ${viewerUserId}`;
+        await sendExtensionChatMessage({
+          broadcasterId: channelId,
+          text: `${who} played "${soundName}" for ${bits} Bits!`,
+        });
+      })().catch(() => {});
+    }
   },
   deduplicateTx: (txId) => {
     const key = `soundtx:${txId}`;

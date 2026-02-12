@@ -361,6 +361,16 @@ export function renderOverlayConfigPage(options = {}) {
               <button class="secondary" id="testHypeOn">Force Hype On</button>
               <button class="secondary" id="testHypeOff">Force Hype Off</button>
             </div>
+            <div style="margin-top:10px; padding-top:10px; border-top:1px solid var(--section-border,#303038)">
+              <div style="font-weight:600; font-size:13px; margin-bottom:6px;">Sound Alert Testing</div>
+              <div class="row2" id="devSoundTests">
+                <select id="devSoundSelect" style="max-width:220px">
+                  <option value="">Loading sounds...</option>
+                </select>
+                <button class="secondary" id="devTestSound" title="Trigger this sound alert on the OBS overlay">Test Sound</button>
+              </div>
+              <div class="hint" id="devSoundHint">Triggers the sound on the OBS overlay without using Bits.</div>
+            </div>
           </div>
         </div>
       </div>
@@ -675,6 +685,12 @@ export function renderOverlayConfigPage(options = {}) {
               detail = 'Hype Train ended';
             } else if (src === 'manual_start' || src === 'manual_add' || src === 'manual_clear' || src === 'manual_restart') {
               detail = label || (e.source || 'Manual');
+            } else if (src === 'sound_alert') {
+              var snd = e.soundName || 'Sound';
+              var viewer = e.viewerUserId ? ' (user ' + escHtml(e.viewerUserId) + ')' : '';
+              return '<div class="log-line"><span class="log-time">' + tStr + '</span><span class="log-text" style="color:#9146FF">' +
+                'Sound Alert – ' + escHtml(snd) + viewer +
+                '</span></div>';
             }
             var hypeInfo = hype !== 1 ? (' (base ' + base + 's ×' + hype + ')') : '';
             return '<div class="log-line"><span class="log-time">' + tStr + '</span><span class="log-text">' +
@@ -1711,6 +1727,61 @@ export function renderOverlayConfigPage(options = {}) {
         const hypeOffBtn = document.getElementById('testHypeOff');
         if (hypeOnBtn) hypeOnBtn.addEventListener('click', async function(e){ e.preventDefault(); flashButton(hypeOnBtn); setBusy(hypeOnBtn,true); await setHypeActive(true); await updateCapStatus(); setBusy(hypeOnBtn,false); });
         if (hypeOffBtn) hypeOffBtn.addEventListener('click', async function(e){ e.preventDefault(); flashButton(hypeOffBtn); setBusy(hypeOffBtn,true); await setHypeActive(false); await updateCapStatus(); setBusy(hypeOffBtn,false); });
+
+        // Sound alert testing
+        const devSoundSelect = document.getElementById('devSoundSelect');
+        const devTestSoundBtn = document.getElementById('devTestSound');
+        const devSoundHint = document.getElementById('devSoundHint');
+        function populateSoundSelect(sounds) {
+          if (!devSoundSelect) return;
+          devSoundSelect.textContent = '';
+          if (!sounds.length) {
+            var opt = document.createElement('option');
+            opt.value = '';
+            opt.textContent = 'No sounds uploaded';
+            devSoundSelect.appendChild(opt);
+            if (devTestSoundBtn) devTestSoundBtn.disabled = true;
+            return;
+          }
+          sounds.forEach(function(s) {
+            var opt = document.createElement('option');
+            opt.value = s.id;
+            opt.textContent = s.name;
+            devSoundSelect.appendChild(opt);
+          });
+        }
+        if (devSoundSelect) {
+          fetch('/api/sounds', { cache: 'no-store' }).then(function(r){ return r.json(); }).then(function(data) {
+            populateSoundSelect(data.sounds || []);
+          }).catch(function() {
+            devSoundSelect.textContent = '';
+            var opt = document.createElement('option');
+            opt.value = '';
+            opt.textContent = 'Failed to load sounds';
+            devSoundSelect.appendChild(opt);
+          });
+        }
+        if (devTestSoundBtn) {
+          devTestSoundBtn.addEventListener('click', async function(e) {
+            e.preventDefault();
+            var soundId = devSoundSelect ? devSoundSelect.value : '';
+            if (!soundId) return;
+            flashButton(devTestSoundBtn);
+            setBusy(devTestSoundBtn, true);
+            try {
+              var r = await fetch('/api/sounds/test/' + encodeURIComponent(soundId), { method: 'POST' });
+              var j = await r.json();
+              if (j.ok && devSoundHint) {
+                devSoundHint.textContent = 'Triggered: ' + (j.sound && j.sound.name ? j.sound.name : soundId);
+                setTimeout(function(){ devSoundHint.textContent = 'Triggers the sound on the OBS overlay without using Bits.'; }, 3000);
+              }
+            } catch (err) {
+              if (devSoundHint) devSoundHint.textContent = 'Test failed';
+            }
+            setBusy(devTestSoundBtn, false);
+            fetchLog();
+          });
+        }
 
         // Load current user settings into inputs in case server changed
         fetch('/api/user/settings').then(function(r){return r.json();}).then(function(j){

@@ -36,6 +36,8 @@ function ConfigApp() {
   const [newName, setNewName] = useState("");
   const [newTier, setNewTier] = useState("sound_100");
   const [newVolume, setNewVolume] = useState(80);
+  const [overlayUrl, setOverlayUrl] = useState(null);
+  const [urlCopied, setUrlCopied] = useState(false);
 
   const headers = useCallback(
     () => ({
@@ -68,6 +70,14 @@ function ConfigApp() {
     window.Twitch?.ext?.onAuthorized((authData) => {
       setAuth(authData);
       fetchSounds(authData.token);
+      fetch(`${EBS_BASE}/api/sounds/overlay-url`, {
+        headers: { Authorization: `Bearer ${authData.token}` },
+      })
+        .then((r) => r.json())
+        .then((data) => {
+          if (data.url) setOverlayUrl(data.url);
+        })
+        .catch(() => {});
     });
   }, [fetchSounds]);
 
@@ -332,6 +342,45 @@ function ConfigApp() {
           />
         ))}
       </div>
+
+      {/* OBS Overlay URL */}
+      {overlayUrl && (
+        <div style={styles.card}>
+          <h3 style={styles.subHeading}>OBS Browser Source</h3>
+          <p style={{ fontSize: 12, opacity: 0.7, marginBottom: 8 }}>
+            Add this URL as a Browser Source in OBS to play sound alerts on
+            stream.
+          </p>
+          <div
+            style={{
+              padding: "8px 10px",
+              background: "#0e0e10",
+              borderRadius: 6,
+              border: "1px solid #303038",
+              fontSize: 11,
+              wordBreak: "break-all",
+              fontFamily: "monospace",
+              marginBottom: 8,
+            }}
+          >
+            {overlayUrl}
+          </div>
+          <button
+            style={styles.btn}
+            onClick={() => {
+              navigator.clipboard
+                .writeText(overlayUrl)
+                .then(() => {
+                  setUrlCopied(true);
+                  setTimeout(() => setUrlCopied(false), 2000);
+                })
+                .catch(() => {});
+            }}
+          >
+            {urlCopied ? "Copied!" : "Copy URL"}
+          </button>
+        </div>
+      )}
     </div>
   );
 }

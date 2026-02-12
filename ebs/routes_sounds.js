@@ -3,6 +3,7 @@ import jwt from "jsonwebtoken";
 import multer from "multer";
 import { rename } from "fs/promises";
 import path from "path";
+import { getOrCreateUserKey } from "./keys.js";
 import {
   listSounds,
   getSound,
@@ -82,10 +83,10 @@ export function mountSoundRoutes(app, deps = {}) {
     return null;
   }
 
-  const notify = (channelId, soundId, soundName, txId) => {
+  const notify = (channelId, soundId, soundName, txId, viewerUserId) => {
     try {
       if (typeof onSoundAlert === "function") {
-        onSoundAlert({ channelId, soundId, soundName, txId });
+        onSoundAlert({ channelId, soundId, soundName, txId, viewerUserId });
       }
     } catch {}
   };
@@ -203,6 +204,28 @@ export function mountSoundRoutes(app, deps = {}) {
     res.json({ settings });
   });
 
+  // Get the OBS overlay URL for the broadcaster
+  app.get("/api/sounds/overlay-url", (req, res) => {
+    const uid = requireBroadcaster(req, res);
+    if (!uid) return;
+    const key = getOrCreateUserKey(uid);
+    const base =
+      process.env.SERVER_BASE_URL || `${req.protocol}://${req.get("host")}`;
+    res.json({
+      url: `${base}/overlay/sounds?key=${encodeURIComponent(key)}`,
+    });
+  });
+
+  // Test a sound alert (admin only, no Bits required)
+  app.post("/api/sounds/test/:soundId", (req, res) => {
+    const uid = requireBroadcaster(req, res);
+    if (!uid) return;
+    const sound = getSound(uid, req.params.soundId);
+    if (!sound) return res.status(404).json({ error: "Sound not found" });
+    notify(String(uid), sound.id, sound.name, null, null);
+    res.json({ ok: true, sound: { id: sound.id, name: sound.name } });
+  });
+
   // ===== Public endpoints =====
 
   // Get enabled sounds for a channel (viewer panel)
@@ -312,7 +335,7 @@ export function mountSoundRoutes(app, deps = {}) {
       viewerUserId: claims.user_id,
     });
 
-    notify(String(channelId), sound.id, sound.name, txId);
+    notify(String(channelId), sound.id, sound.name, txId, claims.user_id);
 
     res.json({ ok: true, sound: { id: sound.id, name: sound.name } });
   });

@@ -18,12 +18,8 @@ const TIER_COSTS = {
 };
 
 function App() {
-  const [remaining, setRemaining] = useState(0);
-  const [hype, setHype] = useState(false);
-  const tickRef = useRef();
-
-  // Sound alert state
   const authRef = useRef(null);
+  const [loading, setLoading] = useState(true);
   const [sounds, setSounds] = useState([]);
   const [soundsEnabled, setSoundsEnabled] = useState(false);
   const [bitsEnabled, setBitsEnabled] = useState(false);
@@ -41,7 +37,8 @@ function App() {
         setSounds(data.sounds || []);
         setSoundsEnabled(data.settings?.enabled ?? false);
       })
-      .catch(() => {});
+      .catch(() => {})
+      .finally(() => setLoading(false));
   }, []);
 
   useEffect(() => {
@@ -105,32 +102,16 @@ function App() {
       pendingSoundRef.current = null;
     });
 
-    // PubSub listener for timer + sound alerts
+    // PubSub listener for sound alerts
     window.Twitch?.ext?.listen?.('broadcast', (_t, _c, message) => {
       try {
         const data = JSON.parse(message);
-        if (data.type === 'timer_reset' || data.type === 'timer_tick') {
-          setRemaining(data.payload.remaining ?? 0);
-          if (typeof data.payload.hype !== 'undefined') {
-            setHype(Boolean(data.payload.hype));
-          }
-        } else if (data.type === 'timer_add') {
-          setRemaining(data.payload.newRemaining ?? 0);
-          setHype(Boolean(data.payload.hype));
-        } else if (data.type === 'sound_alert') {
+        if (data.type === 'sound_alert') {
           setLastPlayed(data.payload.soundName || 'Sound');
           setTimeout(() => setLastPlayed(null), 3000);
         }
       } catch {}
     });
-
-    // Local decrement for smoothness between server ticks
-    const loop = () => {
-      setRemaining((r) => (r > 0 ? r - 1 : 0));
-      tickRef.current = setTimeout(loop, 1000);
-    };
-    loop();
-    return () => clearTimeout(tickRef.current);
   }, [fetchSounds]);
 
   function handleSoundClick(sound) {
@@ -145,140 +126,156 @@ function App() {
     return TIER_COSTS[tier] || '?';
   }
 
-  const mm = String(Math.floor(remaining / 60)).padStart(2, '0');
-  const ss = String(remaining % 60).padStart(2, '0');
+  if (loading) {
+    return (
+      <div style={{ padding: 12 }}>
+        <div
+          style={{
+            padding: 14,
+            borderRadius: 16,
+            background: '#1f1f23',
+            boxShadow: '0 0 0 1px #303038 inset',
+          }}
+        >
+          <div
+            style={{
+              width: 100,
+              height: 16,
+              borderRadius: 6,
+              background: '#2a2a32',
+              marginBottom: 10,
+              animation: 'pulse 1.5s ease-in-out infinite',
+            }}
+          />
+          {[1, 2, 3].map((i) => (
+            <div
+              key={i}
+              style={{
+                height: 36,
+                borderRadius: 8,
+                background: '#2a2a32',
+                marginBottom: 4,
+                animation: 'pulse 1.5s ease-in-out infinite',
+                animationDelay: `${i * 0.15}s`,
+              }}
+            />
+          ))}
+        </div>
+        <style>{`@keyframes pulse { 0%,100% { opacity:.4 } 50% { opacity:.7 } }`}</style>
+      </div>
+    );
+  }
+
+  // No sounds configured or alerts disabled
+  if (!soundsEnabled || sounds.length === 0) {
+    return (
+      <div style={{ padding: 12 }}>
+        <div
+          style={{
+            padding: 16,
+            borderRadius: 16,
+            background: '#1f1f23',
+            boxShadow: '0 0 0 1px #303038 inset',
+            textAlign: 'center',
+          }}
+        >
+          <div style={{ fontSize: 15, opacity: 0.5 }}>
+            No sound alerts available
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div style={{ padding: 12 }}>
-      {/* Timer Section */}
       <div
         style={{
-          padding: 16,
+          padding: 14,
           borderRadius: 16,
           background: '#1f1f23',
           boxShadow: '0 0 0 1px #303038 inset',
         }}
       >
-        <div style={{ fontSize: 18, opacity: 0.85 }}>Stream Countdown</div>
-        <div
-          style={{
-            fontFamily: 'monospace',
-            fontSize: 64,
-            lineHeight: 1,
-            marginTop: 8,
-          }}
-        >
-          {mm}:{ss}
+        <div style={{ fontSize: 15, opacity: 0.85, marginBottom: 8 }}>
+          Sound Alerts
         </div>
-        {hype && (
+
+        {lastPlayed && (
           <div
             style={{
-              marginTop: 8,
               padding: '6px 10px',
-              borderRadius: 999,
-              display: 'inline-block',
+              borderRadius: 8,
               background: '#9146FF22',
-              boxShadow: '0 0 0 1px #9146FF inset',
+              border: '1px solid #9146FF44',
               fontSize: 12,
+              marginBottom: 8,
+              textAlign: 'center',
             }}
           >
-            🔥 Hype Train active — time gains doubled!
+            Now playing: {lastPlayed}
           </div>
         )}
-      </div>
 
-      {/* Sound Alerts Section */}
-      {soundsEnabled && sounds.length > 0 && (
-        <div style={{ marginTop: 12 }}>
-          <div
-            style={{
-              padding: 14,
-              borderRadius: 16,
-              background: '#1f1f23',
-              boxShadow: '0 0 0 1px #303038 inset',
-            }}
-          >
-            <div style={{ fontSize: 15, opacity: 0.85, marginBottom: 8 }}>
-              Sound Alerts
-            </div>
+        {!bitsEnabled && (
+          <div style={{ fontSize: 12, opacity: 0.5, marginBottom: 6 }}>
+            Bits are not available on this channel.
+          </div>
+        )}
 
-            {lastPlayed && (
-              <div
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+          {sounds.map((sound) => {
+            const onCooldown =
+              cooldowns[sound.id] && Date.now() < cooldowns[sound.id];
+            const disabled = !bitsEnabled || onCooldown;
+            return (
+              <button
+                key={sound.id}
+                disabled={disabled}
+                onClick={() => handleSoundClick(sound)}
                 style={{
-                  padding: '6px 10px',
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  width: '100%',
+                  padding: '8px 12px',
+                  background: disabled ? '#16161a' : '#2a2a32',
+                  border: '1px solid #303038',
                   borderRadius: 8,
-                  background: '#9146FF22',
-                  border: '1px solid #9146FF44',
-                  fontSize: 12,
-                  marginBottom: 8,
-                  textAlign: 'center',
+                  color: '#efeff1',
+                  cursor: disabled ? 'not-allowed' : 'pointer',
+                  opacity: disabled ? 0.5 : 1,
+                  fontSize: 13,
+                  transition: 'background 0.15s',
                 }}
               >
-                🔊 {lastPlayed}
-              </div>
-            )}
-
-            {!bitsEnabled && (
-              <div style={{ fontSize: 12, opacity: 0.5, marginBottom: 6 }}>
-                Bits are not available on this channel.
-              </div>
-            )}
-
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-              {sounds.map((sound) => {
-                const onCooldown =
-                  cooldowns[sound.id] && Date.now() < cooldowns[sound.id];
-                const disabled = !bitsEnabled || onCooldown;
-                return (
-                  <button
-                    key={sound.id}
-                    disabled={disabled}
-                    onClick={() => handleSoundClick(sound)}
+                <span style={{ fontWeight: 600 }}>{sound.name}</span>
+                <span
+                  style={{
+                    fontSize: 12,
+                    opacity: 0.7,
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 4,
+                  }}
+                >
+                  <span
                     style={{
-                      display: 'flex',
-                      justifyContent: 'space-between',
-                      alignItems: 'center',
-                      width: '100%',
-                      padding: '8px 12px',
-                      background: disabled ? '#16161a' : '#2a2a32',
-                      border: '1px solid #303038',
-                      borderRadius: 8,
-                      color: '#efeff1',
-                      cursor: disabled ? 'not-allowed' : 'pointer',
-                      opacity: disabled ? 0.5 : 1,
-                      fontSize: 13,
-                      transition: 'background 0.15s',
+                      display: 'inline-block',
+                      width: 12,
+                      height: 12,
+                      borderRadius: '50%',
+                      background:
+                        'linear-gradient(135deg, #9146FF, #772CE8)',
                     }}
-                  >
-                    <span style={{ fontWeight: 600 }}>{sound.name}</span>
-                    <span
-                      style={{
-                        fontSize: 12,
-                        opacity: 0.7,
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: 4,
-                      }}
-                    >
-                      <span
-                        style={{
-                          display: 'inline-block',
-                          width: 12,
-                          height: 12,
-                          borderRadius: '50%',
-                          background:
-                            'linear-gradient(135deg, #9146FF, #772CE8)',
-                        }}
-                      />
-                      {getCost(sound.tier)}
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
+                  />
+                  {getCost(sound.tier)}
+                </span>
+              </button>
+            );
+          })}
         </div>
-      )}
+      </div>
     </div>
   );
 }

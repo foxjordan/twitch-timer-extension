@@ -694,7 +694,14 @@ mountSoundRoutes(app, {
   requireOverlayAuth,
   getSessionUserId: (req) => req.session?.twitchUser?.id,
   getUserIdForKey,
-  onSoundAlert: ({ channelId, soundId, soundName, txId }) => {
+  onSoundAlert: ({ channelId, soundId, soundName, txId, viewerUserId }) => {
+    addLogEntry({
+      type: "sound_alert",
+      soundId,
+      soundName,
+      viewerUserId: viewerUserId || undefined,
+      txId: txId || undefined,
+    });
     const payload = JSON.stringify({
       soundId,
       soundName,

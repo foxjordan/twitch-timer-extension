@@ -147,14 +147,6 @@ function getAllActiveBroadcasters() {
   return Array.from(broadcasterConnections.keys());
 }
 
-// Deprecated: for backward compatibility during migration
-const getBroadcasterId = () => {
-  // Try to get first available broadcaster from connections
-  const ids = getAllActiveBroadcasters();
-  if (ids.length > 0) return String(ids[0]);
-  return String(ENV_BROADCASTER_ID || "");
-};
-
 // Server-Sent Events (SSE) clients for external overlays
 const sseClients = new Set();
 const lastWheelSpinByKey = new Map();
@@ -288,8 +280,6 @@ app.get("/healthz", (_req, res) => {
 
 // ---- Routes mounting ----
 mountTimerRoutes(app, {
-  BROADCASTER_ID: ENV_BROADCASTER_ID,
-  getBroadcasterId,
   sseClients,
   requireOverlayAuth,
   state,
@@ -490,15 +480,17 @@ function broadcastGoalSnapshot(userId, specificClients = null) {
 }
 
 async function refreshSubGoalCounts() {
-  const broadcasterId = getBroadcasterId();
-  if (!broadcasterId) return;
-  try {
-    const total = await fetchActiveSubscriberCount({ broadcasterId });
-    if (typeof total !== "number") return;
-    const changed = syncSubGoals(broadcasterId, total);
-    if (changed) broadcastGoalSnapshot(broadcasterId);
-  } catch (err) {
-    logger.error("sub_goal_refresh_failed", { message: err?.message });
+  const ids = getAllActiveBroadcasters();
+  if (!ids.length) return;
+  for (const broadcasterId of ids) {
+    try {
+      const total = await fetchActiveSubscriberCount({ broadcasterId });
+      if (typeof total !== "number") continue;
+      const changed = syncSubGoals(broadcasterId, total);
+      if (changed) broadcastGoalSnapshot(broadcasterId);
+    } catch (err) {
+      logger.error("sub_goal_refresh_failed", { broadcasterId, message: err?.message });
+    }
   }
 }
 
@@ -981,23 +973,6 @@ async function handleEventSub(notification, expectedUserId = null) {
     }
   } catch (err) {
     logger.error("goal_auto_apply_failed", { message: err?.message });
-  }
-}
-
-function scheduleEventSubReconnect(reason, url) {
-  if (eventSubReconnectTimer) return;
-  eventSubReconnectTimer = setTimeout(() => {
-    eventSubReconnectTimer = null;
-    startEventSubWS(url);
-  }, 5000);
-  observability.lastEventSubReconnectAt = new Date().toISOString();
-  observability.lastEventSubReconnectReason = reason;
-  observability.lastEventSubReconnectUrl = url || null;
-  observability.totalEventSubReconnects += 1;
-  if (eventSubWS && reason === "session_reconnect") {
-    try {
-      eventSubWS.close();
-    } catch {}
   }
 }
 

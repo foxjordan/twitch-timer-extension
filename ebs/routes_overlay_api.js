@@ -87,7 +87,7 @@ export function mountOverlayApiRoutes(app, ctx) {
     if (!uid) return res.status(400).json({ error: 'No user in session' });
     const saved = setUserSettings(uid, req.body || {});
     // propagate max cap into runtime state for immediate effect
-    try { if (typeof setMaxTotalSeconds === 'function') setMaxTotalSeconds(Number(saved.maxTotalSeconds||0)); } catch(e) {}
+    try { if (typeof setMaxTotalSeconds === 'function') setMaxTotalSeconds(uid, Number(saved.maxTotalSeconds||0)); } catch(e) {}
     logger.info('user_settings_saved', {
       requestId: req.requestId,
       userId: uid,

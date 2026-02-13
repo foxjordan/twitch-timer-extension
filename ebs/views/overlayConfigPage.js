@@ -516,7 +516,8 @@ export function renderOverlayConfigPage(options = {}) {
 
             <!-- Upload Sound -->
             <div style="margin-top:18px">
-              <div style="font-weight:600; font-size:14px; margin-bottom:8px;">Upload Sound</div>
+              <div style="font-weight:600; font-size:14px; margin-bottom:4px;">Upload Sound</div>
+              <div class="hint" style="margin-bottom:8px;">Max 1 MB. Accepted formats: MP3, OGG, WAV, WebM, M4A.</div>
               <form id="soundUploadForm">
                 <div style="margin-bottom:8px;">
                   <input type="file" id="soundFile" accept="audio/mpeg,audio/ogg,audio/wav,audio/webm,audio/mp4" style="font-size:12px;">

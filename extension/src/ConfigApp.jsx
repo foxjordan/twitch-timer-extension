@@ -267,6 +267,9 @@ function ConfigApp() {
       {/* Upload Form */}
       <div style={styles.card}>
         <h3 style={styles.subHeading}>Upload Sound</h3>
+        <div style={{ fontSize: 11, opacity: 0.5, marginBottom: 8 }}>
+          Max 1 MB. Accepted formats: MP3, OGG, WAV, WebM, M4A.
+        </div>
         <form onSubmit={handleUpload}>
           <div style={{ marginBottom: 8 }}>
             <input

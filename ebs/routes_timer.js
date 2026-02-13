@@ -4,8 +4,6 @@ import { logger } from './logger.js';
 
 export function mountTimerRoutes(app, ctx) {
   const {
-    BROADCASTER_ID,
-    getBroadcasterId,
     sseClients,
     requireOverlayAuth,
     state,
@@ -34,12 +32,10 @@ export function mountTimerRoutes(app, ctx) {
     if (typeof onTimerMutation === 'function') onTimerMutation();
   };
 
-  async function emitToChannel(eventType, payload) {
+  async function emitToChannel(uid, eventType, payload) {
     try {
       await broadcastToChannel({
-        broadcasterId:
-          (typeof getBroadcasterId === 'function' && getBroadcasterId()) ||
-          BROADCASTER_ID,
+        broadcasterId: String(uid),
         type: eventType,
         payload,
       });
@@ -48,6 +44,7 @@ export function mountTimerRoutes(app, ctx) {
       logger.error('broadcast_failed', {
         reason: err?.message,
         type: eventType,
+        userId: uid,
       });
     }
   }
@@ -89,7 +86,7 @@ export function mountTimerRoutes(app, ctx) {
       userId: uid,
     });
     markTimerMutation();
-    await emitToChannel('timer_reset', { userId: String(uid), remaining: seconds, paused: userState?.paused });
+    await emitToChannel(uid, 'timer_reset', { userId: String(uid), remaining: seconds, paused: userState?.paused });
     res.json({ remaining: seconds });
   });
 
@@ -118,7 +115,7 @@ export function mountTimerRoutes(app, ctx) {
       userId: uid,
     });
     markTimerMutation();
-    await emitToChannel('timer_add', {
+    await emitToChannel(uid, 'timer_add', {
       userId: String(uid),
       secondsAdded: actual,
       newRemaining: remaining,
@@ -202,7 +199,7 @@ export function mountTimerRoutes(app, ctx) {
     }
     logger.info('timer_cleared', { requestId: req.requestId, userId: uid });
     markTimerMutation();
-    await emitToChannel('timer_reset', { userId: String(uid), remaining, paused: state.users.get(String(uid))?.paused });
+    await emitToChannel(uid, 'timer_reset', { userId: String(uid), remaining, paused: state.users.get(String(uid))?.paused });
     res.json({ remaining, cleared: true });
   });
 
@@ -285,7 +282,7 @@ export function mountTimerRoutes(app, ctx) {
       seconds: remaining,
     });
     markTimerMutation();
-    await emitToChannel('timer_reset', { userId: String(uid), remaining, paused: state.users.get(String(uid))?.paused });
+    await emitToChannel(uid, 'timer_reset', { userId: String(uid), remaining, paused: state.users.get(String(uid))?.paused });
     res.json({ remaining });
   });
 
@@ -334,7 +331,7 @@ export function mountTimerRoutes(app, ctx) {
       active,
     });
     markTimerMutation();
-    await emitToChannel('timer_add', { userId: String(uid), secondsAdded: 0, newRemaining: remaining, hype: state.users.get(String(uid))?.hypeActive });
+    await emitToChannel(uid, 'timer_add', { userId: String(uid), secondsAdded: 0, newRemaining: remaining, hype: state.users.get(String(uid))?.hypeActive });
     const payload = JSON.stringify({
       userId: String(uid),
       remaining,

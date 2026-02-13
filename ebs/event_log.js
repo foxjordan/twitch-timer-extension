@@ -10,11 +10,19 @@ export function addLogEntry(entry) {
   return e;
 }
 
-export function getLogEntries() {
-  return entries.slice();
+export function getLogEntries(userId) {
+  if (!userId) return entries.slice();
+  const uid = String(userId);
+  return entries.filter((e) => e.userId === uid);
 }
 
-export function clearLogEntries() {
-  entries.length = 0;
+export function clearLogEntries(userId) {
+  if (!userId) {
+    entries.length = 0;
+    return;
+  }
+  const uid = String(userId);
+  for (let i = entries.length - 1; i >= 0; i--) {
+    if (entries[i].userId === uid) entries.splice(i, 1);
+  }
 }
-

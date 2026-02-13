@@ -303,17 +303,19 @@ mountTimerRoutes(app, {
   resolveTimerUserId: resolveTimerUserIdFromRequest,
 });
 
-// Admin-only: event log for counted contributions
+// Admin-only: event log for counted contributions (per-user)
 app.get("/api/events/log", (req, res) => {
   if (!req?.session?.isAdmin)
     return res.status(401).json({ error: "Admin login required" });
-  res.json({ entries: getLogEntries() });
+  const uid = req.session?.twitchUser?.id;
+  res.json({ entries: getLogEntries(uid ? String(uid) : null) });
 });
 
 app.post("/api/events/log/clear", (req, res) => {
   if (!req?.session?.isAdmin)
     return res.status(401).json({ error: "Admin login required" });
-  clearLogEntries();
+  const uid = req.session?.twitchUser?.id;
+  clearLogEntries(uid ? String(uid) : null);
   res.json({ ok: true });
 });
 
@@ -690,6 +692,7 @@ mountSoundRoutes(app, {
   onSoundAlert: ({ channelId, soundId, soundName, tier, txId, viewerUserId }) => {
     addLogEntry({
       type: "sound_alert",
+      userId: String(channelId),
       soundId,
       soundName,
       viewerUserId: viewerUserId || undefined,
@@ -892,6 +895,7 @@ async function handleEventSub(notification, expectedUserId = null) {
   if (subType === "channel.hype_train.begin" || subType === "channel.hype_train.end") {
     addLogEntry({
       type: subType,
+      userId: timerUid,
       baseSeconds: 0,
       appliedSeconds: 0,
       actualSeconds: 0,

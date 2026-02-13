@@ -264,6 +264,25 @@ function App() {
           </div>
         )}
 
+        {bitsEnabled && (
+          <button
+            onClick={() => window.Twitch?.ext?.bits?.showBitsBalance?.()}
+            style={{
+              background: 'none',
+              border: 'none',
+              color: '#bf94ff',
+              fontSize: 12,
+              cursor: 'pointer',
+              padding: 0,
+              marginBottom: 6,
+              textDecoration: 'underline',
+              opacity: 0.8,
+            }}
+          >
+            Check your Bits balance
+          </button>
+        )}
+
         <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
           {sounds.map((sound) => {
             const onCooldown =

@@ -138,3 +138,31 @@
 [debug] [2026-02-11T21:03:51.419Z] > authorizing via signed-in user (jordan@darkfoxdev.com)
 [debug] [2026-02-11T21:03:51.419Z] > command requires scopes: ["email","openid","https://www.googleapis.com/auth/cloudplatformprojects.readonly","https://www.googleapis.com/auth/firebase","https://www.googleapis.com/auth/cloud-platform"]
 [debug] [2026-02-11T21:03:51.419Z] > authorizing via signed-in user (jordan@darkfoxdev.com)
+[debug] [2026-02-13T03:32:08.161Z] > command requires scopes: ["email","openid","https://www.googleapis.com/auth/cloudplatformprojects.readonly","https://www.googleapis.com/auth/firebase","https://www.googleapis.com/auth/cloud-platform"]
+[debug] [2026-02-13T03:32:08.163Z] > authorizing via signed-in user (jordan@darkfoxdev.com)
+[debug] [2026-02-13T03:32:08.163Z] > command requires scopes: ["email","openid","https://www.googleapis.com/auth/cloudplatformprojects.readonly","https://www.googleapis.com/auth/firebase","https://www.googleapis.com/auth/cloud-platform"]
+[debug] [2026-02-13T03:32:08.163Z] > authorizing via signed-in user (jordan@darkfoxdev.com)
+[debug] [2026-02-13T03:32:08.177Z] > command requires scopes: ["email","openid","https://www.googleapis.com/auth/cloudplatformprojects.readonly","https://www.googleapis.com/auth/firebase","https://www.googleapis.com/auth/cloud-platform"]
+[debug] [2026-02-13T03:32:08.177Z] > authorizing via signed-in user (jordan@darkfoxdev.com)
+[debug] [2026-02-13T03:32:08.320Z] > command requires scopes: ["email","openid","https://www.googleapis.com/auth/cloudplatformprojects.readonly","https://www.googleapis.com/auth/firebase","https://www.googleapis.com/auth/cloud-platform"]
+[debug] [2026-02-13T03:32:08.320Z] > authorizing via signed-in user (jordan@darkfoxdev.com)
+[debug] [2026-02-13T03:32:08.320Z] > command requires scopes: ["email","openid","https://www.googleapis.com/auth/cloudplatformprojects.readonly","https://www.googleapis.com/auth/firebase","https://www.googleapis.com/auth/cloud-platform"]
+[debug] [2026-02-13T03:32:08.321Z] > authorizing via signed-in user (jordan@darkfoxdev.com)
+[debug] [2026-02-13T03:32:08.332Z] > command requires scopes: ["email","openid","https://www.googleapis.com/auth/cloudplatformprojects.readonly","https://www.googleapis.com/auth/firebase","https://www.googleapis.com/auth/cloud-platform"]
+[debug] [2026-02-13T03:32:08.332Z] > authorizing via signed-in user (jordan@darkfoxdev.com)
+[debug] [2026-02-13T03:32:08.333Z] > command requires scopes: ["email","openid","https://www.googleapis.com/auth/cloudplatformprojects.readonly","https://www.googleapis.com/auth/firebase","https://www.googleapis.com/auth/cloud-platform"]
+[debug] [2026-02-13T03:32:08.333Z] > authorizing via signed-in user (jordan@darkfoxdev.com)
+[debug] [2026-02-13T03:32:08.443Z] > command requires scopes: ["email","openid","https://www.googleapis.com/auth/cloudplatformprojects.readonly","https://www.googleapis.com/auth/firebase","https://www.googleapis.com/auth/cloud-platform"]
+[debug] [2026-02-13T03:32:08.444Z] > authorizing via signed-in user (jordan@darkfoxdev.com)
+[debug] [2026-02-13T03:32:08.445Z] > command requires scopes: ["email","openid","https://www.googleapis.com/auth/cloudplatformprojects.readonly","https://www.googleapis.com/auth/firebase","https://www.googleapis.com/auth/cloud-platform"]
+[debug] [2026-02-13T03:32:08.445Z] > authorizing via signed-in user (jordan@darkfoxdev.com)
+[debug] [2026-02-13T03:32:08.456Z] > command requires scopes: ["email","openid","https://www.googleapis.com/auth/cloudplatformprojects.readonly","https://www.googleapis.com/auth/firebase","https://www.googleapis.com/auth/cloud-platform"]
+[debug] [2026-02-13T03:32:08.456Z] > authorizing via signed-in user (jordan@darkfoxdev.com)
+[debug] [2026-02-13T03:32:08.616Z] > command requires scopes: ["email","openid","https://www.googleapis.com/auth/cloudplatformprojects.readonly","https://www.googleapis.com/auth/firebase","https://www.googleapis.com/auth/cloud-platform"]
+[debug] [2026-02-13T03:32:08.616Z] > authorizing via signed-in user (jordan@darkfoxdev.com)
+[debug] [2026-02-13T03:32:08.617Z] > command requires scopes: ["email","openid","https://www.googleapis.com/auth/cloudplatformprojects.readonly","https://www.googleapis.com/auth/firebase","https://www.googleapis.com/auth/cloud-platform"]
+[debug] [2026-02-13T03:32:08.617Z] > authorizing via signed-in user (jordan@darkfoxdev.com)
+[debug] [2026-02-13T03:32:08.624Z] > command requires scopes: ["email","openid","https://www.googleapis.com/auth/cloudplatformprojects.readonly","https://www.googleapis.com/auth/firebase","https://www.googleapis.com/auth/cloud-platform"]
+[debug] [2026-02-13T03:32:08.625Z] > authorizing via signed-in user (jordan@darkfoxdev.com)
+[debug] [2026-02-13T03:32:08.625Z] > command requires scopes: ["email","openid","https://www.googleapis.com/auth/cloudplatformprojects.readonly","https://www.googleapis.com/auth/firebase","https://www.googleapis.com/auth/cloud-platform"]
+[debug] [2026-02-13T03:32:08.625Z] > authorizing via signed-in user (jordan@darkfoxdev.com)

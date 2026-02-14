@@ -429,6 +429,21 @@ export function renderOverlayConfigPage(options = {}) {
             </div>
             <div class="hint" style="margin-top:8px">Current remaining: <span id="remain">--:--</span></div>
             <div class="hint" id="capStatus" style="margin-top:4px; opacity:0.8"></div>
+
+            <div style="margin-top:12px; padding-top:12px; border-top:1px solid var(--section-border,#303038);">
+              <div style="font-weight:600; font-size:13px; margin-bottom:8px;">Max Time Reached Display</div>
+              <label style="display:flex; align-items:center; gap:8px; margin-bottom:8px; cursor:pointer;">
+                <input type="checkbox" id="showCapMessage" />
+                Display max time reached message on overlay
+              </label>
+              <div id="capMessageRow" style="display:none; margin-bottom:8px;">
+                <input id="capMessageText" type="text" placeholder="e.g. Thanks for watching! Stream ending soon." maxlength="200" style="width:100%; box-sizing:border-box;" />
+              </div>
+              <div class="row2">
+                <button class="secondary" id="saveCapMsg">Save Message Settings</button>
+                <button class="secondary" id="forceCapBtn" title="Manually force cap-reached state">Force Max Reached</button>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -1565,11 +1580,14 @@ export function renderOverlayConfigPage(options = {}) {
           const init = Number(t.initialSeconds||0);
           const add = Number(t.additionsTotal||0);
           const used = Math.max(0, init + add);
+          var status = '';
           if (max > 0) {
-            el.textContent = 'Max: ' + fmt(max) + ' • Initial: ' + fmt(init) + ' • Added: ' + fmt(add) + ' • Total: ' + fmt(used);
+            status = 'Max: ' + fmt(max) + ' • Initial: ' + fmt(init) + ' • Added: ' + fmt(add) + ' • Total: ' + fmt(used);
           } else {
-            el.textContent = 'No max set • Initial: ' + fmt(init) + ' • Added: ' + fmt(add) + ' • Total: ' + fmt(used);
+            status = 'No max set • Initial: ' + fmt(init) + ' • Added: ' + fmt(add) + ' • Total: ' + fmt(used);
           }
+          if (t.capReached) status += ' • CAP REACHED';
+          el.textContent = status;
         } catch(e) {}
       }
 
@@ -1637,6 +1655,56 @@ export function renderOverlayConfigPage(options = {}) {
             setBusy(clearMaxBtn, false);
           });
         }
+
+        // Cap message toggle
+        var showCapCb = document.getElementById('showCapMessage');
+        if (showCapCb) {
+          showCapCb.addEventListener('change', function() {
+            document.getElementById('capMessageRow').style.display = showCapCb.checked ? 'block' : 'none';
+          });
+        }
+
+        // Save cap message settings
+        var saveCapBtn = document.getElementById('saveCapMsg');
+        if (saveCapBtn) {
+          saveCapBtn.addEventListener('click', async function(e) {
+            e.preventDefault();
+            flashButton(saveCapBtn);
+            setBusy(saveCapBtn, true);
+            var payload = {
+              showCapMessage: document.getElementById('showCapMessage').checked,
+              capMessage: document.getElementById('capMessageText').value.trim(),
+            };
+            try { await fetch('/api/user/settings', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) }); } catch(e) {}
+            setBusy(saveCapBtn, false);
+          });
+        }
+
+        // Force cap reached button
+        var forceCapBtn = document.getElementById('forceCapBtn');
+        var capForced = false;
+        if (forceCapBtn) {
+          fetch('/api/timer/totals', { cache: 'no-store' }).then(function(r) { return r.json(); }).then(function(t) {
+            capForced = Boolean(t.capForcedOn);
+            forceCapBtn.textContent = capForced ? 'Unforce Max Reached' : 'Force Max Reached';
+          }).catch(function() {});
+
+          forceCapBtn.addEventListener('click', async function(e) {
+            e.preventDefault();
+            flashButton(forceCapBtn);
+            setBusy(forceCapBtn, true);
+            capForced = !capForced;
+            try {
+              var r = await fetch('/api/timer/force-cap', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ forced: capForced }) });
+              var j = await r.json();
+              capForced = Boolean(j.forced);
+              forceCapBtn.textContent = capForced ? 'Unforce Max Reached' : 'Force Max Reached';
+            } catch(e) {}
+            await updateCapStatus();
+            setBusy(forceCapBtn, false);
+          });
+        }
+
         Array.from(document.querySelectorAll('[data-add]')).forEach(function(btn){
           btn.addEventListener('click', async function(e){
             e.preventDefault();
@@ -2162,6 +2230,11 @@ export function renderOverlayConfigPage(options = {}) {
           document.getElementById('maxH').value = Math.floor(max/3600);
           document.getElementById('maxM').value = Math.floor((max%3600)/60);
           document.getElementById('maxS').value = max%60;
+          var showCap = Boolean(j.showCapMessage);
+          var capMsg = String(j.capMessage || '');
+          document.getElementById('showCapMessage').checked = showCap;
+          document.getElementById('capMessageText').value = capMsg;
+          document.getElementById('capMessageRow').style.display = showCap ? 'block' : 'none';
         }).catch(function(){});
 
         // Load current style thresholds to sync controls

@@ -18,6 +18,7 @@ export function mountTimerRoutes(app, ctx) {
     capReached,
     getTotals,
     clearTimer,
+    setCapForcedOn,
     onBroadcastError,
     onTimerMutation,
     resolveTimerUserId,
@@ -359,9 +360,37 @@ export function mountTimerRoutes(app, ctx) {
       const used = Math.max(0, (t.initialSeconds|0) + (t.additionsTotal|0));
       const max = Math.max(0, t.maxTotalSeconds|0);
       const budget = max > 0 ? Math.max(0, max - used) : null;
-      res.json({ ...t, used, budget, capReached: typeof capReached === 'function' ? capReached(uid) : false });
+      const capForced = Boolean(state.users.get(String(uid))?.capForcedOn);
+      res.json({ ...t, used, budget, capReached: typeof capReached === 'function' ? capReached(uid) : false, capForcedOn: capForced });
     } catch (e) {
       res.status(500).json({ error: 'Failed to get totals' });
     }
+  });
+
+  app.post('/api/timer/force-cap', (req, res) => {
+    if (!req?.session?.isAdmin) return res.status(401).json({ error: 'Admin login required' });
+    const uid = resolveUid(req);
+    const forced = Boolean(req.body?.forced);
+    if (typeof setCapForcedOn === 'function') setCapForcedOn(uid, forced);
+    const cap = typeof capReached === 'function' ? capReached(uid) : forced;
+    const remaining = getRemainingSeconds(uid);
+    const payload = JSON.stringify({
+      userId: String(uid),
+      remaining,
+      hype: state.users.get(String(uid))?.hypeActive,
+      paused: state.users.get(String(uid))?.paused,
+      capReached: cap,
+    });
+    for (const client of Array.from(sseClients)) {
+      if (client.timerUserId && String(client.timerUserId) !== String(uid)) continue;
+      try {
+        client.res.write('event: timer_tick\n');
+        client.res.write(`data: ${payload}\n\n`);
+      } catch (e) {
+        sseClients.delete(client);
+      }
+    }
+    markTimerMutation();
+    res.json({ capReached: cap, forced });
   });
 }

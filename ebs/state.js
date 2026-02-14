@@ -24,6 +24,7 @@ function ensure(uid) {
       additionsTotal: 0,
       maxTotalSeconds: 0,
       bitsCarry: 0,
+      capForcedOn: false,
     });
   }
   return state.users.get(id);
@@ -39,6 +40,7 @@ function snapshotUserState(userState) {
     additionsTotal: Number(userState.additionsTotal || 0),
     maxTotalSeconds: Number(userState.maxTotalSeconds || 0),
     bitsCarry: Number(userState.bitsCarry || 0),
+    capForcedOn: Boolean(userState.capForcedOn),
   };
 }
 
@@ -68,6 +70,7 @@ function parseUserState(val) {
     additionsTotal: Number(val.additionsTotal || 0),
     maxTotalSeconds: Number(val.maxTotalSeconds || 0),
     bitsCarry: Number(val.bitsCarry || 0),
+    capForcedOn: Boolean(val.capForcedOn),
   };
 }
 
@@ -126,6 +129,7 @@ export function addSeconds(uid = DEFAULT_USER_ID, sec = 0) {
   let toAdd = Math.floor(Number(sec) || 0);
   const requestedSeconds = toAdd;
   if (toAdd <= 0) return getRemainingSeconds(uid);
+  if (s.capForcedOn) return getRemainingSeconds(uid);
   if (s.maxTotalSeconds > 0) {
     const used = Math.max(0, Math.floor(s.initialSeconds + s.additionsTotal));
     const remainingBudget = Math.max(0, s.maxTotalSeconds - used);
@@ -223,8 +227,15 @@ export function getTotals(uid = DEFAULT_USER_ID) {
 
 export function capReached(uid = DEFAULT_USER_ID) {
   const s = ensure(uid);
+  if (s.capForcedOn) return true;
   const max = Math.max(0, Math.floor(s.maxTotalSeconds || 0));
   if (max <= 0) return false;
   const used = Math.max(0, Math.floor((s.initialSeconds || 0) + (s.additionsTotal || 0)));
   return used >= max;
+}
+
+export function setCapForcedOn(uid = DEFAULT_USER_ID, forced) {
+  const s = ensure(uid);
+  s.capForcedOn = Boolean(forced);
+  persistTimerState().catch(() => {});
 }

@@ -24,6 +24,7 @@ import {
   getTotals,
   loadTimerState,
   clearTimer,
+  setCapForcedOn,
 } from "./state.js";
 import {
   DEFAULT_STYLE,
@@ -225,6 +226,12 @@ function setUserSettings(uid, patch) {
     const v = Number(patch.maxTotalSeconds);
     if (!Number.isNaN(v) && v >= 0) next.maxTotalSeconds = v;
   }
+  if (patch && typeof patch.showCapMessage !== "undefined") {
+    next.showCapMessage = Boolean(patch.showCapMessage);
+  }
+  if (patch && typeof patch.capMessage !== "undefined") {
+    next.capMessage = String(patch.capMessage || "").slice(0, 200);
+  }
   if (
     patch &&
     patch.panelCollapsedSections &&
@@ -294,6 +301,7 @@ mountTimerRoutes(app, {
   capReached,
   getTotals,
   clearTimer,
+  setCapForcedOn,
   onBroadcastError: () => {
     observability.lastBroadcastErrorAt = new Date().toISOString();
   },
@@ -1053,7 +1061,7 @@ setInterval(async () => {
       await broadcastToChannel({
         broadcasterId: userId,
         type: "timer_tick",
-        payload: { userId, remaining, hype },
+        payload: { userId, remaining, hype, capReached: capReached(userId) },
       });
     } catch (err) {
       observability.lastBroadcastErrorAt = new Date().toISOString();
@@ -1073,12 +1081,18 @@ setInterval(async () => {
       const hyp = state.users.get(String(tid))?.hypeActive;
       const paused = state.users.get(String(tid))?.paused;
       const cap = capReached(tid);
+      let capMsg = null;
+      if (cap) {
+        const us = getUserSettings(tid);
+        if (us.showCapMessage && us.capMessage) capMsg = us.capMessage;
+      }
       const payload = JSON.stringify({
         userId: tid,
         remaining: rem,
         hype: hyp,
         paused,
         capReached: cap,
+        capMessage: capMsg,
       });
       client.res.write("event: timer_tick\n");
       client.res.write(`data: ${payload}\n\n`);

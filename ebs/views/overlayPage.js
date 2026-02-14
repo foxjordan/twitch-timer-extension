@@ -45,6 +45,7 @@ export function renderOverlayPage(options = {}) {
       .hype { font-size: 12px; opacity: 0.9; margin-top: 4px; }
       .paused { font-size: 12px; opacity: 0.9; margin-top: 4px; }
       .cap  { font-size: 12px; opacity: 0.9; margin-top: 4px; }
+      .cap.custom { font-size: 22px; font-weight: 700; opacity: 1; margin-top: 8px; }
       @keyframes flash {
         0% { opacity: 1; }
         50% { opacity: 0.3; }
@@ -108,6 +109,7 @@ export function renderOverlayPage(options = {}) {
         };
         let timeFormat = 'mm:ss';
         let cap = false;
+        let capMessage = null;
         let addEffectEnabled = true;
         let addEffectMode = 'pulse';
         let hypeLabelEnabled = true;
@@ -136,7 +138,15 @@ export function renderOverlayPage(options = {}) {
             hypeEl.style.display = hype && hypeLabelEnabled ? 'block' : 'none';
           }
           document.getElementById('paused').style.display = paused ? 'block' : 'none';
-          document.getElementById('cap').style.display = cap ? 'block' : 'none';
+          var capEl = document.getElementById('cap');
+          capEl.style.display = cap ? 'block' : 'none';
+          if (cap && capMessage) {
+            capEl.textContent = capMessage;
+            capEl.className = 'cap custom';
+          } else if (cap) {
+            capEl.textContent = '\u23F1 Stream has reached maximum length';
+            capEl.className = 'cap';
+          }
 
           // Apply threshold color/flash
           var color = el.style.color;
@@ -269,6 +279,7 @@ export function renderOverlayPage(options = {}) {
                 if (typeof data.hype === 'boolean') { hype = data.hype; }
                 if (typeof data.paused === 'boolean') { paused = data.paused; }
                 if (typeof data.capReached === 'boolean') { cap = data.capReached; }
+                if (typeof data.capMessage !== 'undefined') { capMessage = data.capMessage || null; }
                 if (prev !== null && data.remaining > prev) {
                   triggerAddEffect();
                 }

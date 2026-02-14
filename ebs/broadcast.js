@@ -39,7 +39,7 @@ export async function broadcastToChannel({ broadcasterId, type, payload }) {
 export async function sendExtensionChatMessage({ broadcasterId, text }) {
   const clientId = process.env.EXTENSION_CLIENT_ID;
   const secret = process.env.EXTENSION_SECRET;
-  const version = process.env.EXTENSION_VERSION || "0.0.2";
+  const version = process.env.EXTENSION_VERSION || "0.0.1";
   if (!clientId || !secret) return;
 
   const token = signExtensionJwt(broadcasterId);

@@ -110,6 +110,7 @@ export function renderOverlayPage(options = {}) {
         let timeFormat = 'mm:ss';
         let cap = false;
         let capMessage = null;
+        let capStyle = null;
         let addEffectEnabled = true;
         let addEffectMode = 'pulse';
         let hypeLabelEnabled = true;
@@ -143,9 +144,21 @@ export function renderOverlayPage(options = {}) {
           if (cap && capMessage) {
             capEl.textContent = capMessage;
             capEl.className = 'cap custom';
+            var clockFs = parseInt(document.getElementById('clock').style.fontSize, 10) || 48;
+            var sz = capStyle && capStyle.size || 'larger';
+            if (sz === 'larger') capEl.style.fontSize = Math.round(clockFs * 0.5) + 'px';
+            else if (sz === 'smaller') capEl.style.fontSize = Math.round(clockFs * 0.25) + 'px';
+            else capEl.style.fontSize = Math.round(clockFs * 0.35) + 'px';
+            capEl.style.color = (capStyle && capStyle.color) || 'inherit';
+            var pos = capStyle && capStyle.position || 'below';
+            var wrap = capEl.parentNode;
+            if (pos === 'above') { wrap.insertBefore(capEl, document.getElementById('label') || wrap.firstChild); }
+            else { wrap.appendChild(capEl); }
           } else if (cap) {
             capEl.textContent = '\u23F1 Stream has reached maximum length';
             capEl.className = 'cap';
+            capEl.style.fontSize = '';
+            capEl.style.color = '';
           }
 
           // Apply threshold color/flash
@@ -280,6 +293,7 @@ export function renderOverlayPage(options = {}) {
                 if (typeof data.paused === 'boolean') { paused = data.paused; }
                 if (typeof data.capReached === 'boolean') { cap = data.capReached; }
                 if (typeof data.capMessage !== 'undefined') { capMessage = data.capMessage || null; }
+                if (typeof data.capStyle !== 'undefined') { capStyle = data.capStyle || null; }
                 if (prev !== null && data.remaining > prev) {
                   triggerAddEffect();
                 }

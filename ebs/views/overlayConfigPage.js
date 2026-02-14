@@ -437,7 +437,23 @@ export function renderOverlayConfigPage(options = {}) {
                 Display max time reached message on overlay
               </label>
               <div id="capMessageRow" style="display:none; margin-bottom:8px;">
-                <input id="capMessageText" type="text" placeholder="e.g. Thanks for watching! Stream ending soon." maxlength="200" style="width:100%; box-sizing:border-box;" />
+                <input id="capMessageText" type="text" placeholder="e.g. Thanks for watching! Stream ending soon." maxlength="200" style="width:100%; box-sizing:border-box; margin-bottom:8px;" />
+                <div style="display:flex; gap:12px; align-items:center; flex-wrap:wrap;">
+                  <label style="display:flex; align-items:center; gap:4px; font-size:12px;">Color <input id="capMsgColor" type="color" value="#ffffff" style="width:32px; height:24px; border:none; cursor:pointer;" /></label>
+                  <label style="font-size:12px;">Position
+                    <select id="capMsgPosition" style="margin-left:4px;">
+                      <option value="below">Below countdown</option>
+                      <option value="above">Above countdown</option>
+                    </select>
+                  </label>
+                  <label style="font-size:12px;">Size
+                    <select id="capMsgSize" style="margin-left:4px;">
+                      <option value="larger">Larger</option>
+                      <option value="same">Same</option>
+                      <option value="smaller">Smaller</option>
+                    </select>
+                  </label>
+                </div>
               </div>
               <div class="row2">
                 <button class="secondary" id="saveCapMsg">Save Message Settings</button>
@@ -1674,6 +1690,9 @@ export function renderOverlayConfigPage(options = {}) {
             var payload = {
               showCapMessage: document.getElementById('showCapMessage').checked,
               capMessage: document.getElementById('capMessageText').value.trim(),
+              capMessageColor: document.getElementById('capMsgColor').value,
+              capMessagePosition: document.getElementById('capMsgPosition').value,
+              capMessageSize: document.getElementById('capMsgSize').value,
             };
             try { await fetch('/api/user/settings', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) }); } catch(e) {}
             setBusy(saveCapBtn, false);
@@ -2235,6 +2254,9 @@ export function renderOverlayConfigPage(options = {}) {
           document.getElementById('showCapMessage').checked = showCap;
           document.getElementById('capMessageText').value = capMsg;
           document.getElementById('capMessageRow').style.display = showCap ? 'block' : 'none';
+          if (j.capMessageColor) document.getElementById('capMsgColor').value = j.capMessageColor;
+          if (j.capMessagePosition) document.getElementById('capMsgPosition').value = j.capMessagePosition;
+          if (j.capMessageSize) document.getElementById('capMsgSize').value = j.capMessageSize;
         }).catch(function(){});
 
         // Load current style thresholds to sync controls

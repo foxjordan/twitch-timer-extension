@@ -232,6 +232,17 @@ function setUserSettings(uid, patch) {
   if (patch && typeof patch.capMessage !== "undefined") {
     next.capMessage = String(patch.capMessage || "").slice(0, 200);
   }
+  if (patch && typeof patch.capMessageColor !== "undefined") {
+    next.capMessageColor = String(patch.capMessageColor || "").slice(0, 20);
+  }
+  if (patch && typeof patch.capMessagePosition !== "undefined") {
+    const pos = String(patch.capMessagePosition);
+    if (pos === "above" || pos === "below") next.capMessagePosition = pos;
+  }
+  if (patch && typeof patch.capMessageSize !== "undefined") {
+    const sz = String(patch.capMessageSize);
+    if (sz === "larger" || sz === "smaller" || sz === "same") next.capMessageSize = sz;
+  }
   if (
     patch &&
     patch.panelCollapsedSections &&
@@ -1082,9 +1093,17 @@ setInterval(async () => {
       const paused = state.users.get(String(tid))?.paused;
       const cap = capReached(tid);
       let capMsg = null;
+      let capStyle = null;
       if (cap) {
         const us = getUserSettings(tid);
-        if (us.showCapMessage && us.capMessage) capMsg = us.capMessage;
+        if (us.showCapMessage && us.capMessage) {
+          capMsg = us.capMessage;
+          capStyle = {
+            color: us.capMessageColor || '',
+            position: us.capMessagePosition || 'below',
+            size: us.capMessageSize || 'larger',
+          };
+        }
       }
       const payload = JSON.stringify({
         userId: tid,
@@ -1093,6 +1112,7 @@ setInterval(async () => {
         paused,
         capReached: cap,
         capMessage: capMsg,
+        capStyle,
       });
       client.res.write("event: timer_tick\n");
       client.res.write(`data: ${payload}\n\n`);

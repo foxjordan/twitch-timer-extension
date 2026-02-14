@@ -21,7 +21,7 @@ export function renderGdprPage(options = {}) {
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>GDPR Disclosure – Twitch Timer Overlay</title>
+    <title>GDPR Disclosure – Livestreamer Hub</title>
     <script id="Cookiebot" src="https://consent.cookiebot.com/uc.js" data-cbid="6770198d-2c1f-46f8-af4b-694edc70484c" type="text/javascript"></script>
     ${renderThemeBootstrapScript()}
     <style>
@@ -47,7 +47,7 @@ export function renderGdprPage(options = {}) {
     <main>
       <h1>GDPR / UK GDPR Disclosure</h1>
       <div class="meta">
-        <span>Service: Twitch Timer Overlay</span>
+        <span>Service: Livestreamer Hub</span>
         <span>Last updated: ${lastUpdated}</span>
       </div>
       <p>This disclosure supplements our <a href="${privacyUrl}">Privacy Policy</a> for users located in the European Economic Area (EEA), the United Kingdom, and Switzerland. It explains the legal bases we rely on and the rights that apply under the GDPR and UK GDPR.</p>

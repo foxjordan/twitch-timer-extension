@@ -3,15 +3,12 @@ import {
   THEME_TOGGLE_STYLES,
   renderThemeBootstrapScript,
 } from "./theme.js";
-import {
-  GLOBAL_HEADER_STYLES,
-  renderGlobalHeader,
-} from "./globalHeader.js";
+import { GLOBAL_HEADER_STYLES, renderGlobalHeader } from "./globalHeader.js";
 
 export function renderHomePage(options = {}) {
   const base = String(options.base || "");
   const loginUrl = `${base}/auth/login?next=${encodeURIComponent(
-    "/overlay/config"
+    "/overlay/config",
   )}`;
   const configUrl = `${base}/overlay/config`;
   const overlayUrl = String(options.overlayUrl || `${base}/overlay`);
@@ -64,8 +61,9 @@ export function renderHomePage(options = {}) {
   <body>
     ${renderGlobalHeader({ base, adminName: headerAdminName, active: "home", includeThemeToggle: true, showUtilitiesLink })}
     <main>
-      <h1>Hyper Timer Overlay</h1>
+      <h1>Livestreamer Hub</h1>
       <p>This service powers your Twitch charity/subathon style timer. Sign in with Twitch to configure the overlay, tune the rules, and monitor inbound events.</p>
+      <p><strong>NEW: </strong>Additional stream utilities and support for the companion Bit alerts extension.</p>
 
       <div class="grid">
         <section class="card">

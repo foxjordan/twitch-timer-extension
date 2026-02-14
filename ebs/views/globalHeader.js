@@ -87,7 +87,7 @@ export function renderGlobalHeader(options = {}) {
       (link) =>
         `<a class="nav-link${active === link.key ? " active" : ""}" href="${
           link.href
-        }">${link.label}</a>`
+        }">${link.label}</a>`,
     )
     .join("");
 
@@ -97,14 +97,14 @@ export function renderGlobalHeader(options = {}) {
     actions.push(`<span class="user-label">Logged in as ${adminName}</span>`);
   if (showFeedback)
     actions.push(
-      `<a href="${feedbackUrl}" target="_blank" rel="noopener noreferrer"><button class="secondary">Feedback</button></a>`
+      `<a href="${feedbackUrl}" target="_blank" rel="noopener noreferrer"><button class="secondary">Feedback</button></a>`,
     );
   if (showLogout) actions.push(`<button id="logout">Logout</button>`);
 
   return `
     <header class="global-header">
       <div class="header-brand">
-        <a class="brand-link" href="${homeHref}">Twitch Timer</a>
+        <a class="brand-link" href="${homeHref}">Livestreamer Hub</a>
         <nav class="nav-links">${navLinks}</nav>
       </div>
       <div class="header-actions">

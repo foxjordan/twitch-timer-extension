@@ -3,6 +3,7 @@ import jwt from "jsonwebtoken";
 import multer from "multer";
 import { rename } from "fs/promises";
 import path from "path";
+import { getBaseUrl } from "./base_url.js";
 import { getOrCreateUserKey } from "./keys.js";
 import {
   listSounds,
@@ -209,8 +210,7 @@ export function mountSoundRoutes(app, deps = {}) {
     const uid = requireBroadcaster(req, res);
     if (!uid) return;
     const key = getOrCreateUserKey(uid);
-    const base =
-      process.env.SERVER_BASE_URL || `${req.protocol}://${req.get("host")}`;
+    const base = getBaseUrl(req);
     res.json({
       url: `${base}/overlay/sounds?key=${encodeURIComponent(key)}`,
     });

@@ -2,10 +2,10 @@ import { renderHomePage } from "./views/homePage.js";
 import { renderPrivacyPage } from "./views/privacyPage.js";
 import { renderGdprPage } from "./views/gdprPage.js";
 import { renderUtilitiesPage } from "./views/utilitiesPage.js";
+import { getBaseUrl } from "./base_url.js";
 
 export function mountHomePageRoutes(app) {
-  const baseUrl = (req) =>
-    process.env.SERVER_BASE_URL || `${req.protocol}://${req.get("host")}`;
+  const baseUrl = (req) => getBaseUrl(req);
   const contactEmail =
     process.env.CONTACT_EMAIL || process.env.SUPPORT_EMAIL || "help@darkfoxdev.com";
 

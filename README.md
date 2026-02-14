@@ -1,6 +1,6 @@
-Twitch Timer — External Overlay
+Livestreamer Hub: Twitch Timer — External Overlay
 
-This project provides a Twitch timer panel and an external overlay view you can capture in OBS/Streamlabs as a Browser Source.
+This project provides a Twitch Bit alerts extension and an external overlay countdown timer view you can capture in OBS/Streamlabs as a Browser Source.
 
 Quick Start (Local)
 - EBS: `cd ebs && npm install && npm run dev`

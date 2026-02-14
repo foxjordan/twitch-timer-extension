@@ -4,10 +4,10 @@ import { getOrCreateUserKey } from './keys.js';
 import { renderLoggedOutPage } from './views/loggedOutPage.js';
 import { logger } from './logger.js';
 import { storeUserAccessToken } from './twitch_tokens.js';
+import { getBaseUrl } from './base_url.js';
 
 function buildRedirectURI(req) {
-  const base = process.env.SERVER_BASE_URL || `${req.protocol}://${req.get('host')}`;
-  return `${base}/auth/callback`;
+  return `${getBaseUrl(req)}/auth/callback`;
 }
 
 export function mountAuthRoutes(app, opts = {}) {
@@ -74,8 +74,7 @@ export function mountAuthRoutes(app, opts = {}) {
       // notify host (server) of admin login for dynamic broadcaster/eventsub wiring
       try { if (opts && typeof opts.onAdminLogin === 'function') opts.onAdminLogin({ user, accessToken }); } catch {}
       const next = req.query.next || '/overlay/config';
-      const base = process.env.SERVER_BASE_URL || `${req.protocol}://${req.get('host')}`;
-      res.redirect(`${base}${String(next).startsWith('/') ? next : '/overlay/config'}`);
+      res.redirect(`${getBaseUrl(req)}${String(next).startsWith('/') ? next : '/overlay/config'}`);
     } catch (e) {
       logger.error('oauth_callback_error', { message: e?.message });
       res.status(500).send('OAuth error');
@@ -115,7 +114,7 @@ export function mountAuthRoutes(app, opts = {}) {
     }
 
     const next = req.query.next || '/overlay/config';
-    const base = process.env.SERVER_BASE_URL || `${req.protocol}://${req.get('host')}`;
+    const base = getBaseUrl(req);
     const secure = req.secure || req.headers['x-forwarded-proto'] === 'https';
     try { res.clearCookie('overlay.sid', { path: '/', sameSite: 'lax', secure }); } catch {}
     req.session.destroy(() => {
@@ -125,7 +124,7 @@ export function mountAuthRoutes(app, opts = {}) {
 
   // Simple logged-out page to avoid immediately re-authing via Twitch SSO
   app.get('/auth/logged-out', (req, res) => {
-    const base = process.env.SERVER_BASE_URL || `${req.protocol}://${req.get('host')}`;
+    const base = getBaseUrl(req);
     const next = req.query.next || '/overlay/config';
     const html = renderLoggedOutPage({ base, next });
     res.setHeader('Content-Type', 'text/html; charset=utf-8');
@@ -135,7 +134,7 @@ export function mountAuthRoutes(app, opts = {}) {
 
   // Convenience alias
   app.get('/oauth/callback', (req, res) => {
-    const base = process.env.SERVER_BASE_URL || `${req.protocol}://${req.get('host')}`;
+    const base = getBaseUrl(req);
     const qs = req.url.includes('?') ? req.url.slice(req.url.indexOf('?')) : '';
     res.redirect(`${base}/auth/callback${qs}`);
   });

@@ -63,8 +63,8 @@ export function renderOverlayConfigPage(options = {}) {
   const sectionBodyAttr = (id) =>
     isCollapsed(id) ? 'style="display:none"' : "";
   const sectionExpandedAttr = (id) => (isCollapsed(id) ? "false" : "true");
-  const privacyUrl = `${base}/privacy`;
-  const gdprUrl = `${base}/gdpr`;
+  const privacyUrl = `/privacy`;
+  const gdprUrl = `/gdpr`;
 
   const html = `<!doctype html>
 <html>
@@ -162,7 +162,7 @@ export function renderOverlayConfigPage(options = {}) {
   </head>
   <body>
     ${renderGlobalHeader({
-      base,
+      base: "",
       adminName,
       active: "config",
       includeThemeToggle: true,
@@ -612,7 +612,7 @@ export function renderOverlayConfigPage(options = {}) {
         'h','m','s','addEffectEnabled','addEffectMode','hypeLabelEnabled','hypeLabel'
       ].reduce((acc, id) => (acc[id] = document.getElementById(id), acc), {});
       const sectionState = ${JSON.stringify(collapsedSections || {})};
-      const GOAL_OVERLAY_BASE = ${JSON.stringify(`${base}/overlay/goal`)};
+      const GOAL_OVERLAY_BASE = window.location.origin + '/overlay/goal';
       const goalListEl = document.getElementById('goalList');
       const goalCreateBtn = document.getElementById('createGoal');
       const goalCreateSubBtn = document.getElementById('createSubGoal');
@@ -675,13 +675,13 @@ export function renderOverlayConfigPage(options = {}) {
       function overlayUrl() {
         const p = new URLSearchParams();
         if (inputs.key.value) p.set('key', inputs.key.value.trim());
-        return '${base}/overlay' + (p.toString() ? ('?' + p.toString()) : '');
+        return window.location.origin + '/overlay' + (p.toString() ? ('?' + p.toString()) : '');
       }
 
       async function saveStyle() {
         const p = new URLSearchParams();
         if (inputs.key.value) p.set('key', inputs.key.value.trim());
-        const url = '${base}/api/overlay/style' + (p.toString() ? ('?' + p.toString()) : '');
+        const url = '/api/overlay/style' + (p.toString() ? ('?' + p.toString()) : '');
         const payload = {
           fontSize: Number(inputs.fontSize.value),
           color: inputs.color.value,
@@ -848,7 +848,7 @@ export function renderOverlayConfigPage(options = {}) {
       function soundOverlayUrl() {
         const p = new URLSearchParams();
         if (inputs.key.value) p.set('key', inputs.key.value.trim());
-        return '${base}/overlay/sounds' + (p.toString() ? ('?' + p.toString()) : '');
+        return window.location.origin + '/overlay/sounds' + (p.toString() ? ('?' + p.toString()) : '');
       }
 
       function refresh() {

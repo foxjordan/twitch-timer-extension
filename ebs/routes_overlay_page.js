@@ -3,7 +3,6 @@ import { renderOverlayConfigPage } from "./views/overlayConfigPage.js";
 import { renderGoalsOverlayPage } from "./views/goalsOverlayPage.js";
 import { renderWheelOverlayPage } from "./views/wheelOverlayPage.js";
 import { renderSoundAlertOverlayPage } from "./views/soundAlertOverlayPage.js";
-import { getBaseUrl } from "./base_url.js";
 
 export function mountOverlayPageRoutes(app, deps) {
   const { requireOverlayAuth, requireAdmin, getUserSettings, getRules } =
@@ -55,7 +54,6 @@ export function mountOverlayPageRoutes(app, deps) {
   });
 
   app.get("/overlay/config", requireAdmin, (req, res) => {
-    const base = getBaseUrl(req);
     const adminName = String(
       req.session?.twitchUser?.display_name ||
         req.session?.twitchUser?.login ||
@@ -68,7 +66,7 @@ export function mountOverlayPageRoutes(app, deps) {
     const rulesSnapshot = getRules(req.session?.twitchUser?.id);
 
     const html = renderOverlayConfigPage({
-      base,
+      base: "",
       adminName,
       userKey,
       settings,

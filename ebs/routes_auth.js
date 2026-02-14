@@ -7,7 +7,10 @@ import { storeUserAccessToken } from './twitch_tokens.js';
 import { getBaseUrl } from './base_url.js';
 
 function buildRedirectURI(req) {
-  return `${getBaseUrl(req)}/auth/callback`;
+  // Prefer the origin we captured when the login flow started
+  const saved = req.session?.oauthOrigin;
+  const base = saved || getBaseUrl(req);
+  return `${base}/auth/callback`;
 }
 
 export function mountAuthRoutes(app, opts = {}) {
@@ -16,6 +19,8 @@ export function mountAuthRoutes(app, opts = {}) {
     if (!clientId) return res.status(500).send('Missing TWITCH_CLIENT_ID');
     const state = crypto.randomBytes(16).toString('hex');
     req.session.oauthState = state;
+    // Capture the origin the user is on so the callback redirect_uri matches
+    req.session.oauthOrigin = getBaseUrl(req);
     const params = new URLSearchParams({
       client_id: clientId,
       redirect_uri: buildRedirectURI(req),
@@ -74,7 +79,7 @@ export function mountAuthRoutes(app, opts = {}) {
       // notify host (server) of admin login for dynamic broadcaster/eventsub wiring
       try { if (opts && typeof opts.onAdminLogin === 'function') opts.onAdminLogin({ user, accessToken }); } catch {}
       const next = req.query.next || '/overlay/config';
-      res.redirect(`${getBaseUrl(req)}${String(next).startsWith('/') ? next : '/overlay/config'}`);
+      res.redirect(String(next).startsWith('/') ? next : '/overlay/config');
     } catch (e) {
       logger.error('oauth_callback_error', { message: e?.message });
       res.status(500).send('OAuth error');
@@ -114,19 +119,17 @@ export function mountAuthRoutes(app, opts = {}) {
     }
 
     const next = req.query.next || '/overlay/config';
-    const base = getBaseUrl(req);
     const secure = req.secure || req.headers['x-forwarded-proto'] === 'https';
     try { res.clearCookie('overlay.sid', { path: '/', sameSite: 'lax', secure }); } catch {}
     req.session.destroy(() => {
-      res.redirect(`${base}/auth/logged-out?next=${encodeURIComponent(String(next))}`);
+      res.redirect(`/auth/logged-out?next=${encodeURIComponent(String(next))}`);
     });
   });
 
   // Simple logged-out page to avoid immediately re-authing via Twitch SSO
   app.get('/auth/logged-out', (req, res) => {
-    const base = getBaseUrl(req);
     const next = req.query.next || '/overlay/config';
-    const html = renderLoggedOutPage({ base, next });
+    const html = renderLoggedOutPage({ base: '', next });
     res.setHeader('Content-Type', 'text/html; charset=utf-8');
     res.setHeader('Cache-Control', 'no-store');
     res.send(html);
@@ -134,8 +137,7 @@ export function mountAuthRoutes(app, opts = {}) {
 
   // Convenience alias
   app.get('/oauth/callback', (req, res) => {
-    const base = getBaseUrl(req);
     const qs = req.url.includes('?') ? req.url.slice(req.url.indexOf('?')) : '';
-    res.redirect(`${base}/auth/callback${qs}`);
+    res.redirect(`/auth/callback${qs}`);
   });
 }

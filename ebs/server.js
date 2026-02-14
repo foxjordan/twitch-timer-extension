@@ -62,7 +62,6 @@ import {
 import { fetchActiveSubscriberCount } from "./twitch_api.js";
 import { mountSoundRoutes } from "./routes_sounds.js";
 import { loadSoundAlerts } from "./sounds_store.js";
-import { getBaseUrl } from "./base_url.js";
 
 const app = express();
 // honor X-Forwarded-* so req.protocol resolves to https behind Fly
@@ -769,7 +768,7 @@ mountSoundRoutes(app, {
 function requireAdmin(req, res, next) {
   if (req?.session?.isAdmin) return next();
   const nextUrl = encodeURIComponent(req.originalUrl || "/overlay/config");
-  return res.redirect(`${getBaseUrl(req)}/auth/login?next=${nextUrl}`);
+  return res.redirect(`/auth/login?next=${nextUrl}`);
 }
 
 mountOverlayPageRoutes(app, {

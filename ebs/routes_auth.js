@@ -6,27 +6,74 @@ import { logger } from './logger.js';
 import { storeUserAccessToken } from './twitch_tokens.js';
 import { getBaseUrl } from './base_url.js';
 
-function buildRedirectURI(req) {
-  // Prefer the origin we captured when the login flow started
-  const saved = req.session?.oauthOrigin;
-  const base = saved || getBaseUrl(req);
-  return `${base}/auth/callback`;
+/**
+ * Build a signed OAuth state value that encodes the origin so the callback
+ * can reconstruct the exact redirect_uri even if the in-memory session is
+ * lost (e.g. Fly machine restart between login and callback).
+ *
+ * Format: <nonce>.<base64url(origin)>.<hmac>
+ */
+function buildSignedState(origin, secret) {
+  const nonce = crypto.randomBytes(16).toString('hex');
+  const originB64 = Buffer.from(origin).toString('base64url');
+  const payload = `${nonce}.${originB64}`;
+  const hmac = crypto.createHmac('sha256', secret).update(payload).digest('hex');
+  return `${payload}.${hmac}`;
+}
+
+/**
+ * Verify and decode a signed state value.
+ * Returns { valid: true, origin } or { valid: false }.
+ */
+function verifySignedState(state, secret) {
+  if (!state || typeof state !== 'string') return { valid: false };
+  const parts = state.split('.');
+  if (parts.length !== 3) return { valid: false };
+  const [nonce, originB64, hmac] = parts;
+  const payload = `${nonce}.${originB64}`;
+  const expected = crypto.createHmac('sha256', secret).update(payload).digest('hex');
+  if (!crypto.timingSafeEqual(Buffer.from(hmac, 'hex'), Buffer.from(expected, 'hex'))) {
+    return { valid: false };
+  }
+  try {
+    const origin = Buffer.from(originB64, 'base64url').toString();
+    return { valid: true, origin };
+  } catch {
+    return { valid: false };
+  }
 }
 
 export function mountAuthRoutes(app, opts = {}) {
+  // Use a stable secret for signing OAuth state values.
+  // TWITCH_CLIENT_SECRET is always set and stable across restarts.
+  const stateSigningKey = process.env.SESSION_SECRET || process.env.TWITCH_CLIENT_SECRET || 'fallback-oauth-state-key';
+
   app.get('/auth/login', (req, res) => {
     const clientId = process.env.TWITCH_CLIENT_ID;
     if (!clientId) return res.status(500).send('Missing TWITCH_CLIENT_ID');
-    const state = crypto.randomBytes(16).toString('hex');
+
+    const origin = getBaseUrl(req);
+    const state = buildSignedState(origin, stateSigningKey);
+    const redirectUri = `${origin}/auth/callback`;
+
+    // Also store in session as a fallback (if session survives, great)
     req.session.oauthState = state;
-    // Capture the origin the user is on so the callback redirect_uri matches
-    req.session.oauthOrigin = getBaseUrl(req);
+    req.session.oauthOrigin = origin;
+
+    logger.info('oauth_login_start', {
+      resolvedBase: origin,
+      redirectUri,
+      host: req.get('host'),
+      origin: req.get('origin'),
+      referer: req.get('referer'),
+      xForwardedHost: req.get('x-forwarded-host'),
+      protocol: req.protocol,
+    });
+
     const params = new URLSearchParams({
       client_id: clientId,
-      redirect_uri: buildRedirectURI(req),
+      redirect_uri: redirectUri,
       response_type: 'code',
-      // Scopes required to subscribe to EventSub topics for the logged-in broadcaster.
-      // Include follows (moderator scope), subs, bits, charity, hype train.
       scope: 'channel:read:subscriptions bits:read channel:read:charity channel:read:hype_train moderator:read:followers',
       force_verify: 'true',
       state
@@ -38,10 +85,38 @@ export function mountAuthRoutes(app, opts = {}) {
   app.get('/auth/callback', async (req, res) => {
     try {
       const { code, state } = req.query;
-      if (!code || !state || state !== req.session.oauthState) {
+
+      // Verify the signed state (works even if session was lost)
+      const verified = verifySignedState(state, stateSigningKey);
+      const sessionStateMatch = state && state === req.session?.oauthState;
+
+      logger.info('oauth_callback_start', {
+        hasCode: !!code,
+        hasState: !!state,
+        signedStateValid: verified.valid,
+        sessionStateMatch,
+        hasSession: !!req.session,
+        sessionKeys: req.session ? Object.keys(req.session) : [],
+        host: req.get('host'),
+        cookie: req.get('cookie') ? 'present' : 'missing',
+        extractedOrigin: verified.origin,
+      });
+
+      if (!code || !state || !verified.valid) {
+        logger.warn('oauth_state_invalid', {
+          hasCode: !!code,
+          hasState: !!state,
+          signedValid: verified.valid,
+        });
         return res.status(400).send('Invalid OAuth state');
       }
+
+      // Clean up session state if it survived
       delete req.session.oauthState;
+
+      // Use the origin from the signed state for the redirect_uri
+      const callbackOrigin = verified.origin;
+      const redirectUri = `${callbackOrigin}/auth/callback`;
 
       const tokenRes = await fetch('https://id.twitch.tv/oauth2/token', {
         method: 'POST',
@@ -51,13 +126,16 @@ export function mountAuthRoutes(app, opts = {}) {
           client_secret: process.env.TWITCH_CLIENT_SECRET,
           code: String(code),
           grant_type: 'authorization_code',
-          redirect_uri: buildRedirectURI(req)
+          redirect_uri: redirectUri
         })
       });
       const tokenJson = await tokenRes.json();
       const accessToken = tokenJson.access_token;
       const expiresIn = tokenJson.expires_in;
-      if (!accessToken) return res.status(400).send('OAuth token exchange failed');
+      if (!accessToken) {
+        logger.error('oauth_token_exchange_failed', { error: tokenJson.error, message: tokenJson.message });
+        return res.status(400).send('OAuth token exchange failed');
+      }
 
       const userRes = await fetch('https://api.twitch.tv/helix/users', {
         headers: {

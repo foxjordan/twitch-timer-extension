@@ -87,7 +87,7 @@ app.use(
   session({
     name: "overlay.sid",
     secret:
-      process.env.SESSION_SECRET || crypto.randomBytes(16).toString("hex"),
+      process.env.SESSION_SECRET || process.env.TWITCH_CLIENT_SECRET || crypto.randomBytes(16).toString("hex"),
     resave: false,
     saveUninitialized: false,
     cookie: { httpOnly: true, sameSite: "lax", secure: "auto" },

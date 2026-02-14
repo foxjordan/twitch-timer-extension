@@ -11,6 +11,7 @@ export default defineConfig({
       input: {
         panel: resolve(__dirname, 'index.html'),
         config: resolve(__dirname, 'config.html'),
+        mobile: resolve(__dirname, 'mobile.html'),
       },
     },
   },

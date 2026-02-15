@@ -39,6 +39,7 @@ import {
   rotateUserKey,
   keyIsValid,
   getUserIdForKey,
+  getAllUserIds,
 } from "./keys.js";
 import { mountTimerRoutes } from "./routes_timer.js";
 import { mountAuthRoutes } from "./routes_auth.js";
@@ -56,12 +57,14 @@ import {
 import {
   loadGoals,
   getPublicGoals,
+  listGoals,
   applyAutoContribution as applyGoalAutoContribution,
   syncSubGoals,
 } from "./goals_store.js";
 import { fetchActiveSubscriberCount } from "./twitch_api.js";
 import { mountSoundRoutes } from "./routes_sounds.js";
-import { loadSoundAlerts } from "./sounds_store.js";
+import { mountAdminRoutes } from "./routes_admin.js";
+import { loadSoundAlerts, listSounds, getSoundSettings } from "./sounds_store.js";
 
 const app = express();
 // honor X-Forwarded-* so req.protocol resolves to https behind Fly
@@ -780,7 +783,22 @@ mountOverlayPageRoutes(app, {
 
 mountHomePageRoutes(app);
 
-
+mountAdminRoutes(app, {
+  getAllActiveBroadcasters,
+  getBroadcasterConnection,
+  sseClients,
+  getAllUserIds,
+  getUserSettings,
+  getRemainingSeconds,
+  getTotals,
+  capReached,
+  listSounds,
+  getSoundSettings,
+  listGoals,
+  getSavedStyle,
+  DEFAULT_STYLE,
+  observability,
+});
 
 // ---- EventSub integration ----
 function secondsFromEvent(notification, uid = "default") {

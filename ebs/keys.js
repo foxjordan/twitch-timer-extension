@@ -46,6 +46,10 @@ export function keyIsValid(globalKey, candidate) {
   return false;
 }
 
+export function getAllUserIds() {
+  return Array.from(overlayKeys.keys());
+}
+
 export function getUserIdForKey(candidate) {
   if (!candidate) return null;
   const key = String(candidate);

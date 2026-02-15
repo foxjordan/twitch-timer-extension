@@ -1,4 +1,5 @@
 import { renderAdminDashboardPage } from "./views/adminDashboardPage.js";
+import { getBan, banUser, unbanUser } from "./bans.js";
 
 const SUPER_ADMIN_IDS = (process.env.SUPER_ADMIN_IDS || "")
   .split(",")
@@ -27,6 +28,7 @@ export function mountAdminRoutes(app, ctx) {
     getSavedStyle,
     DEFAULT_STYLE,
     observability,
+    onUserBanned,
   } = ctx;
 
   app.get("/admin", (req, res) => {
@@ -62,6 +64,7 @@ export function mountAdminRoutes(app, ctx) {
       const remaining = getRemainingSeconds(uid);
       const cap = capReached(uid);
       const settings = getUserSettings(uid);
+      const ban = getBan(uid);
 
       // Sounds
       let soundCount = 0;
@@ -104,8 +107,13 @@ export function mountAdminRoutes(app, ctx) {
         goalCount,
         hasCustomStyle,
         defaultInitialSeconds: settings.defaultInitialSeconds || null,
+        banned: !!ban,
+        bannedAt: ban?.bannedAt || null,
+        banReason: ban?.reason || null,
       };
     });
+
+    const mem = process.memoryUsage();
 
     res.json({
       totalRegistered: registeredIds.length,
@@ -115,7 +123,60 @@ export function mountAdminRoutes(app, ctx) {
       }).length,
       activeSseClients: sseClients.size,
       totalSseServed: observability.totalSseClientsServed || 0,
+      server: {
+        uptimeSeconds: Math.floor(process.uptime()),
+        memoryMB: Math.round(mem.rss / 1024 / 1024),
+        heapUsedMB: Math.round(mem.heapUsed / 1024 / 1024),
+        lastEventSubEvent: observability.lastEventSubEventAt,
+        lastEventSubType: observability.lastEventSubType,
+        lastEventSubKeepalive: observability.lastEventSubKeepaliveAt,
+        lastEventSubConnected: observability.lastEventSubConnectedAt,
+        lastEventSubError: observability.lastEventSubErrorAt,
+        lastEventSubErrorMessage: observability.lastEventSubErrorMessage,
+        totalEventSubReconnects: observability.totalEventSubReconnects,
+        lastTimerMutation: observability.lastTimerMutationAt,
+        lastBroadcastError: observability.lastBroadcastErrorAt,
+      },
       users,
     });
+  });
+
+  // Ban a user
+  app.post("/api/admin/ban", (req, res) => {
+    if (!req.session?.isAdmin || !isSuperAdmin(req)) {
+      return res.status(403).json({ error: "Access denied" });
+    }
+    const { userId, reason } = req.body || {};
+    if (!userId) return res.status(400).json({ error: "userId required" });
+
+    const uid = String(userId);
+
+    // Don't allow banning yourself
+    if (SUPER_ADMIN_IDS.includes(uid)) {
+      return res.status(400).json({ error: "Cannot ban a super admin" });
+    }
+
+    banUser(uid, reason || "");
+
+    // Disconnect their EventSub and close SSE connections
+    if (typeof onUserBanned === "function") {
+      try { onUserBanned(uid); } catch {}
+    }
+
+    res.json({ ok: true, userId: uid, banned: true });
+  });
+
+  // Unban a user
+  app.post("/api/admin/unban", (req, res) => {
+    if (!req.session?.isAdmin || !isSuperAdmin(req)) {
+      return res.status(403).json({ error: "Access denied" });
+    }
+    const { userId } = req.body || {};
+    if (!userId) return res.status(400).json({ error: "userId required" });
+
+    const uid = String(userId);
+    const existed = unbanUser(uid);
+
+    res.json({ ok: true, userId: uid, wasBanned: existed });
   });
 }

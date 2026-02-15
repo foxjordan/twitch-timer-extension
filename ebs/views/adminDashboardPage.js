@@ -38,11 +38,22 @@ export function renderAdminDashboardPage(options = {}) {
       .badge-offline { background: #94a3b833; color: #94a3b8; }
       .badge-paused { background: #f59e0b33; color: #f59e0b; }
       .badge-capped { background: #ef444433; color: #ef4444; }
+      .badge-banned { background: #dc262633; color: #dc2626; }
+      .btn-ban { background: #dc2626; color: #fff; border: none; padding: 4px 10px; border-radius: 6px; font-size: 12px; cursor: pointer; font-weight: 600; }
+      .btn-ban:hover { background: #b91c1c; }
+      .btn-unban { background: #16a34a; color: #fff; border: none; padding: 4px 10px; border-radius: 6px; font-size: 12px; cursor: pointer; font-weight: 600; }
+      .btn-unban:hover { background: #15803d; }
+      .ban-reason { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
       .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; opacity: 0.7; }
       .empty-state { text-align: center; padding: 40px 20px; color: var(--text-muted); }
       .feature-pills { display: flex; gap: 4px; flex-wrap: wrap; }
       .pill { display: inline-block; padding: 2px 7px; border-radius: 6px; font-size: 11px; background: var(--surface-muted); color: var(--text-muted); }
       .pill-active { background: #9146ff33; color: #bf94ff; }
+      .server-health-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; font-size: 13px; }
+      .health-item { padding: 8px 10px; background: var(--surface-muted); border-radius: 8px; }
+      .health-label { color: var(--text-muted); font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 2px; }
+      .health-value { font-weight: 600; }
+      .health-error { color: #ef4444; }
       ${THEME_TOGGLE_STYLES}
       ${GLOBAL_HEADER_STYLES}
     </style>
@@ -75,6 +86,13 @@ export function renderAdminDashboardPage(options = {}) {
         <div class="stat-card">
           <div class="stat-value" id="statTotalSse">--</div>
           <div class="stat-label">Total SSE Served</div>
+        </div>
+      </div>
+
+      <div class="table-card" style="margin-bottom: 18px;">
+        <h2>Server Health</h2>
+        <div id="serverHealth" class="server-health-grid">
+          <div class="empty-state">Loading...</div>
         </div>
       </div>
 
@@ -114,11 +132,64 @@ export function renderAdminDashboardPage(options = {}) {
           return div.innerHTML;
         }
 
+        function formatUptime(seconds) {
+          if (!seconds) return '--';
+          var d = Math.floor(seconds / 86400);
+          var h = Math.floor((seconds % 86400) / 3600);
+          var m = Math.floor((seconds % 3600) / 60);
+          var parts = [];
+          if (d > 0) parts.push(d + 'd');
+          if (h > 0) parts.push(h + 'h');
+          parts.push(m + 'm');
+          return parts.join(' ');
+        }
+
+        function renderServerHealth(server) {
+          var container = document.getElementById('serverHealth');
+          if (!server) { container.textContent = '--'; return; }
+          container.textContent = '';
+
+          var items = [
+            ['Uptime', formatUptime(server.uptimeSeconds)],
+            ['Memory (RSS)', server.memoryMB + ' MB'],
+            ['Heap Used', server.heapUsedMB + ' MB'],
+            ['Last EventSub Event', (server.lastEventSubType || '--') + ' ' + timeAgo(server.lastEventSubEvent)],
+            ['Last Keepalive', timeAgo(server.lastEventSubKeepalive)],
+            ['EventSub Connected', timeAgo(server.lastEventSubConnected)],
+            ['Reconnects', String(server.totalEventSubReconnects || 0)],
+            ['Last Timer Mutation', timeAgo(server.lastTimerMutation)],
+          ];
+
+          if (server.lastEventSubError) {
+            items.push(['Last Error', timeAgo(server.lastEventSubError) + ' — ' + (server.lastEventSubErrorMessage || '')]);
+          }
+          if (server.lastBroadcastError) {
+            items.push(['Last Broadcast Error', timeAgo(server.lastBroadcastError)]);
+          }
+
+          items.forEach(function(pair) {
+            var div = document.createElement('div');
+            div.className = 'health-item';
+            var label = document.createElement('div');
+            label.className = 'health-label';
+            label.textContent = pair[0];
+            var value = document.createElement('div');
+            value.className = 'health-value';
+            if (pair[0].indexOf('Error') !== -1) value.className += ' health-error';
+            value.textContent = pair[1];
+            div.appendChild(label);
+            div.appendChild(value);
+            container.appendChild(div);
+          });
+        }
+
         function renderTable(data) {
           document.getElementById('statRegistered').textContent = data.totalRegistered || 0;
           document.getElementById('statConnected').textContent = data.totalConnected || 0;
           document.getElementById('statOverlays').textContent = data.activeSseClients || 0;
           document.getElementById('statTotalSse').textContent = data.totalSseServed || 0;
+
+          renderServerHealth(data.server);
 
           var users = data.users || [];
           if (users.length === 0) {
@@ -135,7 +206,7 @@ export function renderAdminDashboardPage(options = {}) {
           var table = document.createElement('table');
           var thead = document.createElement('thead');
           var headerRow = document.createElement('tr');
-          ['Broadcaster', 'Status', 'Timer', 'Time Added', 'Features', 'Last Event'].forEach(function(label) {
+          ['Broadcaster', 'Status', 'Timer', 'Time Added', 'Features', 'Last Event', 'Actions'].forEach(function(label) {
             var th = document.createElement('th');
             th.textContent = label;
             headerRow.appendChild(th);
@@ -172,11 +243,23 @@ export function renderAdminDashboardPage(options = {}) {
             else addBadge('Offline', 'badge-offline');
             if (u.timerPaused) addBadge('Paused', 'badge-paused');
             if (u.capReached) addBadge('Capped', 'badge-capped');
+            if (u.banned) addBadge('Banned', 'badge-banned');
             tr.appendChild(tdStatus);
 
             // Timer
             var tdTimer = document.createElement('td');
-            tdTimer.textContent = u.remaining != null ? formatSeconds(u.remaining) : '--';
+            var timerMain = document.createElement('div');
+            timerMain.textContent = u.remaining != null ? formatSeconds(u.remaining) : '--';
+            tdTimer.appendChild(timerMain);
+            if (u.initialSeconds || u.maxTotalSeconds) {
+              var timerDetail = document.createElement('div');
+              timerDetail.className = 'mono';
+              var parts = [];
+              if (u.initialSeconds) parts.push('init: ' + formatSeconds(u.initialSeconds));
+              if (u.maxTotalSeconds) parts.push('max: ' + formatSeconds(u.maxTotalSeconds));
+              timerDetail.textContent = parts.join(' / ');
+              tdTimer.appendChild(timerDetail);
+            }
             tr.appendChild(tdTimer);
 
             // Time Added
@@ -205,6 +288,29 @@ export function renderAdminDashboardPage(options = {}) {
             tdEvent.textContent = timeAgo(u.lastEventAt);
             tr.appendChild(tdEvent);
 
+            // Actions
+            var tdActions = document.createElement('td');
+            if (u.banned) {
+              var unbanBtn = document.createElement('button');
+              unbanBtn.className = 'btn-unban';
+              unbanBtn.textContent = 'Unban';
+              unbanBtn.addEventListener('click', function() { doUnban(u.userId); });
+              tdActions.appendChild(unbanBtn);
+              if (u.banReason) {
+                var reasonDiv = document.createElement('div');
+                reasonDiv.className = 'ban-reason';
+                reasonDiv.textContent = u.banReason;
+                tdActions.appendChild(reasonDiv);
+              }
+            } else {
+              var banBtn = document.createElement('button');
+              banBtn.className = 'btn-ban';
+              banBtn.textContent = 'Ban';
+              banBtn.addEventListener('click', function() { doBan(u.userId, u.displayName || u.login); });
+              tdActions.appendChild(banBtn);
+            }
+            tr.appendChild(tdActions);
+
             tbody.appendChild(tr);
           });
           table.appendChild(tbody);
@@ -230,6 +336,39 @@ export function renderAdminDashboardPage(options = {}) {
             .catch(function() {
               if (lastRefreshEl) lastRefreshEl.textContent = 'Refresh failed';
             });
+        }
+
+        function doBan(userId, displayName) {
+          var reason = prompt('Ban ' + (displayName || userId) + '? Enter an optional reason:');
+          if (reason === null) return; // cancelled
+          fetch('/api/admin/ban', {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ userId: userId, reason: reason })
+          })
+          .then(function(r) { return r.json(); })
+          .then(function(data) {
+            if (data.error) { alert('Error: ' + data.error); return; }
+            refresh();
+          })
+          .catch(function() { alert('Ban request failed'); });
+        }
+
+        function doUnban(userId) {
+          if (!confirm('Unban user ' + userId + '?')) return;
+          fetch('/api/admin/unban', {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ userId: userId })
+          })
+          .then(function(r) { return r.json(); })
+          .then(function(data) {
+            if (data.error) { alert('Error: ' + data.error); return; }
+            refresh();
+          })
+          .catch(function() { alert('Unban request failed'); });
         }
 
         refresh();

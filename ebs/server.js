@@ -65,6 +65,7 @@ import { fetchActiveSubscriberCount } from "./twitch_api.js";
 import { mountSoundRoutes } from "./routes_sounds.js";
 import { mountAdminRoutes } from "./routes_admin.js";
 import { loadSoundAlerts, listSounds, getSoundSettings } from "./sounds_store.js";
+import { loadBans, isBanned } from "./bans.js";
 
 const app = express();
 // honor X-Forwarded-* so req.protocol resolves to https behind Fly
@@ -96,6 +97,17 @@ app.use(
     cookie: { httpOnly: true, sameSite: "lax", secure: "auto" },
   })
 );
+
+// Block banned users from session-based routes
+app.use((req, res, next) => {
+  const uid = req.session?.twitchUser?.id;
+  if (uid && isBanned(String(uid))) {
+    // Allow logout so banned users can still sign out
+    if (req.path === "/auth/logout") return next();
+    return res.status(403).json({ error: "Your account has been suspended" });
+  }
+  next();
+});
 
 const assetCandidates = [
   process.env.ASSETS_DIR,
@@ -193,6 +205,7 @@ loadRules().catch(() => {});
 loadTimerState().catch(() => {});
 loadGoals().catch(() => {});
 loadSoundAlerts().catch(() => {});
+loadBans().catch(() => {});
 
 // ===== Per-user settings (persisted) =====
 const DATA_DIR = process.env.DATA_DIR || process.cwd();
@@ -582,6 +595,12 @@ mountAuthRoutes(app, {
       const userId = String(user.id);
       const userLogin = String(user.login || '').toLowerCase();
 
+      // Don't start EventSub for banned users
+      if (isBanned(userId)) {
+        logger.info("user_login_blocked_banned", { userId, userLogin });
+        return;
+      }
+
       logger.info("user_login", { userId, userLogin });
 
       // Add or update this user's connection info
@@ -798,6 +817,18 @@ mountAdminRoutes(app, {
   getSavedStyle,
   DEFAULT_STYLE,
   observability,
+  onUserBanned: (uid) => {
+    // Disconnect their EventSub WebSocket
+    closeEventSubForUser(uid);
+    // Close any active SSE connections for this user
+    for (const client of Array.from(sseClients)) {
+      if (String(client.timerUserId) === String(uid)) {
+        try { client.res.end(); } catch {}
+        sseClients.delete(client);
+      }
+    }
+    logger.info("user_banned_disconnected", { userId: uid });
+  },
 });
 
 // ---- EventSub integration ----

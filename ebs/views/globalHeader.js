@@ -74,11 +74,13 @@ export function renderGlobalHeader(options = {}) {
 
   const homeHref = `${base}/`;
   const configHref = `${base}/overlay/config`;
+  const soundsHref = `${base}/sounds/config`;
   const utilitiesHref = `${base}/utilities`;
 
   const navLinks = [
     { href: homeHref, label: "Home", key: "home" },
     { href: configHref, label: "Configurator", key: "config" },
+    { href: soundsHref, label: "Sound Alerts", key: "sounds" },
     ...(showUtilitiesLink
       ? [{ href: utilitiesHref, label: "Utilities (WIP)", key: "utilities" }]
       : []),

@@ -3,6 +3,7 @@ import { renderOverlayConfigPage } from "./views/overlayConfigPage.js";
 import { renderGoalsOverlayPage } from "./views/goalsOverlayPage.js";
 import { renderWheelOverlayPage } from "./views/wheelOverlayPage.js";
 import { renderSoundAlertOverlayPage } from "./views/soundAlertOverlayPage.js";
+import { renderSoundConfigPage } from "./views/soundConfigPage.js";
 
 export function mountOverlayPageRoutes(app, deps) {
   const { requireOverlayAuth, requireAdmin, getUserSettings, getRules } =
@@ -50,6 +51,26 @@ export function mountOverlayPageRoutes(app, deps) {
     res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
     res.setHeader("Pragma", "no-cache");
     res.setHeader("Expires", "0");
+    res.send(html);
+  });
+
+  app.get("/sounds/config", requireAdmin, (req, res) => {
+    const adminName = String(
+      req.session?.twitchUser?.display_name ||
+        req.session?.twitchUser?.login ||
+        "Admin"
+    );
+    const userKey = String(
+      req.session?.userOverlayKey || req.session?.twitchUser?.id || ""
+    );
+
+    const html = renderSoundConfigPage({
+      base: "",
+      adminName,
+      userKey,
+    });
+
+    res.setHeader("Content-Type", "text/html; charset=utf-8");
     res.send(html);
   });
 

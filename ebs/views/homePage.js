@@ -98,9 +98,17 @@ export function renderHomePage(options = {}) {
       /* Status + footer */
       .status { margin-top: 16px; padding: 16px; border-radius: 12px; background: var(--surface-muted); border: 1px solid var(--surface-border); color: var(--text-color); }
       .status strong { color: var(--accent-color); }
-      .global-footer { margin-top: 40px; display: flex; flex-wrap: wrap; gap: 16px; font-size: 14px; color: var(--text-muted); }
-      .global-footer a { color: var(--text-muted); text-decoration: none; font-weight: 500; }
+      .global-footer { margin-top: 40px; display: flex; flex-wrap: wrap; gap: 16px; font-size: 14px; color: var(--text-muted); align-items: center; }
+      .global-footer a { color: var(--text-muted); text-decoration: none; font-weight: 500; display: inline-flex; align-items: center; gap: 5px; }
       .global-footer a:hover { color: var(--accent-color); }
+      .global-footer .discord-icon { width: 16px; height: 16px; fill: currentColor; flex-shrink: 0; }
+
+      /* Community banner */
+      .community-banner { margin-bottom: 48px; padding: 28px 32px; border-radius: 14px; background: var(--surface-color); border: 1px solid var(--surface-border); box-shadow: 0 4px 20px var(--goal-card-shadow); display: flex; align-items: center; gap: 24px; flex-wrap: wrap; }
+      .community-banner .discord-icon-lg { width: 40px; height: 40px; fill: #5865F2; flex-shrink: 0; }
+      .community-banner .community-text { flex: 1; min-width: 200px; }
+      .community-banner h3 { margin: 0 0 4px; font-size: 17px; font-weight: 700; }
+      .community-banner p { margin: 0; font-size: 14px; color: var(--text-muted); line-height: 1.5; }
 
       /* Beta banner */
       .beta-badge { display: inline-block; padding: 2px 8px; border-radius: 999px; background: linear-gradient(135deg, #F97316, #EA580C); color: #fff; font-size: 10px; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase; vertical-align: middle; margin-left: 8px; }
@@ -257,6 +265,16 @@ export function renderHomePage(options = {}) {
         </div>
       </section>
 
+      <!-- Community -->
+      <div class="community-banner">
+        <svg class="discord-icon-lg" viewBox="0 0 127.14 96.36" xmlns="http://www.w3.org/2000/svg"><path d="M107.7 8.07A105.15 105.15 0 0 0 81.47 0a72.06 72.06 0 0 0-3.36 6.83 97.68 97.68 0 0 0-29.11 0A72.37 72.37 0 0 0 45.64 0 105.89 105.89 0 0 0 19.39 8.09C2.79 32.65-1.71 56.6.54 80.21a105.73 105.73 0 0 0 32.17 16.15 77.7 77.7 0 0 0 6.89-11.11 68.42 68.42 0 0 1-10.85-5.18c.91-.66 1.8-1.34 2.66-2.03a75.57 75.57 0 0 0 64.32 0c.87.71 1.76 1.39 2.66 2.03a68.68 68.68 0 0 1-10.87 5.19 77 77 0 0 0 6.89 11.1 105.25 105.25 0 0 0 32.19-16.14c2.64-27.38-4.51-51.11-18.9-72.15ZM42.45 65.69C36.18 65.69 31 60 31 53.05s5-12.68 11.45-12.68S54 46.09 53.89 53.05 48.84 65.69 42.45 65.69Zm42.24 0C78.41 65.69 73.25 60 73.25 53.05s5-12.68 11.44-12.68S96.23 46.09 96.12 53.05 91.08 65.69 84.69 65.69Z"/></svg>
+        <div class="community-text">
+          <h3>Join the community</h3>
+          <p>Got questions, feedback, or feature requests? Come hang out on Discord.</p>
+        </div>
+        <a class="cta secondary" href="https://discord.gg/nwu4w5cUVd" target="_blank" rel="noopener noreferrer">Join Discord</a>
+      </div>
+
       <!-- Status -->
       <div class="status">
         ${isAdmin
@@ -268,6 +286,7 @@ export function renderHomePage(options = {}) {
       <footer class="global-footer">
         <a href="${privacyUrl}">Privacy Policy</a>
         <a href="${gdprUrl}">GDPR / UK GDPR Disclosure</a>
+        <a href="https://discord.gg/nwu4w5cUVd" target="_blank" rel="noopener noreferrer"><svg class="discord-icon" viewBox="0 0 127.14 96.36" xmlns="http://www.w3.org/2000/svg"><path d="M107.7 8.07A105.15 105.15 0 0 0 81.47 0a72.06 72.06 0 0 0-3.36 6.83 97.68 97.68 0 0 0-29.11 0A72.37 72.37 0 0 0 45.64 0 105.89 105.89 0 0 0 19.39 8.09C2.79 32.65-1.71 56.6.54 80.21a105.73 105.73 0 0 0 32.17 16.15 77.7 77.7 0 0 0 6.89-11.11 68.42 68.42 0 0 1-10.85-5.18c.91-.66 1.8-1.34 2.66-2.03a75.57 75.57 0 0 0 64.32 0c.87.71 1.76 1.39 2.66 2.03a68.68 68.68 0 0 1-10.87 5.19 77 77 0 0 0 6.89 11.1 105.25 105.25 0 0 0 32.19-16.14c2.64-27.38-4.51-51.11-18.9-72.15ZM42.45 65.69C36.18 65.69 31 60 31 53.05s5-12.68 11.45-12.68S54 46.09 53.89 53.05 48.84 65.69 42.45 65.69Zm42.24 0C78.41 65.69 73.25 60 73.25 53.05s5-12.68 11.44-12.68S96.23 46.09 96.12 53.05 91.08 65.69 84.69 65.69Z"/></svg> Discord</a>
       </footer>
 
     </main>

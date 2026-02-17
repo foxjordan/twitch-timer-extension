@@ -1,8 +1,7 @@
 import { useEffect, useState, useRef, useCallback } from "react";
 import ReactDOM from "react-dom/client";
 
-const EBS_BASE =
-  import.meta.env.VITE_EBS_BASE || "https://https://livestreamerhub.com";
+const EBS_BASE = import.meta.env.VITE_EBS_BASE || "https://livestreamerhub.com";
 
 const TIER_LABELS = {
   sound_10: "10 Bits",
@@ -12,6 +11,7 @@ const TIER_LABELS = {
   sound_100: "100 Bits",
   sound_150: "150 Bits",
   sound_200: "200 Bits",
+  sound_250: "250 Bits",
   sound_300: "300 Bits",
   sound_500: "500 Bits",
   sound_1000: "1000 Bits",

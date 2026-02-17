@@ -21,7 +21,7 @@ export function renderPrivacyPage(options = {}) {
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Privacy Policy – Twitch Timer Overlay</title>
+    <title>Privacy Policy – Live Streamer Hub</title>
     <script id="Cookiebot" src="https://consent.cookiebot.com/uc.js" data-cbid="6770198d-2c1f-46f8-af4b-694edc70484c" type="text/javascript"></script>
     ${renderThemeBootstrapScript()}
     <style>
@@ -47,7 +47,7 @@ export function renderPrivacyPage(options = {}) {
     <main>
       <h1>Privacy Policy</h1>
       <div class="meta">
-        <span>Service: Twitch Timer Overlay</span>
+        <span>Service: Live Streamer Hub and Twitch Timer Overlay</span>
         <span>Last updated: ${lastUpdated}</span>
       </div>
       <p>We built the Twitch Timer overlay to help creators run charity drives, subathons, and other time-based goals. This Privacy Policy explains how we handle personal information today and describes the disclosures you should expect when we launch upcoming monetization features.</p>

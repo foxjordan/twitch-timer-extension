@@ -1,20 +1,20 @@
-import { useEffect, useRef, useState, useCallback } from 'react';
-import ReactDOM from 'react-dom/client';
+import { useEffect, useRef, useState, useCallback } from "react";
+import ReactDOM from "react-dom/client";
 
-const EBS_BASE =
-  import.meta.env.VITE_EBS_BASE || 'https://livestreamerhub.com';
+const EBS_BASE = import.meta.env.VITE_EBS_BASE || "https://livestreamerhub.com";
 
 const TIER_COSTS = {
-  sound_10: '10',
-  sound_25: '25',
-  sound_50: '50',
-  sound_75: '75',
-  sound_100: '100',
-  sound_150: '150',
-  sound_200: '200',
-  sound_300: '300',
-  sound_500: '500',
-  sound_1000: '1000',
+  sound_10: "10",
+  sound_25: "25",
+  sound_50: "50",
+  sound_75: "75",
+  sound_100: "100",
+  sound_150: "150",
+  sound_200: "200",
+  sound_250: "250",
+  sound_300: "300",
+  sound_500: "500",
+  sound_1000: "1000",
 };
 
 function App() {
@@ -59,10 +59,8 @@ function App() {
 
       // Watch for feature flag changes
       window.Twitch?.ext?.features?.onChanged?.((changed) => {
-        if (changed.includes('isBitsEnabled')) {
-          setBitsEnabled(
-            Boolean(window.Twitch?.ext?.features?.isBitsEnabled)
-          );
+        if (changed.includes("isBitsEnabled")) {
+          setBitsEnabled(Boolean(window.Twitch?.ext?.features?.isBitsEnabled));
         }
       });
 
@@ -76,10 +74,10 @@ function App() {
       const currentAuth = authRef.current;
       if (pending && currentAuth) {
         fetch(`${EBS_BASE}/api/sounds/redeem`, {
-          method: 'POST',
+          method: "POST",
           headers: {
             Authorization: `Bearer ${currentAuth.token}`,
-            'Content-Type': 'application/json',
+            "Content-Type": "application/json",
           },
           body: JSON.stringify({
             receipt: tx.transactionReceipt,
@@ -105,11 +103,11 @@ function App() {
     });
 
     // PubSub listener for sound alerts
-    window.Twitch?.ext?.listen?.('broadcast', (_t, _c, message) => {
+    window.Twitch?.ext?.listen?.("broadcast", (_t, _c, message) => {
       try {
         const data = JSON.parse(message);
-        if (data.type === 'sound_alert') {
-          setLastPlayed(data.payload.soundName || 'Sound');
+        if (data.type === "sound_alert") {
+          setLastPlayed(data.payload.soundName || "Sound");
           setTimeout(() => setLastPlayed(null), 3000);
         }
       } catch {}
@@ -140,10 +138,10 @@ function App() {
     setPreviewing(sound.id);
     fetch(
       `${EBS_BASE}/api/sounds/preview/${sound.id}?channelId=${auth.channelId}`,
-      { headers: { Authorization: `Bearer ${auth.token}` } }
+      { headers: { Authorization: `Bearer ${auth.token}` } },
     )
       .then((r) => {
-        if (!r.ok) throw new Error('fetch failed');
+        if (!r.ok) throw new Error("fetch failed");
         return r.blob();
       })
       .then((blob) => {
@@ -163,8 +161,8 @@ function App() {
 
   function getCost(tier) {
     const product = products.find((p) => p.sku === tier);
-    if (product) return product.cost?.amount || TIER_COSTS[tier] || '?';
-    return TIER_COSTS[tier] || '?';
+    if (product) return product.cost?.amount || TIER_COSTS[tier] || "?";
+    return TIER_COSTS[tier] || "?";
   }
 
   if (loading) {
@@ -174,8 +172,8 @@ function App() {
           style={{
             padding: 14,
             borderRadius: 16,
-            background: '#1f1f23',
-            boxShadow: '0 0 0 1px #303038 inset',
+            background: "#1f1f23",
+            boxShadow: "0 0 0 1px #303038 inset",
           }}
         >
           <div
@@ -183,9 +181,9 @@ function App() {
               width: 100,
               height: 16,
               borderRadius: 6,
-              background: '#2a2a32',
+              background: "#2a2a32",
               marginBottom: 10,
-              animation: 'pulse 1.5s ease-in-out infinite',
+              animation: "pulse 1.5s ease-in-out infinite",
             }}
           />
           {[1, 2, 3].map((i) => (
@@ -194,9 +192,9 @@ function App() {
               style={{
                 height: 36,
                 borderRadius: 8,
-                background: '#2a2a32',
+                background: "#2a2a32",
                 marginBottom: 4,
-                animation: 'pulse 1.5s ease-in-out infinite',
+                animation: "pulse 1.5s ease-in-out infinite",
                 animationDelay: `${i * 0.15}s`,
               }}
             />
@@ -215,9 +213,9 @@ function App() {
           style={{
             padding: 16,
             borderRadius: 16,
-            background: '#1f1f23',
-            boxShadow: '0 0 0 1px #303038 inset',
-            textAlign: 'center',
+            background: "#1f1f23",
+            boxShadow: "0 0 0 1px #303038 inset",
+            textAlign: "center",
           }}
         >
           <div style={{ fontSize: 15, opacity: 0.5 }}>
@@ -234,8 +232,8 @@ function App() {
         style={{
           padding: 14,
           borderRadius: 16,
-          background: '#1f1f23',
-          boxShadow: '0 0 0 1px #303038 inset',
+          background: "#1f1f23",
+          boxShadow: "0 0 0 1px #303038 inset",
         }}
       >
         <div style={{ fontSize: 15, opacity: 0.85, marginBottom: 8 }}>
@@ -245,13 +243,13 @@ function App() {
         {lastPlayed && (
           <div
             style={{
-              padding: '6px 10px',
+              padding: "6px 10px",
               borderRadius: 8,
-              background: '#9146FF22',
-              border: '1px solid #9146FF44',
+              background: "#9146FF22",
+              border: "1px solid #9146FF44",
               fontSize: 12,
               marginBottom: 8,
-              textAlign: 'center',
+              textAlign: "center",
             }}
           >
             Now playing: {lastPlayed}
@@ -268,14 +266,14 @@ function App() {
           <button
             onClick={() => window.Twitch?.ext?.bits?.showBitsBalance?.()}
             style={{
-              background: 'none',
-              border: 'none',
-              color: '#bf94ff',
+              background: "none",
+              border: "none",
+              color: "#bf94ff",
               fontSize: 12,
-              cursor: 'pointer',
+              cursor: "pointer",
               padding: 0,
               marginBottom: 6,
-              textDecoration: 'underline',
+              textDecoration: "underline",
               opacity: 0.8,
             }}
           >
@@ -283,7 +281,7 @@ function App() {
           </button>
         )}
 
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
           {sounds.map((sound) => {
             const onCooldown =
               cooldowns[sound.id] && Date.now() < cooldowns[sound.id];
@@ -293,50 +291,50 @@ function App() {
               <div
                 key={sound.id}
                 style={{
-                  display: 'flex',
-                  alignItems: 'center',
+                  display: "flex",
+                  alignItems: "center",
                   gap: 4,
                 }}
               >
                 <button
                   onClick={(e) => handlePreview(e, sound)}
-                  title={isPreviewPlaying ? 'Stop preview' : 'Preview sound'}
+                  title={isPreviewPlaying ? "Stop preview" : "Preview sound"}
                   style={{
                     flexShrink: 0,
                     width: 32,
                     height: 36,
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    background: isPreviewPlaying ? '#9146FF33' : '#2a2a32',
-                    border: '1px solid #303038',
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    background: isPreviewPlaying ? "#9146FF33" : "#2a2a32",
+                    border: "1px solid #303038",
                     borderRadius: 8,
-                    color: isPreviewPlaying ? '#bf94ff' : '#efeff1',
-                    cursor: 'pointer',
+                    color: isPreviewPlaying ? "#bf94ff" : "#efeff1",
+                    cursor: "pointer",
                     fontSize: 14,
                     padding: 0,
-                    transition: 'background 0.15s',
+                    transition: "background 0.15s",
                   }}
                 >
-                  {isPreviewPlaying ? '\u25A0' : '\u25B6'}
+                  {isPreviewPlaying ? "\u25A0" : "\u25B6"}
                 </button>
                 <button
                   disabled={disabled}
                   onClick={() => handleSoundClick(sound)}
                   style={{
                     flex: 1,
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    alignItems: 'center',
-                    padding: '8px 12px',
-                    background: disabled ? '#16161a' : '#2a2a32',
-                    border: '1px solid #303038',
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                    padding: "8px 12px",
+                    background: disabled ? "#16161a" : "#2a2a32",
+                    border: "1px solid #303038",
                     borderRadius: 8,
-                    color: '#efeff1',
-                    cursor: disabled ? 'not-allowed' : 'pointer',
+                    color: "#efeff1",
+                    cursor: disabled ? "not-allowed" : "pointer",
                     opacity: disabled ? 0.5 : 1,
                     fontSize: 13,
-                    transition: 'background 0.15s',
+                    transition: "background 0.15s",
                   }}
                 >
                   <span style={{ fontWeight: 600 }}>{sound.name}</span>
@@ -344,19 +342,18 @@ function App() {
                     style={{
                       fontSize: 12,
                       opacity: 0.7,
-                      display: 'flex',
-                      alignItems: 'center',
+                      display: "flex",
+                      alignItems: "center",
                       gap: 4,
                     }}
                   >
                     <span
                       style={{
-                        display: 'inline-block',
+                        display: "inline-block",
                         width: 12,
                         height: 12,
-                        borderRadius: '50%',
-                        background:
-                          'linear-gradient(135deg, #9146FF, #772CE8)',
+                        borderRadius: "50%",
+                        background: "linear-gradient(135deg, #9146FF, #772CE8)",
                       }}
                     />
                     {getCost(sound.tier)}
@@ -371,5 +368,5 @@ function App() {
   );
 }
 
-ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+ReactDOM.createRoot(document.getElementById("root")).render(<App />);
 export default App;

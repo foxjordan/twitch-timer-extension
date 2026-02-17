@@ -2,7 +2,7 @@ import { useEffect, useState, useRef, useCallback } from "react";
 import ReactDOM from "react-dom/client";
 
 const EBS_BASE =
-  import.meta.env.VITE_EBS_BASE || "https://twitch-timer-extension.fly.dev";
+  import.meta.env.VITE_EBS_BASE || "https://https://livestreamerhub.com";
 
 const TIER_LABELS = {
   sound_10: "10 Bits",

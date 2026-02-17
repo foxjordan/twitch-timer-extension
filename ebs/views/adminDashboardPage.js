@@ -15,6 +15,7 @@ export function renderAdminDashboardPage(options = {}) {
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Admin Dashboard – Livestreamer Hub</title>
+    <link rel="icon" type="image/png" href="/assets/convertico-coin_24x24.png">
     ${renderThemeBootstrapScript()}
     <style>
       ${THEME_CSS_VARS}

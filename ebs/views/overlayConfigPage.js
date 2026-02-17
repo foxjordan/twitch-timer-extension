@@ -72,6 +72,7 @@ export function renderOverlayConfigPage(options = {}) {
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Timer Overlay Configurator</title>
+    <link rel="icon" type="image/png" href="/assets/convertico-coin_24x24.png">
     <script id="Cookiebot" src="https://consent.cookiebot.com/uc.js" data-cbid="6770198d-2c1f-46f8-af4b-694edc70484c" type="text/javascript"></script>
     ${renderThemeBootstrapScript()}
     <style>

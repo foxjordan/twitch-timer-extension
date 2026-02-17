@@ -22,7 +22,6 @@ export function renderHomePage(options = {}) {
   const showAdminLink = Boolean(options.showAdminLink);
   const headerAdminName = isAdmin ? adminName : "";
   const soundsConfigUrl = `${base}/sounds/config`;
-  const extensionUrl = "https://dashboard.twitch.tv/extensions/l7iuxz2tipmi4ly2g2vg5uzmdqkhx3-0.0.2";
 
   return `<!doctype html>
 <html>
@@ -103,6 +102,11 @@ export function renderHomePage(options = {}) {
       .global-footer a { color: var(--text-muted); text-decoration: none; font-weight: 500; }
       .global-footer a:hover { color: var(--accent-color); }
 
+      /* Beta banner */
+      .beta-badge { display: inline-block; padding: 2px 8px; border-radius: 999px; background: linear-gradient(135deg, #F97316, #EA580C); color: #fff; font-size: 10px; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase; vertical-align: middle; margin-left: 8px; }
+      .beta-callout { margin-top: 20px; padding: 14px 16px; border-radius: 10px; background: rgba(249, 115, 22, 0.08); border: 1px solid rgba(249, 115, 22, 0.25); font-size: 14px; line-height: 1.5; color: var(--text-color); }
+      .beta-callout strong { color: #F97316; }
+
       /* Responsive */
       @media (max-width: 840px) {
         .feature-block, .feature-block.reverse { grid-template-columns: 1fr; direction: ltr; gap: 32px; margin-bottom: 56px; }
@@ -178,7 +182,7 @@ export function renderHomePage(options = {}) {
       <!-- Bit Alerts Extension -->
       <div class="feature-block reverse">
         <div class="feature-text">
-          <div class="tag-pill">Twitch Extension</div>
+          <div class="tag-pill">Twitch Extension</div><span class="beta-badge">Beta</span>
           <h2>Live Bit Alerts for your stream</h2>
           <p>A companion Twitch Extension that fires custom sound effects when viewers cheer Bits. Viewers can browse the active sounds right inside their Twitch panel.</p>
           <ul class="feature-bullets">
@@ -188,8 +192,11 @@ export function renderHomePage(options = {}) {
             <li>OBS Browser Source overlay for on-screen alerts</li>
           </ul>
           <div class="feature-ctas">
-            <a class="cta primary" href="${extensionUrl}" target="_blank" rel="noopener noreferrer">Install Bit Alerts Extension</a>
+            <a class="cta primary" href="https://forms.gle/68zBupcoB6XthTheA" target="_blank" rel="noopener noreferrer">Request Beta Access</a>
             <a class="cta secondary" href="${soundsConfigUrl}">Manage Sounds</a>
+          </div>
+          <div class="beta-callout">
+            <strong>Looking for beta testers!</strong> Bit Alerts is currently in testing on Twitch and requires whitelisting. Request access using the button above and we&rsquo;ll get you set up.
           </div>
         </div>
         <div class="feature-screenshots">

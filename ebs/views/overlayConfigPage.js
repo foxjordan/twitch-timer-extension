@@ -13,6 +13,7 @@ export function renderOverlayConfigPage(options = {}) {
     settings,
     rulesSnapshot,
     initialQuery = {},
+    showAdminLink = false,
   } = options;
 
   const safeNum = (val, fallback = 0) => {
@@ -170,6 +171,7 @@ export function renderOverlayConfigPage(options = {}) {
       showFeedback: true,
       showLogout: true,
       showUtilitiesLink: true,
+      showAdminLink,
     })}
     <div class="row">
       <div class="panel controls">

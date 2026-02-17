@@ -14,6 +14,7 @@ export function renderUtilitiesPage(options = {}) {
   );
   const privacyUrl = `${base}/privacy`;
   const gdprUrl = `${base}/gdpr`;
+  const showAdminLink = Boolean(options.showAdminLink);
   const coinHeadsSrc = `${base}/assets/foxCoinHeads.png`;
   const coinTailsSrc = `${base}/assets/foxCoinTails.png`;
 
@@ -89,6 +90,7 @@ export function renderUtilitiesPage(options = {}) {
       active: "utilities",
       includeThemeToggle: true,
       showUtilitiesLink: true,
+      showAdminLink,
       showFeedback: false,
       showLogout: true,
     })}

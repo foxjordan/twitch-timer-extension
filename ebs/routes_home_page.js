@@ -2,6 +2,7 @@ import { renderHomePage } from "./views/homePage.js";
 import { renderPrivacyPage } from "./views/privacyPage.js";
 import { renderGdprPage } from "./views/gdprPage.js";
 import { renderUtilitiesPage } from "./views/utilitiesPage.js";
+import { isSuperAdmin } from "./routes_admin.js";
 
 export function mountHomePageRoutes(app) {
   const contactEmail =
@@ -24,6 +25,7 @@ export function mountHomePageRoutes(app) {
       isAdmin,
       adminName,
       showUtilitiesLink: isAdmin,
+      showAdminLink: isSuperAdmin(req),
     });
 
     res.setHeader("Content-Type", "text/html; charset=utf-8");
@@ -63,6 +65,7 @@ export function mountHomePageRoutes(app) {
       adminName,
       overlayKey,
       wheelOverlayBase,
+      showAdminLink: isSuperAdmin(req),
     });
     res.setHeader("Content-Type", "text/html; charset=utf-8");
     res.setHeader("Cache-Control", "no-store");

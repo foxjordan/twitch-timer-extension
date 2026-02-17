@@ -65,6 +65,7 @@ export function renderAdminDashboardPage(options = {}) {
       adminName,
       active: "admin",
       includeThemeToggle: true,
+      showAdminLink: true,
       showLogout: true,
     })}
     <main>

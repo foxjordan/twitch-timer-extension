@@ -69,6 +69,7 @@ export function renderGlobalHeader(options = {}) {
     showFeedback = false,
     showLogout = false,
     showUtilitiesLink = false,
+    showAdminLink = false,
     feedbackUrl = "https://docs.google.com/forms/d/e/1FAIpQLSdanikaYMRTjwm9TS5HQ4zMMc8tiDRbz9dqyrJ00Zl518hxbw/viewform?usp=dialog",
   } = options;
 
@@ -76,6 +77,7 @@ export function renderGlobalHeader(options = {}) {
   const configHref = `${base}/overlay/config`;
   const soundsHref = `${base}/sounds/config`;
   const utilitiesHref = `${base}/utilities`;
+  const adminHref = `${base}/admin`;
 
   const navLinks = [
     { href: homeHref, label: "Home", key: "home" },
@@ -83,6 +85,9 @@ export function renderGlobalHeader(options = {}) {
     { href: soundsHref, label: "Sound Alerts", key: "sounds" },
     ...(showUtilitiesLink
       ? [{ href: utilitiesHref, label: "Utilities (WIP)", key: "utilities" }]
+      : []),
+    ...(showAdminLink
+      ? [{ href: adminHref, label: "Admin", key: "admin" }]
       : []),
   ]
     .map(

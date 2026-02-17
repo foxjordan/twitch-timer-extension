@@ -6,7 +6,7 @@ const SUPER_ADMIN_IDS = (process.env.SUPER_ADMIN_IDS || "")
   .map((s) => s.trim())
   .filter(Boolean);
 
-function isSuperAdmin(req) {
+export function isSuperAdmin(req) {
   if (!req.session?.isAdmin || !req.session?.twitchUser?.id) return false;
   if (SUPER_ADMIN_IDS.length === 0) return false;
   return SUPER_ADMIN_IDS.includes(String(req.session.twitchUser.id));

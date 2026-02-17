@@ -19,6 +19,7 @@ export function renderHomePage(options = {}) {
   const privacyUrl = `${base}/privacy`;
   const gdprUrl = `${base}/gdpr`;
   const showUtilitiesLink = Boolean(options.showUtilitiesLink);
+  const showAdminLink = Boolean(options.showAdminLink);
   const headerAdminName = isAdmin ? adminName : "";
 
   return `<!doctype html>
@@ -60,7 +61,7 @@ export function renderHomePage(options = {}) {
     </style>
   </head>
   <body>
-    ${renderGlobalHeader({ base, adminName: headerAdminName, active: "home", includeThemeToggle: true, showUtilitiesLink })}
+    ${renderGlobalHeader({ base, adminName: headerAdminName, active: "home", includeThemeToggle: true, showUtilitiesLink, showAdminLink })}
     <main>
       <h1>Livestreamer Hub</h1>
       <p>This service powers your Twitch charity/subathon style timer. Sign in with Twitch to configure the overlay, tune the rules, and monitor inbound events.</p>

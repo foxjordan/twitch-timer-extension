@@ -4,6 +4,7 @@ import { renderGoalsOverlayPage } from "./views/goalsOverlayPage.js";
 import { renderWheelOverlayPage } from "./views/wheelOverlayPage.js";
 import { renderSoundAlertOverlayPage } from "./views/soundAlertOverlayPage.js";
 import { renderSoundConfigPage } from "./views/soundConfigPage.js";
+import { isSuperAdmin } from "./routes_admin.js";
 
 export function mountOverlayPageRoutes(app, deps) {
   const { requireOverlayAuth, requireAdmin, getUserSettings, getRules } =
@@ -68,6 +69,7 @@ export function mountOverlayPageRoutes(app, deps) {
       base: "",
       adminName,
       userKey,
+      showAdminLink: isSuperAdmin(req),
     });
 
     res.setHeader("Content-Type", "text/html; charset=utf-8");
@@ -93,6 +95,7 @@ export function mountOverlayPageRoutes(app, deps) {
       settings,
       rulesSnapshot,
       initialQuery: req.query || {},
+      showAdminLink: isSuperAdmin(req),
     });
 
     res.setHeader("Content-Type", "text/html; charset=utf-8");

@@ -9,6 +9,7 @@ export function renderSoundConfigPage(options = {}) {
   const base = String(options.base || "");
   const adminName = String(options.adminName || "");
   const userKey = String(options.userKey || "");
+  const showAdminLink = Boolean(options.showAdminLink);
 
   return `<!doctype html>
 <html>
@@ -59,6 +60,7 @@ export function renderSoundConfigPage(options = {}) {
       showFeedback: true,
       showLogout: true,
       showUtilitiesLink: true,
+      showAdminLink,
     })}
     <main>
       <h1>Sound Alerts</h1>

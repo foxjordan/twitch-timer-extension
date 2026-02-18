@@ -4,6 +4,7 @@ import {
   renderThemeBootstrapScript,
 } from "./theme.js";
 import { GLOBAL_HEADER_STYLES, renderGlobalHeader } from "./globalHeader.js";
+import { renderFirebaseScript } from "./firebase.js";
 
 export function renderHomePage(options = {}) {
   const base = String(options.base || "");
@@ -32,6 +33,7 @@ export function renderHomePage(options = {}) {
     <link rel="icon" type="image/png" href="/assets/convertico-coin_24x24.png">
     <script id="Cookiebot" src="https://consent.cookiebot.com/uc.js" data-cbid="6770198d-2c1f-46f8-af4b-694edc70484c" type="text/javascript"></script>
     ${renderThemeBootstrapScript()}
+    ${renderFirebaseScript()}
     <style>
       ${THEME_CSS_VARS}
       * { box-sizing: border-box; }

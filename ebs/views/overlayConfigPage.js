@@ -4,6 +4,7 @@ import {
   renderThemeBootstrapScript,
 } from "./theme.js";
 import { GLOBAL_HEADER_STYLES, renderGlobalHeader } from "./globalHeader.js";
+import { renderFirebaseScript } from "./firebase.js";
 
 export function renderOverlayConfigPage(options = {}) {
   const {
@@ -76,6 +77,7 @@ export function renderOverlayConfigPage(options = {}) {
     <link rel="icon" type="image/png" href="/assets/convertico-coin_24x24.png">
     <script id="Cookiebot" src="https://consent.cookiebot.com/uc.js" data-cbid="6770198d-2c1f-46f8-af4b-694edc70484c" type="text/javascript"></script>
     ${renderThemeBootstrapScript()}
+    ${renderFirebaseScript()}
     <style>
       ${THEME_CSS_VARS}
       body { margin: 0; font-family: Inter, system-ui, Arial, sans-serif; background: var(--page-bg); color: var(--text-color); }

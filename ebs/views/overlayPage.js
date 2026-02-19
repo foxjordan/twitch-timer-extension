@@ -120,15 +120,19 @@ export function renderOverlayPage(options = {}) {
           const el = document.getElementById('clock');
           var txt = '--:--';
           var r = Math.max(0, remaining|0);
-          if (timeFormat === 'hh:mm:ss') {
-            var h = Math.floor(r/3600), m = Math.floor((r%3600)/60), s = r%60;
-            txt = String(h).padStart(2,'0') + ':' + String(m).padStart(2,'0') + ':' + String(s).padStart(2,'0');
+          var d = Math.floor(r/86400), h = Math.floor((r%86400)/3600), m = Math.floor((r%3600)/60), s = r%60;
+          if (timeFormat === 'dd:hh:mm:ss') {
+            txt = String(d).padStart(2,'0') + ':' + String(h).padStart(2,'0') + ':' + String(m).padStart(2,'0') + ':' + String(s).padStart(2,'0');
+          } else if (timeFormat === 'hh:mm:ss') {
+            var totalH = d * 24 + h;
+            txt = String(totalH).padStart(2,'0') + ':' + String(m).padStart(2,'0') + ':' + String(s).padStart(2,'0');
           } else if (timeFormat === 'auto') {
-            var h2 = Math.floor(r/3600), m2 = Math.floor((r%3600)/60), s2 = r%60;
-            if (h2 > 0) {
-              txt = String(h2).padStart(2,'0') + ':' + String(m2).padStart(2,'0') + ':' + String(s2).padStart(2,'0');
+            if (d > 0) {
+              txt = String(d).padStart(2,'0') + ':' + String(h).padStart(2,'0') + ':' + String(m).padStart(2,'0') + ':' + String(s).padStart(2,'0');
+            } else if (h > 0) {
+              txt = String(h).padStart(2,'0') + ':' + String(m).padStart(2,'0') + ':' + String(s).padStart(2,'0');
             } else {
-              txt = String((Math.floor(r/60))).padStart(2,'0') + ':' + String(r%60).padStart(2,'0');
+              txt = String(m).padStart(2,'0') + ':' + String(s).padStart(2,'0');
             }
           } else {
             txt = String((Math.floor(r/60))).padStart(2,'0') + ':' + String(r%60).padStart(2,'0');
@@ -246,7 +250,7 @@ export function renderOverlayPage(options = {}) {
             styleThresholds.dangerColor = s.dangerColor || '#FF4D4D';
             styleThresholds.flashEnabled = (typeof s.flashEnabled === 'boolean') ? s.flashEnabled : true;
             styleThresholds.flashUnderSeconds = Number(s.flashUnderSeconds||0);
-            timeFormat = (s.timeFormat==='hh:mm:ss' || s.timeFormat==='auto') ? s.timeFormat : 'mm:ss';
+            timeFormat = ['hh:mm:ss','dd:hh:mm:ss','auto'].includes(s.timeFormat) ? s.timeFormat : 'mm:ss';
             if (typeof s.addEffectEnabled === 'boolean') {
               addEffectEnabled = s.addEffectEnabled;
             } else {

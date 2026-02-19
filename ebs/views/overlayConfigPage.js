@@ -243,7 +243,8 @@ export function renderOverlayConfigPage(options = {}) {
               <select id="timeFormat">
                 <option value="mm:ss" >mm:ss</option>
                 <option value="hh:mm:ss">hh:mm:ss</option>
-                <option value="auto" selected>auto (hh:mm:ss when hours > 0)</option>
+                <option value="dd:hh:mm:ss">dd:hh:mm:ss</option>
+                <option value="auto" selected>auto (expands as needed)</option>
               </select>
             </div>
             <div style="margin:12px 0; opacity:0.85; font-weight:600;">Threshold Styling</div>
@@ -1816,7 +1817,7 @@ export function renderOverlayConfigPage(options = {}) {
                 document.getElementById('flashEnabled').checked =
                   (typeof s.flashEnabled === 'boolean') ? s.flashEnabled : true;
               }
-              if (typeof s.timeFormat !== 'undefined') document.getElementById('timeFormat').value = (s.timeFormat==='hh:mm:ss' || s.timeFormat==='auto') ? s.timeFormat : 'mm:ss';
+              if (typeof s.timeFormat !== 'undefined') document.getElementById('timeFormat').value = ['hh:mm:ss','dd:hh:mm:ss','auto'].includes(s.timeFormat) ? s.timeFormat : 'mm:ss';
               if (document.getElementById('addEffectEnabled')) {
                 document.getElementById('addEffectEnabled').checked =
                   (typeof s.addEffectEnabled === 'boolean') ? s.addEffectEnabled : true;

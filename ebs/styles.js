@@ -69,7 +69,7 @@ export function setSavedStyle(k, s = {}) {
   if ('flashUnderSeconds' in s) clean.flashUnderSeconds = Math.max(0, Number(s.flashUnderSeconds) || 0);
   if ('timeFormat' in s) {
     const tf = String(s.timeFormat || DEFAULT_STYLE.timeFormat);
-    clean.timeFormat = (tf === 'hh:mm:ss' || tf === 'auto') ? tf : 'mm:ss';
+    clean.timeFormat = ['hh:mm:ss', 'dd:hh:mm:ss', 'auto'].includes(tf) ? tf : 'mm:ss';
   }
   if ('addEffectEnabled' in s) clean.addEffectEnabled = Boolean(s.addEffectEnabled);
   if ('addEffectMode' in s) {

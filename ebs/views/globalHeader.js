@@ -2,21 +2,30 @@ import { renderThemeToggle } from "./theme.js";
 
 export const GLOBAL_HEADER_STYLES = `
       .global-header {
+        position: sticky;
+        top: 0;
+        z-index: 100;
         display: flex;
         align-items: center;
-        justify-content: space-between;
         padding: 14px 24px;
         background: var(--header-bg);
         border-bottom: 1px solid var(--header-border);
         backdrop-filter: blur(12px);
         -webkit-backdrop-filter: blur(12px);
-        flex-wrap: wrap;
         gap: 12px;
       }
-      .global-header .header-brand {
+      .global-header .header-top {
         display: flex;
         align-items: center;
         gap: 20px;
+        flex-shrink: 0;
+      }
+      .global-header .header-collapse {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        flex: 1;
+        min-width: 0;
       }
       .global-header .brand-link {
         font-weight: 800;
@@ -86,11 +95,71 @@ export const GLOBAL_HEADER_STYLES = `
         background: transparent;
         border: 1px solid var(--surface-border);
       }
-      @media (max-width: 600px) {
-        .global-header { padding: 12px 16px; }
-        .global-header .header-brand { gap: 12px; }
+
+      /* Hamburger button – hidden on desktop */
+      .global-header .menu-toggle {
+        display: none;
+        background: none;
+        border: 1px solid var(--surface-border);
+        border-radius: 8px;
+        padding: 6px 8px;
+        cursor: pointer;
+        color: var(--text-color);
+        line-height: 0;
+      }
+      .global-header .menu-toggle svg { display: block; }
+
+      @media (max-width: 768px) {
+        .global-header {
+          flex-wrap: wrap;
+          padding: 12px 16px;
+        }
+        .global-header .header-top {
+          width: 100%;
+          justify-content: space-between;
+        }
         .global-header .brand-link { font-size: 15px; }
-        .global-header .nav-link { padding: 5px 8px; font-size: 13px; }
+
+        .global-header .menu-toggle { display: inline-flex; }
+
+        .global-header .header-collapse {
+          display: none;
+          flex-direction: column;
+          gap: 14px;
+          width: 100%;
+          padding-top: 12px;
+          border-top: 1px solid var(--header-border);
+        }
+        .global-header.menu-open .header-collapse {
+          display: flex;
+        }
+
+        .global-header .nav-links {
+          flex-direction: column;
+          gap: 2px;
+        }
+        .global-header .nav-link {
+          padding: 10px 14px;
+          font-size: 15px;
+          border-radius: 10px;
+        }
+
+        .global-header .header-actions {
+          flex-direction: column;
+          align-items: stretch;
+          gap: 10px;
+        }
+        .global-header .header-actions .user-label {
+          text-align: center;
+        }
+        .global-header .header-actions button {
+          width: 100%;
+          padding: 10px 14px;
+          font-size: 14px;
+        }
+        .global-header .header-actions .theme-toggle {
+          justify-content: center;
+        }
       }
 `;
 
@@ -143,14 +212,30 @@ export function renderGlobalHeader(options = {}) {
   if (showLogout) actions.push(`<button id="logout">Logout</button>`);
 
   return `
-    <header class="global-header">
-      <div class="header-brand">
+    <header class="global-header" id="globalHeader">
+      <div class="header-top">
         <a class="brand-link" href="${homeHref}">Livestreamer Hub</a>
-        <nav class="nav-links">${navLinks}</nav>
+        <button class="menu-toggle" id="menuToggle" aria-label="Toggle menu" aria-expanded="false">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="4" y1="6" x2="20" y2="6"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="18" x2="20" y2="18"/></svg>
+        </button>
       </div>
-      <div class="header-actions">
-        ${actions.join("\n")}
+      <div class="header-collapse">
+        <nav class="nav-links">${navLinks}</nav>
+        <div class="header-actions">
+          ${actions.join("\n")}
+        </div>
       </div>
     </header>
+    <script>
+      (function(){
+        var hdr = document.getElementById('globalHeader');
+        var btn = document.getElementById('menuToggle');
+        if (!btn) return;
+        btn.addEventListener('click', function(){
+          var open = hdr.classList.toggle('menu-open');
+          btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+        });
+      })();
+    </script>
   `;
 }

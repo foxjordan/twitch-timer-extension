@@ -309,11 +309,17 @@ export const THEME_TOGGLE_STYLES = `
         color: var(--text-muted);
         font-size: 12px;
         font-weight: 500;
+        transition: background .15s ease, color .15s ease, box-shadow .15s ease;
+      }
+      .theme-toggle button:hover:not(.active) {
+        color: var(--text-color);
+        background: rgba(145, 70, 255, 0.08);
       }
       .theme-toggle button.active {
         background: var(--accent-color);
         color: #ffffff;
         font-weight: 600;
+        box-shadow: 0 1px 4px rgba(145, 70, 255, 0.4);
       }
 `;
 

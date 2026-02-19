@@ -499,11 +499,13 @@ export function renderGoalsOverlayPage(options = {}) {
         }
 
         function connectStream() {
+          let retryDelay = 4000;
           let streamUrl = '/api/overlay/stream';
           if (state.key) {
             streamUrl += '?key=' + encodeURIComponent(state.key);
           }
           const es = new EventSource(streamUrl);
+          es.addEventListener('open', () => { retryDelay = 4000; });
           es.addEventListener('goal_snapshot', (ev) => {
             try {
               const payload = JSON.parse(ev.data || '{}');
@@ -512,7 +514,8 @@ export function renderGoalsOverlayPage(options = {}) {
           });
           es.onerror = () => {
             es.close();
-            setTimeout(connectStream, 4000);
+            setTimeout(connectStream, retryDelay);
+            retryDelay = Math.min(retryDelay * 2, 60000);
           };
         }
 

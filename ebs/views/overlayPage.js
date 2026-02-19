@@ -282,29 +282,38 @@ export function renderOverlayPage(options = {}) {
           fetch(u, { cache: 'no-store' }).then(function(r){ return r.json(); }).then(applyStyle).catch(function(){});
         }, 5000);
 
-          try {
-            const es = new EventSource('/api/overlay/stream${qs}');
-            es.addEventListener('timer_tick', function(ev){
-              try {
-                const data = JSON.parse(ev.data);
-                const prev = typeof remaining === 'number' ? remaining : null;
-                if (typeof data.remaining === 'number') { remaining = data.remaining; }
-                if (typeof data.hype === 'boolean') { hype = data.hype; }
-                if (typeof data.paused === 'boolean') { paused = data.paused; }
-                if (typeof data.capReached === 'boolean') { cap = data.capReached; }
-                if (typeof data.capMessage !== 'undefined') { capMessage = data.capMessage || null; }
-                if (typeof data.capStyle !== 'undefined') { capStyle = data.capStyle || null; }
-                if (prev !== null && data.remaining > prev) {
-                  triggerAddEffect();
-                }
-                lastRemaining = data.remaining;
-                render();
-              } catch (e) {}
-            });
-            es.addEventListener('style_update', function(ev){
-              try { applyStyle(JSON.parse(ev.data)); } catch (e) {}
-            });
-          } catch (e) {}
+          (function connectSSE() {
+            var retryDelay = 4000;
+            try {
+              const es = new EventSource('/api/overlay/stream${qs}');
+              es.addEventListener('open', function() { retryDelay = 4000; });
+              es.addEventListener('timer_tick', function(ev){
+                try {
+                  const data = JSON.parse(ev.data);
+                  const prev = typeof remaining === 'number' ? remaining : null;
+                  if (typeof data.remaining === 'number') { remaining = data.remaining; }
+                  if (typeof data.hype === 'boolean') { hype = data.hype; }
+                  if (typeof data.paused === 'boolean') { paused = data.paused; }
+                  if (typeof data.capReached === 'boolean') { cap = data.capReached; }
+                  if (typeof data.capMessage !== 'undefined') { capMessage = data.capMessage || null; }
+                  if (typeof data.capStyle !== 'undefined') { capStyle = data.capStyle || null; }
+                  if (prev !== null && data.remaining > prev) {
+                    triggerAddEffect();
+                  }
+                  lastRemaining = data.remaining;
+                  render();
+                } catch (e) {}
+              });
+              es.addEventListener('style_update', function(ev){
+                try { applyStyle(JSON.parse(ev.data)); } catch (e) {}
+              });
+              es.onerror = function() {
+                es.close();
+                setTimeout(connectSSE, retryDelay);
+                retryDelay = Math.min(retryDelay * 2, 60000);
+              };
+            } catch (e) {}
+          })();
       })();
     </script>
   </body>

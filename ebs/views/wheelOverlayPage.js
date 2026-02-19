@@ -235,22 +235,31 @@ export function renderWheelOverlayPage(options = {}) {
           return true;
         }
 
-        const streamUrl = '/api/overlay/stream?key=' + encodeURIComponent(overlayKey);
-        const source = new EventSource(streamUrl);
-        source.addEventListener('wheel_spin', (event) => {
-          if (!event || !event.data) return;
-          try {
-            const payload = JSON.parse(event.data);
-            handleSpinPayload(payload);
-          } catch (e) {}
-        });
+        (function connectSSE() {
+          var retryDelay = 4000;
+          const streamUrl = '/api/overlay/stream?key=' + encodeURIComponent(overlayKey);
+          const source = new EventSource(streamUrl);
 
-        source.addEventListener('error', () => {
-          if (statusEl) statusEl.textContent = 'Disconnected from spinner stream...';
-        });
-        source.addEventListener('open', () => {
-          if (statusEl) statusEl.textContent = '';
-        });
+          source.addEventListener('open', () => {
+            retryDelay = 4000;
+            if (statusEl) statusEl.textContent = '';
+          });
+
+          source.addEventListener('wheel_spin', (event) => {
+            if (!event || !event.data) return;
+            try {
+              const payload = JSON.parse(event.data);
+              handleSpinPayload(payload);
+            } catch (e) {}
+          });
+
+          source.addEventListener('error', () => {
+            if (statusEl) statusEl.textContent = 'Disconnected from spinner stream...';
+            source.close();
+            setTimeout(connectSSE, retryDelay);
+            retryDelay = Math.min(retryDelay * 2, 60000);
+          });
+        })();
       })();
     </script>
   </body>

@@ -136,28 +136,37 @@ export function renderSoundAlertOverlayPage() {
           }, displayMs);
         }
 
-        // Connect to SSE
-        var es = new EventSource('/api/overlay/stream?key=' + encodeURIComponent(overlayKey));
+        // Connect to SSE with reconnect + exponential backoff
+        (function connectSSE() {
+          var retryDelay = 4000;
+          var es = new EventSource('/api/overlay/stream?key=' + encodeURIComponent(overlayKey));
 
-        es.addEventListener('sound_alert', function(ev) {
-          try {
-            var data = JSON.parse(ev.data);
-            if (!data.soundId || !data.soundName) return;
-            if (audioQueue.length >= maxQueue) return;
-            audioQueue.push(data);
-            playNext();
-          } catch (e) {}
-        });
+          es.addEventListener('open', function() { retryDelay = 4000; });
 
-        es.addEventListener('sound_settings', function(ev) {
-          try {
-            var data = JSON.parse(ev.data);
-            if (typeof data.maxQueueSize === 'number') maxQueue = data.maxQueueSize;
-            if (typeof data.overlayDurationMs === 'number') displayMs = data.overlayDurationMs;
-          } catch (e) {}
-        });
+          es.addEventListener('sound_alert', function(ev) {
+            try {
+              var data = JSON.parse(ev.data);
+              if (!data.soundId || !data.soundName) return;
+              if (audioQueue.length >= maxQueue) return;
+              audioQueue.push(data);
+              playNext();
+            } catch (e) {}
+          });
 
-        es.onerror = function() {};
+          es.addEventListener('sound_settings', function(ev) {
+            try {
+              var data = JSON.parse(ev.data);
+              if (typeof data.maxQueueSize === 'number') maxQueue = data.maxQueueSize;
+              if (typeof data.overlayDurationMs === 'number') displayMs = data.overlayDurationMs;
+            } catch (e) {}
+          });
+
+          es.onerror = function() {
+            es.close();
+            setTimeout(connectSSE, retryDelay);
+            retryDelay = Math.min(retryDelay * 2, 60000);
+          };
+        })();
       })();
     </script>
   </body>

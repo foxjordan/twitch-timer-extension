@@ -165,6 +165,22 @@ function getAllActiveBroadcasters() {
 
 // Server-Sent Events (SSE) clients for external overlays
 const sseClients = new Set();
+const SSE_HEARTBEAT_MS = 30_000; // ping every 30 s
+
+// Periodic heartbeat – detects dead connections and keeps proxies from dropping idle ones
+setInterval(() => {
+  for (const client of sseClients) {
+    try {
+      client.res.write(": ping\n\n");
+    } catch {
+      sseClients.delete(client);
+      logger.info("sse_client_heartbeat_failed", {
+        key: client.key,
+        activeClients: sseClients.size,
+      });
+    }
+  }
+}, SSE_HEARTBEAT_MS);
 const lastWheelSpinByKey = new Map();
 const DEFAULT_WHEEL_OPTIONS = [
   { label: "Heads", color: "#9146FF" },

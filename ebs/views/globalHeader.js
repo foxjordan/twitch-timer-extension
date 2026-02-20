@@ -76,7 +76,7 @@ export const GLOBAL_HEADER_STYLES = `
       .global-header .header-actions .theme-toggle {
         margin: 0;
       }
-      .global-header .header-actions button {
+      .global-header .header-actions button:not([data-theme-select]) {
         padding: 6px 14px;
         border-radius: 999px;
         border: 1px solid var(--surface-border);
@@ -87,7 +87,7 @@ export const GLOBAL_HEADER_STYLES = `
         cursor: pointer;
         transition: background .15s ease, border-color .15s ease;
       }
-      .global-header .header-actions button:hover {
+      .global-header .header-actions button:not([data-theme-select]):hover {
         border-color: var(--accent-color);
         color: var(--accent-color);
       }

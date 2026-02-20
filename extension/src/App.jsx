@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import ReactDOM from "react-dom/client";
+import { setupAnalytics, logEvent } from "./firebase.js";
 
 const EBS_BASE = import.meta.env.VITE_EBS_BASE || "https://livestreamerhub.com";
 
@@ -44,9 +45,12 @@ function App() {
   }, []);
 
   useEffect(() => {
+    setupAnalytics();
+
     // Twitch extension lifecycle
     window.Twitch?.ext?.onAuthorized((authData) => {
       authRef.current = authData;
+      logEvent("panel_loaded", { channel_id: authData.channelId });
 
       // Check Bits availability
       if (window.Twitch?.ext?.features?.isBitsEnabled) {
@@ -86,6 +90,7 @@ function App() {
           }),
         })
           .then(() => {
+            logEvent("sound_redeemed", { sound_name: pending.name, tier: pending.tier });
             setCooldowns((prev) => ({
               ...prev,
               [pending.id]: Date.now() + (pending.cooldownMs || 5000),
@@ -117,6 +122,7 @@ function App() {
   function handleSoundClick(sound) {
     if (!bitsEnabled) return;
     pendingSoundRef.current = sound;
+    logEvent("sound_redeem_started", { sound_name: sound.name, tier: sound.tier });
     window.Twitch.ext.bits.useBits(sound.tier);
   }
 
@@ -136,6 +142,7 @@ function App() {
     }
 
     setPreviewing(sound.id);
+    logEvent("sound_preview", { sound_name: sound.name });
     fetch(
       `${EBS_BASE}/api/sounds/preview/${sound.id}?channelId=${auth.channelId}`,
       { headers: { Authorization: `Bearer ${auth.token}` } },

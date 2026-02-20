@@ -1,5 +1,6 @@
 import { useEffect, useState, useRef, useCallback } from "react";
 import ReactDOM from "react-dom/client";
+import { setupAnalytics, logEvent } from "./firebase.js";
 
 const EBS_BASE = import.meta.env.VITE_EBS_BASE || "https://livestreamerhub.com";
 
@@ -67,8 +68,11 @@ function ConfigApp() {
   );
 
   useEffect(() => {
+    setupAnalytics();
+
     window.Twitch?.ext?.onAuthorized((authData) => {
       setAuth(authData);
+      logEvent("config_loaded");
       fetchSounds(authData.token);
       fetch(`${EBS_BASE}/api/sounds/overlay-url`, {
         headers: { Authorization: `Bearer ${authData.token}` },
@@ -111,6 +115,7 @@ function ConfigApp() {
         throw new Error(body.error || "Upload failed");
       }
       await fetchSounds(auth.token);
+      logEvent("sound_uploaded", { tier: newTier });
       setNewName("");
       setNewTier("sound_tier_1");
       setNewVolume(80);
@@ -132,6 +137,7 @@ function ConfigApp() {
       });
       if (!res.ok) throw new Error("Delete failed");
       await fetchSounds(auth.token);
+      logEvent("sound_deleted");
       flash("Sound deleted");
     } catch (e) {
       setError(e.message);
@@ -179,6 +185,7 @@ function ConfigApp() {
       if (!res.ok) throw new Error("Settings update failed");
       const data = await res.json();
       setSettings(data.settings);
+      logEvent("settings_updated", patch);
       flash("Settings saved");
     } catch (e) {
       setError(e.message);

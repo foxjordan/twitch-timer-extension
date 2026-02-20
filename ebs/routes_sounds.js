@@ -290,7 +290,8 @@ export function mountSoundRoutes(app, deps = {}) {
     }
 
     const filePath = getSoundFilePath(uid, sound);
-    const tmpPath = filePath + ".trim_tmp";
+    const ext = path.extname(sound.filename) || ".mp3";
+    const tmpPath = filePath + ".trim_tmp" + ext;
 
     try {
       // Try stream copy first (fast, no re-encode)

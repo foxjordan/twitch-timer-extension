@@ -1,8 +1,12 @@
 import { logger } from "./logger.js";
 import jwt from "jsonwebtoken";
 import multer from "multer";
-import { rename } from "fs/promises";
+import { rename, stat as fsStat, unlink as fsUnlink } from "fs/promises";
+import { execFile } from "child_process";
+import { promisify } from "util";
 import path from "path";
+
+const execFileAsync = promisify(execFile);
 import { getBaseUrl } from "./base_url.js";
 import { getOrCreateUserKey } from "./keys.js";
 import {
@@ -226,6 +230,110 @@ export function mountSoundRoutes(app, deps = {}) {
     if (!sound) return res.status(404).json({ error: "Sound not found" });
     notify(String(uid), sound.id, sound.name, sound.tier, null, null);
     res.json({ ok: true, sound: { id: sound.id, name: sound.name } });
+  });
+
+  // Serve sound file for admin preview/trim (session auth)
+  app.get("/api/sounds/:soundId/audio", (req, res) => {
+    const uid = requireBroadcaster(req, res);
+    if (!uid) return;
+    const sound = getSound(uid, req.params.soundId);
+    if (!sound) return res.status(404).json({ error: "Sound not found" });
+    const filePath = getSoundFilePath(uid, sound);
+    res.setHeader("Content-Type", sound.mimeType);
+    res.setHeader("Cache-Control", "no-store");
+    res.sendFile(filePath, (err) => {
+      if (err && !res.headersSent) {
+        res.status(404).json({ error: "Sound file not found" });
+      }
+    });
+  });
+
+  // Get audio duration for a sound (for trim UI)
+  app.get("/api/sounds/:soundId/duration", async (req, res) => {
+    const uid = requireBroadcaster(req, res);
+    if (!uid) return;
+    const sound = getSound(uid, req.params.soundId);
+    if (!sound) return res.status(404).json({ error: "Sound not found" });
+
+    const filePath = getSoundFilePath(uid, sound);
+    try {
+      const { stdout } = await execFileAsync("ffprobe", [
+        "-v", "error",
+        "-show_entries", "format=duration",
+        "-of", "json",
+        filePath,
+      ], { timeout: 5000 });
+      const info = JSON.parse(stdout);
+      const duration = parseFloat(info.format?.duration || "0");
+      res.json({ duration });
+    } catch (err) {
+      logger.error("sound_duration_failed", { userId: uid, soundId: req.params.soundId, message: err?.message });
+      res.status(500).json({ error: "Could not determine audio duration" });
+    }
+  });
+
+  // Trim a sound (server-side ffmpeg)
+  app.post("/api/sounds/:soundId/trim", async (req, res) => {
+    const uid = requireBroadcaster(req, res);
+    if (!uid) return;
+    const sound = getSound(uid, req.params.soundId);
+    if (!sound) return res.status(404).json({ error: "Sound not found" });
+
+    const trimStart = parseFloat(req.body.trimStart);
+    const trimEnd = parseFloat(req.body.trimEnd);
+
+    if (!Number.isFinite(trimStart) || !Number.isFinite(trimEnd) || trimStart < 0 || trimEnd <= trimStart) {
+      return res.status(400).json({ error: "Invalid trim range" });
+    }
+    if (trimEnd - trimStart < 0.5) {
+      return res.status(400).json({ error: "Trimmed clip must be at least 0.5 seconds" });
+    }
+
+    const filePath = getSoundFilePath(uid, sound);
+    const tmpPath = filePath + ".trim_tmp";
+
+    try {
+      // Try stream copy first (fast, no re-encode)
+      try {
+        await execFileAsync("ffmpeg", [
+          "-i", filePath,
+          "-ss", String(trimStart),
+          "-to", String(trimEnd),
+          "-c", "copy",
+          "-y", tmpPath,
+        ], { timeout: 10000 });
+      } catch {
+        // Fall back to re-encode if copy fails
+        await execFileAsync("ffmpeg", [
+          "-i", filePath,
+          "-ss", String(trimStart),
+          "-to", String(trimEnd),
+          "-y", tmpPath,
+        ], { timeout: 10000 });
+      }
+
+      // Replace original atomically
+      await rename(tmpPath, filePath);
+
+      // Update file size in sound record
+      const fileStat = await fsStat(filePath);
+      const updated = updateSound(uid, sound.id, { sizeBytes: fileStat.size });
+
+      logger.info("sound_trimmed", {
+        userId: uid,
+        soundId: sound.id,
+        trimStart,
+        trimEnd,
+        newSize: fileStat.size,
+      });
+
+      res.json({ sound: updated });
+    } catch (err) {
+      // Clean up temp file if it exists
+      try { await fsUnlink(tmpPath); } catch {}
+      logger.error("sound_trim_failed", { userId: uid, soundId: req.params.soundId, message: err?.message });
+      res.status(500).json({ error: "Trim failed" });
+    }
   });
 
   // ===== Public endpoints =====

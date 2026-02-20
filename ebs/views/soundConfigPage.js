@@ -367,6 +367,166 @@ export function renderSoundConfigPage(options = {}) {
           cdInput.style.cssText = 'width:60px;';
           cdLabel.appendChild(cdInput);
 
+          // Trim section
+          var trimSection = document.createElement('div');
+          trimSection.style.cssText = 'margin-top:4px;';
+
+          var trimToggle = document.createElement('button');
+          trimToggle.textContent = 'Trim Audio';
+          trimToggle.className = 'secondary';
+          trimToggle.style.cssText = 'font-size:12px; padding:3px 8px;';
+
+          var trimControls = document.createElement('div');
+          trimControls.style.cssText = 'display:none; flex-direction:column; gap:6px; margin-top:6px; padding:8px; background:var(--surface-muted,#1a1a1e); border-radius:6px;';
+
+          var trimAudio = null;
+          var trimAudioUrl = null;
+          var trimDuration = 0;
+
+          function fmtTime(sec) {
+            var m = Math.floor(sec / 60);
+            var s = (sec % 60).toFixed(1);
+            return m + ':' + (s < 10 ? '0' : '') + s;
+          }
+
+          trimToggle.addEventListener('click', async function() {
+            if (trimControls.style.display !== 'none') {
+              trimControls.style.display = 'none';
+              if (trimAudio) { trimAudio.pause(); trimAudio = null; }
+              if (trimAudioUrl) { URL.revokeObjectURL(trimAudioUrl); trimAudioUrl = null; }
+              return;
+            }
+            trimControls.style.display = 'flex';
+            trimControls.textContent = '';
+            var loadHint = document.createElement('div');
+            loadHint.className = 'hint';
+            loadHint.textContent = 'Loading audio info…';
+            trimControls.appendChild(loadHint);
+            try {
+              var dr = await fetch('/api/sounds/' + encodeURIComponent(s.id) + '/duration');
+              var dd = await dr.json();
+              trimDuration = dd.duration || 0;
+              if (trimDuration < 0.5) { loadHint.textContent = 'Clip too short to trim'; return; }
+              buildTrimUI(trimControls, s, trimDuration);
+            } catch(e) {
+              loadHint.textContent = 'Could not load audio info';
+            }
+          });
+
+          function buildTrimUI(container, sound, duration) {
+            container.textContent = '';
+
+            var startLabel = document.createElement('label');
+            startLabel.style.cssText = 'display:flex; align-items:center; gap:6px; font-size:12px;';
+            startLabel.textContent = 'Start ';
+            var startRange = document.createElement('input');
+            startRange.type = 'range'; startRange.min = '0'; startRange.max = String(duration);
+            startRange.step = '0.1'; startRange.value = '0';
+            startRange.style.cssText = 'flex:1;';
+            var startVal = document.createElement('span');
+            startVal.style.cssText = 'font-size:12px; opacity:0.7; min-width:44px; text-align:right;';
+            startVal.textContent = fmtTime(0);
+            startLabel.appendChild(startRange);
+            startLabel.appendChild(startVal);
+
+            var endLabel = document.createElement('label');
+            endLabel.style.cssText = 'display:flex; align-items:center; gap:6px; font-size:12px;';
+            endLabel.textContent = 'End  ';
+            var endRange = document.createElement('input');
+            endRange.type = 'range'; endRange.min = '0'; endRange.max = String(duration);
+            endRange.step = '0.1'; endRange.value = String(duration);
+            endRange.style.cssText = 'flex:1;';
+            var endVal = document.createElement('span');
+            endVal.style.cssText = 'font-size:12px; opacity:0.7; min-width:44px; text-align:right;';
+            endVal.textContent = fmtTime(duration);
+            endLabel.appendChild(endRange);
+            endLabel.appendChild(endVal);
+
+            startRange.addEventListener('input', function() {
+              if (parseFloat(startRange.value) >= parseFloat(endRange.value) - 0.5) {
+                startRange.value = String(Math.max(0, parseFloat(endRange.value) - 0.5));
+              }
+              startVal.textContent = fmtTime(parseFloat(startRange.value));
+            });
+            endRange.addEventListener('input', function() {
+              if (parseFloat(endRange.value) <= parseFloat(startRange.value) + 0.5) {
+                endRange.value = String(Math.min(duration, parseFloat(startRange.value) + 0.5));
+              }
+              endVal.textContent = fmtTime(parseFloat(endRange.value));
+            });
+
+            var trimBtnRow = document.createElement('div');
+            trimBtnRow.style.cssText = 'display:flex; gap:6px; align-items:center;';
+
+            var previewBtn = document.createElement('button');
+            previewBtn.textContent = '\\u25B6 Preview';
+            previewBtn.className = 'secondary';
+            previewBtn.style.cssText = 'font-size:12px; padding:3px 8px;';
+            previewBtn.addEventListener('click', async function() {
+              if (trimAudio) { trimAudio.pause(); trimAudio = null; previewBtn.textContent = '\\u25B6 Preview'; }
+              else {
+                try {
+                  if (!trimAudioUrl) {
+                    var ar = await fetch('/api/sounds/' + encodeURIComponent(sound.id) + '/audio');
+                    if (!ar.ok) throw new Error('Could not load audio');
+                    var blob = await ar.blob();
+                    trimAudioUrl = URL.createObjectURL(blob);
+                  }
+                  trimAudio = new Audio(trimAudioUrl);
+                  trimAudio.currentTime = parseFloat(startRange.value);
+                  var stopAt = parseFloat(endRange.value);
+                  trimAudio.ontimeupdate = function() { if (trimAudio && trimAudio.currentTime >= stopAt) { trimAudio.pause(); trimAudio = null; previewBtn.textContent = '\\u25B6 Preview'; } };
+                  trimAudio.onended = function() { trimAudio = null; previewBtn.textContent = '\\u25B6 Preview'; };
+                  previewBtn.textContent = '\\u25A0 Stop';
+                  await trimAudio.play();
+                } catch(e) { previewBtn.textContent = '\\u25B6 Preview'; }
+              }
+            });
+
+            var applyBtn = document.createElement('button');
+            applyBtn.textContent = 'Apply Trim';
+            applyBtn.style.cssText = 'font-size:12px; padding:3px 8px;';
+            var trimHint = document.createElement('span');
+            trimHint.className = 'hint';
+            trimHint.style.cssText = 'margin-left:4px;';
+
+            applyBtn.addEventListener('click', async function() {
+              var ts = parseFloat(startRange.value);
+              var te = parseFloat(endRange.value);
+              if (ts === 0 && te === duration) { trimHint.textContent = 'No change — adjust the range first'; setTimeout(function() { trimHint.textContent = ''; }, 2500); return; }
+              if (trimAudio) { trimAudio.pause(); trimAudio = null; }
+              if (trimAudioUrl) { URL.revokeObjectURL(trimAudioUrl); trimAudioUrl = null; }
+              flashButton(applyBtn);
+              setBusy(applyBtn, true);
+              trimHint.textContent = 'Trimming…';
+              try {
+                var r = await fetch('/api/sounds/' + encodeURIComponent(sound.id) + '/trim', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ trimStart: ts, trimEnd: te })
+                });
+                if (!r.ok) { var b = await r.json().catch(function() { return {}; }); throw new Error(b.error || 'Trim failed'); }
+                trimHint.textContent = 'Trimmed!';
+                setTimeout(function() { trimHint.textContent = ''; }, 2500);
+                await fetchSoundsAdmin();
+              } catch(e) {
+                trimHint.textContent = e.message || 'Trim failed';
+              }
+              setBusy(applyBtn, false);
+            });
+
+            trimBtnRow.appendChild(previewBtn);
+            trimBtnRow.appendChild(applyBtn);
+            trimBtnRow.appendChild(trimHint);
+
+            container.appendChild(startLabel);
+            container.appendChild(endLabel);
+            container.appendChild(trimBtnRow);
+          }
+
+          trimSection.appendChild(trimToggle);
+          trimSection.appendChild(trimControls);
+
           var btnRow = document.createElement('div');
           btnRow.style.cssText = 'display:flex; gap:6px;';
           var saveBtn = document.createElement('button');
@@ -387,7 +547,11 @@ export function renderSoundConfigPage(options = {}) {
           cancelBtn.textContent = 'Cancel';
           cancelBtn.className = 'secondary';
           cancelBtn.style.cssText = 'font-size:12px; padding:4px 10px;';
-          cancelBtn.addEventListener('click', function() { form.remove(); });
+          cancelBtn.addEventListener('click', function() {
+            if (trimAudio) { trimAudio.pause(); trimAudio = null; }
+            if (trimAudioUrl) { URL.revokeObjectURL(trimAudioUrl); trimAudioUrl = null; }
+            form.remove();
+          });
 
           btnRow.appendChild(saveBtn);
           btnRow.appendChild(cancelBtn);
@@ -395,6 +559,7 @@ export function renderSoundConfigPage(options = {}) {
           form.appendChild(nameInput);
           form.appendChild(row);
           form.appendChild(cdLabel);
+          form.appendChild(trimSection);
           form.appendChild(btnRow);
           info.appendChild(form);
         }

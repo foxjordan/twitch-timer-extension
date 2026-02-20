@@ -3,6 +3,9 @@ FROM node:20-alpine
 
 WORKDIR /app/ebs
 
+# ffmpeg for audio trimming
+RUN apk add --no-cache ffmpeg
+
 # Install prod deps first for better layer caching
 COPY ebs/package.json ebs/package-lock.json ./
 RUN npm ci --omit=dev

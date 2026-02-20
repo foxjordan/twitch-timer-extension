@@ -21,6 +21,7 @@ import {
   MAX_FILE_SIZE,
   VALID_TIERS,
   SOUNDS_FILE_DIR,
+  seedDefaultSounds,
 } from "./sounds_store.js";
 
 const EXT_SECRET = process.env.EXTENSION_SECRET
@@ -95,9 +96,10 @@ export function mountSoundRoutes(app, deps = {}) {
   // ===== Admin endpoints =====
 
   // List all sounds for logged-in broadcaster
-  app.get("/api/sounds", (req, res) => {
+  app.get("/api/sounds", async (req, res) => {
     const uid = requireBroadcaster(req, res);
     if (!uid) return;
+    await seedDefaultSounds(uid);
     const sounds = listSounds(uid);
     const settings = getSoundSettings(uid);
     res.json({ sounds, settings, tiers: VALID_TIERS });
@@ -251,12 +253,13 @@ export function mountSoundRoutes(app, deps = {}) {
   });
 
   // Get enabled sounds for a channel (viewer panel)
-  app.get("/api/sounds/public", (req, res) => {
+  app.get("/api/sounds/public", async (req, res) => {
     const claims = verifyExtensionJwt(req);
     const channelId = claims?.channel_id || req.query.channelId;
     if (!channelId) {
       return res.status(400).json({ error: "channelId required" });
     }
+    await seedDefaultSounds(String(channelId));
     const sounds = getPublicSoundList(String(channelId));
     const settings = getSoundSettings(String(channelId));
     res.setHeader("Cache-Control", "no-store");

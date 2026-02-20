@@ -1,6 +1,7 @@
-import { readFile, writeFile, mkdir, unlink, stat } from "fs/promises";
+import { readFile, writeFile, mkdir, unlink, stat, copyFile } from "fs/promises";
 import { existsSync } from "fs";
 import path from "path";
+import { fileURLToPath } from "url";
 import crypto from "crypto";
 
 const DATA_DIR = process.env.DATA_DIR || process.cwd();
@@ -247,6 +248,53 @@ export async function ensureSoundDir(uid) {
   const dir = getSoundFileDir(uid);
   await mkdir(dir, { recursive: true });
   return dir;
+}
+
+// ===== Default Sound Seeding =====
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const DEFAULT_SOUNDS_DIR = path.resolve(__dirname, "default-sounds");
+
+const DEFAULT_SOUNDS = [
+  { file: "applause.mp3", name: "Applause" },
+  { file: "booo.mp3", name: "Booo" },
+  { file: "monsterRoar.mp3", name: "Monster Roar" },
+  { file: "scream.mp3", name: "Scream" },
+];
+
+/**
+ * Seed default sounds for a new broadcaster.
+ * Only runs when the user has zero sounds — idempotent after first call.
+ */
+export async function seedDefaultSounds(uid) {
+  const user = ensureUser(uid);
+  if (user.sounds.size > 0) return; // already has sounds, skip
+
+  const dir = await ensureSoundDir(uid);
+  for (const def of DEFAULT_SOUNDS) {
+    const src = path.join(DEFAULT_SOUNDS_DIR, def.file);
+    if (!existsSync(src)) continue;
+
+    const soundId = `snd_${crypto.randomUUID().slice(0, 12)}`;
+    const filename = `${soundId}.mp3`;
+    const dest = path.join(dir, filename);
+
+    try {
+      await copyFile(src, dest);
+      const fileStat = await stat(dest);
+      createSound(uid, {
+        id: soundId,
+        name: def.name,
+        filename,
+        originalFilename: def.file,
+        mimeType: "audio/mpeg",
+        sizeBytes: fileStat.size,
+        tier: "sound_100",
+        volume: 80,
+        enabled: true,
+      });
+    } catch {}
+  }
 }
 
 // ===== Public API (for viewers) =====

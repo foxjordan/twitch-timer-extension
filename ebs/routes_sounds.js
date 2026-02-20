@@ -294,6 +294,7 @@ export function mountSoundRoutes(app, deps = {}) {
 
     try {
       // Try stream copy first (fast, no re-encode)
+      let usedCopy = true;
       try {
         await execFileAsync("ffmpeg", [
           "-i", filePath,
@@ -302,7 +303,9 @@ export function mountSoundRoutes(app, deps = {}) {
           "-c", "copy",
           "-y", tmpPath,
         ], { timeout: 10000 });
-      } catch {
+      } catch (copyErr) {
+        usedCopy = false;
+        logger.info("sound_trim_copy_fallback", { soundId: sound.id, reason: copyErr?.stderr || copyErr?.message });
         // Fall back to re-encode if copy fails
         await execFileAsync("ffmpeg", [
           "-i", filePath,
@@ -310,6 +313,12 @@ export function mountSoundRoutes(app, deps = {}) {
           "-to", String(trimEnd),
           "-y", tmpPath,
         ], { timeout: 10000 });
+      }
+
+      // Verify the output file was actually created and has content
+      const tmpStat = await fsStat(tmpPath);
+      if (tmpStat.size === 0) {
+        throw new Error("ffmpeg produced an empty file");
       }
 
       // Replace original atomically
@@ -325,14 +334,16 @@ export function mountSoundRoutes(app, deps = {}) {
         trimStart,
         trimEnd,
         newSize: fileStat.size,
+        usedCopy,
       });
 
       res.json({ sound: updated });
     } catch (err) {
       // Clean up temp file if it exists
       try { await fsUnlink(tmpPath); } catch {}
-      logger.error("sound_trim_failed", { userId: uid, soundId: req.params.soundId, message: err?.message });
-      res.status(500).json({ error: "Trim failed" });
+      const detail = err?.stderr || err?.message || "Unknown error";
+      logger.error("sound_trim_failed", { userId: uid, soundId: req.params.soundId, detail });
+      res.status(500).json({ error: "Trim failed: " + detail });
     }
   });
 

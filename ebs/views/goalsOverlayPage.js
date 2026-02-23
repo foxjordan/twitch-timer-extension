@@ -211,6 +211,7 @@ export function renderGoalsOverlayPage(options = {}) {
           bits: 'Bits',
           tips: 'Tips',
           charity: 'Charity',
+          follows: 'Follows',
           manual: 'Manual',
           other: 'Other'
         };
@@ -359,6 +360,7 @@ export function renderGoalsOverlayPage(options = {}) {
               "bits",
               "tips",
               "charity",
+              "follows",
               "manual",
               "other",
             ])};

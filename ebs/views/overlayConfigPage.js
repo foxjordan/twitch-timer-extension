@@ -989,6 +989,24 @@ export function renderOverlayConfigPage(options = {}) {
                    <div class="goal-field"><label><input type="checkbox" data-field="rules.autoTrackBits" \${boolAttr(rules.autoTrackBits)} /> Auto-count bits</label></div>
                    <div class="goal-field"><label><input type="checkbox" data-field="rules.autoTrackTips" \${boolAttr(rules.autoTrackTips)} /> Auto-count tips</label></div>
                    <div class="goal-field"><label><input type="checkbox" data-field="rules.autoTrackCharity" \${boolAttr(rules.autoTrackCharity)} /> Auto-count charity</label></div>
+                   <div class="goal-field"><label><input type="checkbox" data-field="rules.autoTrackFollows" \${boolAttr(rules.autoTrackFollows)} /> Auto-count follows</label></div>
+                   <div class="goal-follow-options" style="grid-column:1/-1;display:\${rules.autoTrackFollows ? 'grid' : 'none'};grid-template-columns:1fr 1fr;gap:12px;">
+                     <div class="goal-field">
+                       <label>Follow mode</label>
+                       <select data-field="rules.followMode">
+                         <option value="new" \${rules.followMode !== 'all' ? 'selected' : ''}>New followers only</option>
+                         <option value="all" \${rules.followMode === 'all' ? 'selected' : ''}>Include existing followers</option>
+                       </select>
+                       <div class="hint">\${rules.followMode === 'all' ? 'Existing followers count toward the goal' : 'Only new follows after enabling count toward the goal'}</div>
+                     </div>
+                     <div class="goal-field">
+                       <label>Value per follow</label>
+                       <input type="number" min="0" step="0.1" data-field="rules.followWeight" value="\${Number(rules.followWeight || 1)}" />
+                     </div>
+                     <div class="goal-field" style="grid-column:1/-1;">
+                       <div class="hint">Follower baseline: \${Number.isFinite(goal.followBaseline) ? prettyNumber(goal.followBaseline) + ' followers when tracking was enabled' : 'Not yet set — will be captured when you save'}</div>
+                     </div>
+                   </div>
                    <div class="goal-field">
                      <label>Tier 1 weight</label>
                      <input type="number" min="0" step="0.1" data-field="rules.tierWeights.1000" value="\${Number(tierWeights['1000'] ?? 1)}" />
@@ -1050,6 +1068,7 @@ export function renderOverlayConfigPage(options = {}) {
                      <option value="bits">Bits</option>
                      <option value="tips">Tips</option>
                      <option value="charity">Charity</option>
+                     <option value="follows">Follows</option>
                      <option value="manual" selected>Manual value</option>
                    </select>
                    <input type="number" min="0" step="1" data-manual-field="amount" placeholder="Amount" />
@@ -1362,6 +1381,17 @@ export function renderOverlayConfigPage(options = {}) {
         setBusy(btn, true);
         const payload = collectGoalPayload(card);
         try {
+          // If follow tracking is being enabled, call the enable-follows endpoint first
+          const followCheckbox = card.querySelector('[data-field="rules.autoTrackFollows"]');
+          if (followCheckbox && followCheckbox.checked) {
+            const modeSelect = card.querySelector('[data-field="rules.followMode"]');
+            const mode = modeSelect ? modeSelect.value : 'new';
+            await fetch('/api/goals/' + goalId + '/enable-follows', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ mode })
+            });
+          }
           await fetch('/api/goals/' + goalId, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
@@ -1475,6 +1505,10 @@ export function renderOverlayConfigPage(options = {}) {
         if (target.hasAttribute('data-field')) {
           refreshGoalPreviews(card);
           if (target.matches('[data-field="overlaySlug"]')) updateGoalUrls(card);
+          if (target.matches('[data-field="rules.autoTrackFollows"]')) {
+            const opts = card.querySelector('.goal-follow-options');
+            if (opts) opts.style.display = target.checked ? 'grid' : 'none';
+          }
         }
       }
 

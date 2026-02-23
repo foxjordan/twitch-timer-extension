@@ -16,6 +16,7 @@ export const SEGMENT_KEYS = [
   "bits",
   "tips",
   "charity",
+  "follows",
   "manual",
   "other",
 ];
@@ -29,6 +30,7 @@ const DEFAULT_SEGMENT_COLORS = {
   bits: "#10B981",
   tips: "#FACC15",
   charity: "#22D3EE",
+  follows: "#3B82F6",
   manual: "#38BDF8",
   other: "#94A3B8",
 };
@@ -73,6 +75,9 @@ export const DEFAULT_GOAL_RULES = {
   autoTrackBits: false,
   autoTrackTips: false,
   autoTrackCharity: false,
+  autoTrackFollows: false,
+  followMode: "new", // "new" | "all"
+  followWeight: 1,
   preferSubPoints: true,
   tierWeights: { "1000": 1, "2000": 2, "3000": 6 },
   resubWeight: 1,
@@ -269,6 +274,7 @@ function sanitizeRules(rules = {}) {
     "autoTrackBits",
     "autoTrackTips",
     "autoTrackCharity",
+    "autoTrackFollows",
     "preferSubPoints",
     "breakdownEnabled",
     "allowOverflow",
@@ -320,6 +326,12 @@ function sanitizeRules(rules = {}) {
     next.manualUnitValue,
     0
   );
+  if (typeof rules.followMode === "string") {
+    next.followMode = ["new", "all"].includes(rules.followMode)
+      ? rules.followMode
+      : "new";
+  }
+  next.followWeight = sanitizeNumber(rules.followWeight, next.followWeight, 0);
   return next;
 }
 
@@ -362,6 +374,7 @@ function normalizeGoal(raw = {}) {
       : [],
     overlaySlug: sanitizeString(goal.overlaySlug, "").replace(/\s+/g, "") || "",
     tags: Array.isArray(goal.tags) ? goal.tags.map((t) => sanitizeString(t)) : [],
+    followBaseline: sanitizeNumber(goal.followBaseline, null),
     subBaseline:
       type === "sub_goal"
         ? Math.max(0, sanitizeNumber(goal.subBaseline, goal.currentValue || 0))
@@ -445,6 +458,8 @@ export function updateGoal(uid, goalId, patch = {}) {
       sanitizeString(patch.overlaySlug, goal.overlaySlug).replace(/\s+/g, "") ||
       goal.overlaySlug;
   if (Array.isArray(patch.tags)) goal.tags = patch.tags.map((t) => sanitizeString(t));
+  if ("followBaseline" in patch)
+    goal.followBaseline = sanitizeNumber(patch.followBaseline, goal.followBaseline);
   if (patch.resetSegments) goal.segments = blankSegments();
   goal.updatedAt = nowIso();
   persistGoals().catch(() => {});
@@ -469,6 +484,7 @@ export function resetGoal(uid, goalId, options = {}) {
   } else {
     goal.currentValue = 0;
     goal.segments = blankSegments();
+    goal.followBaseline = null;
   }
   if (options.startAt !== undefined) goal.startAt = sanitizeDate(options.startAt);
   if (options.endAt !== undefined) goal.endAt = sanitizeDate(options.endAt);
@@ -639,6 +655,12 @@ function mapEventToDelta(goal, type, event = {}) {
         value: usd * per,
         segmentKey: rules.autoTrackCharity ? "charity" : "tips",
       };
+    }
+    case "channel.follow": {
+      if (!rules.autoTrackFollows) return null;
+      const value = Math.max(0, Number(rules.followWeight || 1));
+      if (!value) return null;
+      return { value, segmentKey: "follows" };
     }
     default:
       return null;

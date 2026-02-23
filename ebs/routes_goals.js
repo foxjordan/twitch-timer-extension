@@ -6,12 +6,17 @@ import {
   deleteGoal,
   resetGoal,
   applyManualContribution,
+  applyGoalValue,
+  getGoal,
   getPublicGoals,
   DEFAULT_GOAL_STYLE,
   DEFAULT_GOAL_RULES,
   SEGMENT_KEYS,
 } from "./goals_store.js";
-import { fetchActiveSubscriberCount } from "./twitch_api.js";
+import {
+  fetchActiveSubscriberCount,
+  fetchFollowerCount,
+} from "./twitch_api.js";
 
 export function mountGoalRoutes(app, deps = {}) {
   const {
@@ -156,6 +161,63 @@ export function mountGoalRoutes(app, deps = {}) {
       requestId: req.requestId,
     });
     res.json(goal);
+  });
+
+  app.post("/api/goals/:goalId/enable-follows", async (req, res) => {
+    const uid = requireAdmin(req, res);
+    if (!uid) return;
+    try {
+      const { mode } = req.body || {};
+      const followMode = ["new", "all"].includes(mode) ? mode : "new";
+
+      const followerCount = await fetchFollowerCount({ broadcasterId: uid });
+      if (typeof followerCount !== "number") {
+        return res
+          .status(400)
+          .json({ error: "Unable to fetch follower count" });
+      }
+
+      // Reset follows segment before applying new baseline
+      const current = getGoal(uid, req.params.goalId);
+      if (!current) return res.status(404).json({ error: "Goal not found" });
+      const followsSegmentValue = Number(current.segments?.follows || 0);
+
+      const goal = updateGoal(uid, req.params.goalId, {
+        rules: { autoTrackFollows: true, followMode },
+        followBaseline: followerCount,
+      });
+      if (!goal) return res.status(404).json({ error: "Goal not found" });
+
+      // Remove any existing follows segment value, then apply baseline if "all" mode
+      if (followsSegmentValue > 0) {
+        applyGoalValue(uid, req.params.goalId, -followsSegmentValue, {
+          segmentKey: "follows",
+        });
+      }
+      if (followMode === "all" && followerCount > 0) {
+        applyGoalValue(uid, req.params.goalId, followerCount, {
+          segmentKey: "follows",
+        });
+      }
+
+      notify(uid);
+      const updated = getGoal(uid, req.params.goalId);
+      logger.info("goal_follows_enabled", {
+        userId: uid,
+        goalId: req.params.goalId,
+        followMode,
+        followerCount,
+        requestId: req.requestId,
+      });
+      res.json(updated);
+    } catch (err) {
+      logger.error("goal_enable_follows_failed", {
+        userId: uid,
+        goalId: req.params.goalId,
+        message: err?.message,
+      });
+      res.status(400).json({ error: "Failed to enable follow tracking" });
+    }
   });
 
   app.get("/api/overlay/goals", (req, res) => {

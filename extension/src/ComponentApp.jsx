@@ -21,15 +21,15 @@ const TIER_COSTS = {
 function SpeakerIcon() {
   return (
     <svg
-      width="28"
-      height="28"
+      width="100%"
+      height="100%"
       viewBox="0 0 24 24"
       fill="none"
       stroke="currentColor"
       strokeWidth="2"
       strokeLinecap="round"
       strokeLinejoin="round"
-      style={{ opacity: 0.4 }}
+      style={{ opacity: 0.4, padding: "22%" }}
     >
       <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
       <path d="M15.54 8.46a5 5 0 0 1 0 7.07" />
@@ -64,6 +64,22 @@ function useImageUrl(soundId, hasImage, auth) {
   return url;
 }
 
+function ChevronUp() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M18 15l-6-6-6 6" />
+    </svg>
+  );
+}
+
+function ChevronDown() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M6 9l6 6 6-6" />
+    </svg>
+  );
+}
+
 function SoundCard({ sound, auth, disabled, onBuy, onPreview, isPreviewPlaying, getCost }) {
   const [hovered, setHovered] = useState(false);
   const imageUrl = useImageUrl(sound.id, sound.hasImage, auth);
@@ -77,7 +93,7 @@ function SoundCard({ sound, auth, disabled, onBuy, onPreview, isPreviewPlaying, 
         display: "flex",
         flexDirection: "column",
         alignItems: "center",
-        padding: "6px 4px",
+        padding: "5% 3%",
         borderRadius: 10,
         background: disabled
           ? "rgba(22,22,26,0.7)"
@@ -93,30 +109,29 @@ function SoundCard({ sound, auth, disabled, onBuy, onPreview, isPreviewPlaying, 
         position: "relative",
       }}
     >
-      {/* Image or default icon */}
+      {/* Image or default icon — square, responsive */}
       <div
         style={{
-          width: 48,
-          height: 48,
+          width: "100%",
+          paddingBottom: "100%",
           borderRadius: 8,
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
+          position: "relative",
           background: "rgba(14,14,16,0.5)",
           overflow: "hidden",
           marginBottom: 4,
-          position: "relative",
         }}
       >
-        {imageUrl ? (
-          <img
-            src={imageUrl}
-            alt={sound.name}
-            style={{ width: "100%", height: "100%", objectFit: "cover" }}
-          />
-        ) : (
-          <SpeakerIcon />
-        )}
+        <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
+          {imageUrl ? (
+            <img
+              src={imageUrl}
+              alt={sound.name}
+              style={{ width: "100%", height: "100%", objectFit: "cover" }}
+            />
+          ) : (
+            <SpeakerIcon />
+          )}
+        </div>
         {/* Preview overlay on hover */}
         {hovered && !disabled && (
           <div
@@ -135,7 +150,7 @@ function SoundCard({ sound, auth, disabled, onBuy, onPreview, isPreviewPlaying, 
               cursor: "pointer",
             }}
           >
-            <span style={{ fontSize: 16, color: "#fff" }}>
+            <span style={{ fontSize: "clamp(14px, 4vw, 22px)", color: "#fff" }}>
               {isPreviewPlaying ? "\u25A0" : "\u25B6"}
             </span>
           </div>
@@ -144,7 +159,7 @@ function SoundCard({ sound, auth, disabled, onBuy, onPreview, isPreviewPlaying, 
       {/* Name */}
       <div
         style={{
-          fontSize: 11,
+          fontSize: "clamp(10px, 2.8vw, 14px)",
           fontWeight: 600,
           textAlign: "center",
           overflow: "hidden",
@@ -159,20 +174,21 @@ function SoundCard({ sound, auth, disabled, onBuy, onPreview, isPreviewPlaying, 
       {/* Bits cost */}
       <div
         style={{
-          fontSize: 10,
+          fontSize: "clamp(9px, 2.4vw, 13px)",
           opacity: 0.7,
           display: "flex",
           alignItems: "center",
-          gap: 2,
+          gap: 3,
         }}
       >
         <span
           style={{
-            width: 8,
-            height: 8,
+            width: "clamp(6px, 2vw, 10px)",
+            height: "clamp(6px, 2vw, 10px)",
             borderRadius: "50%",
             background: "linear-gradient(135deg, #9146FF, #772CE8)",
             display: "inline-block",
+            flexShrink: 0,
           }}
         />
         {getCost(sound.tier)}
@@ -194,19 +210,22 @@ function ComponentApp() {
   const [lastPlayed, setLastPlayed] = useState(null);
   const [previewing, setPreviewing] = useState(null);
   const previewAudioRef = useRef(null);
-  const [collapsed, setCollapsed] = useState(() => {
-    try {
-      return localStorage.getItem("sa_collapsed") !== "false";
-    } catch {
-      return true;
-    }
-  });
+  const gridRef = useRef(null);
+  const [canScrollUp, setCanScrollUp] = useState(false);
+  const [canScrollDown, setCanScrollDown] = useState(false);
 
-  useEffect(() => {
-    try {
-      localStorage.setItem("sa_collapsed", String(collapsed));
-    } catch {}
-  }, [collapsed]);
+  const checkScroll = useCallback(() => {
+    const el = gridRef.current;
+    if (!el) return;
+    setCanScrollUp(el.scrollTop > 0);
+    setCanScrollDown(el.scrollTop + el.clientHeight < el.scrollHeight - 1);
+  }, []);
+
+  function scrollBy(delta) {
+    const el = gridRef.current;
+    if (!el) return;
+    el.scrollBy({ top: delta, behavior: "smooth" });
+  }
 
   const fetchSounds = useCallback((token, channelId) => {
     fetch(`${EBS_BASE}/api/sounds/public?channelId=${channelId}`, {
@@ -343,66 +362,14 @@ function ComponentApp() {
     return TIER_COSTS[tier] || "?";
   }
 
-  // Collapsed pill button
-  if (collapsed) {
-    return (
-      <div
-        style={{
-          position: "fixed",
-          bottom: 12,
-          right: 12,
-        }}
-      >
-        <button
-          onClick={() => setCollapsed(false)}
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: 6,
-            padding: "8px 14px",
-            borderRadius: 20,
-            background: "rgba(14,14,16,0.85)",
-            backdropFilter: "blur(8px)",
-            border: "1px solid rgba(145,70,255,0.4)",
-            color: "#efeff1",
-            cursor: "pointer",
-            fontSize: 13,
-            fontWeight: 600,
-            fontFamily: "inherit",
-          }}
-        >
-          <svg
-            width="16"
-            height="16"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          >
-            <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
-            <path d="M15.54 8.46a5 5 0 0 1 0 7.07" />
-          </svg>
-          Sounds
-        </button>
-      </div>
-    );
-  }
-
   // Loading state
   if (loading) {
     return (
       <div style={containerStyle}>
         <div style={headerStyle}>
-          <span style={{ fontSize: 13, fontWeight: 600 }}>Sound Alerts</span>
-          <button onClick={() => setCollapsed(true)} style={closeButtonStyle}>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
-              <path d="M18 6L6 18" /><path d="M6 6l12 12" />
-            </svg>
-          </button>
+          <span>Sound Alerts</span>
         </div>
-        <div style={{ padding: 12, textAlign: "center", fontSize: 12, opacity: 0.5 }}>
+        <div style={{ padding: 12, textAlign: "center", opacity: 0.5 }}>
           Loading...
         </div>
       </div>
@@ -414,14 +381,9 @@ function ComponentApp() {
     return (
       <div style={containerStyle}>
         <div style={headerStyle}>
-          <span style={{ fontSize: 13, fontWeight: 600 }}>Sound Alerts</span>
-          <button onClick={() => setCollapsed(true)} style={closeButtonStyle}>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
-              <path d="M18 6L6 18" /><path d="M6 6l12 12" />
-            </svg>
-          </button>
+          <span>Sound Alerts</span>
         </div>
-        <div style={{ padding: 12, textAlign: "center", fontSize: 12, opacity: 0.5 }}>
+        <div style={{ padding: 12, textAlign: "center", opacity: 0.5 }}>
           No sound alerts available
         </div>
       </div>
@@ -430,14 +392,35 @@ function ComponentApp() {
 
   return (
     <div style={containerStyle}>
-      {/* Header */}
+      {/* Header with scroll buttons */}
       <div style={headerStyle}>
-        <span style={{ fontSize: 13, fontWeight: 600 }}>Sound Alerts</span>
-        <button onClick={() => setCollapsed(true)} style={closeButtonStyle}>
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
-            <path d="M18 6L6 18" /><path d="M6 6l12 12" />
-          </svg>
-        </button>
+        <span>Sound Alerts</span>
+        <div style={{ display: "flex", gap: 2 }}>
+          <button
+            onClick={() => scrollBy(-150)}
+            disabled={!canScrollUp}
+            style={{
+              ...scrollBtnStyle,
+              opacity: canScrollUp ? 0.8 : 0.2,
+              cursor: canScrollUp ? "pointer" : "default",
+            }}
+            aria-label="Scroll up"
+          >
+            <ChevronUp />
+          </button>
+          <button
+            onClick={() => scrollBy(150)}
+            disabled={!canScrollDown}
+            style={{
+              ...scrollBtnStyle,
+              opacity: canScrollDown ? 0.8 : 0.2,
+              cursor: canScrollDown ? "pointer" : "default",
+            }}
+            aria-label="Scroll down"
+          >
+            <ChevronDown />
+          </button>
+        </div>
       </div>
 
       {/* Now playing banner */}
@@ -448,7 +431,6 @@ function ComponentApp() {
             background: "#9146FF22",
             border: "1px solid #9146FF44",
             borderRadius: 6,
-            fontSize: 11,
             textAlign: "center",
             margin: "0 10px 6px",
           }}
@@ -458,81 +440,95 @@ function ComponentApp() {
       )}
 
       {!bitsEnabled && (
-        <div style={{ fontSize: 11, opacity: 0.5, padding: "0 10px 6px", textAlign: "center" }}>
+        <div style={{ opacity: 0.5, padding: "0 10px 6px", textAlign: "center" }}>
           Bits are not available on this channel.
         </div>
       )}
 
-      {/* Card grid */}
+      {/* Scrollable card grid */}
       <div
+        ref={gridRef}
+        onScroll={checkScroll}
+        onLoad={checkScroll}
         style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(auto-fill, minmax(72px, 1fr))",
-          gap: 6,
+          flex: 1,
+          overflowY: "auto",
+          overflowX: "hidden",
           padding: "0 10px 10px",
+          /* Hide scrollbar but keep functionality for touch/programmatic scroll */
+          scrollbarWidth: "none",
+          msOverflowStyle: "none",
         }}
       >
-        {sounds.map((sound) => {
-          const onCooldown =
-            cooldowns[sound.id] && Date.now() < cooldowns[sound.id];
-          const disabled = !bitsEnabled || onCooldown;
-          return (
-            <SoundCard
-              key={sound.id}
-              sound={sound}
-              auth={auth}
-              disabled={disabled}
-              onBuy={handleSoundClick}
-              onPreview={handlePreview}
-              isPreviewPlaying={previewing === sound.id}
-              getCost={getCost}
-            />
-          );
-        })}
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fill, minmax(min(80px, 30%), 1fr))",
+            gap: "clamp(4px, 1.5vw, 8px)",
+          }}
+        >
+          {sounds.map((sound) => {
+            const onCooldown =
+              cooldowns[sound.id] && Date.now() < cooldowns[sound.id];
+            const disabled = !bitsEnabled || onCooldown;
+            return (
+              <SoundCard
+                key={sound.id}
+                sound={sound}
+                auth={auth}
+                disabled={disabled}
+                onBuy={handleSoundClick}
+                onPreview={handlePreview}
+                isPreviewPlaying={previewing === sound.id}
+                getCost={getCost}
+              />
+            );
+          })}
+        </div>
+        {/* Sentinel to trigger initial scroll check */}
+        <div ref={(el) => {
+          if (el) setTimeout(checkScroll, 100);
+        }} />
       </div>
+
+      <style>{`::-webkit-scrollbar { display: none; }`}</style>
     </div>
   );
 }
 
 const containerStyle = {
-  position: "fixed",
-  bottom: 12,
-  right: 12,
-  width: 280,
-  maxHeight: "70vh",
-  overflowY: "auto",
-  borderRadius: 14,
+  width: "100%",
+  height: "100%",
+  display: "flex",
+  flexDirection: "column",
+  overflow: "hidden",
   background: "rgba(14,14,16,0.85)",
   backdropFilter: "blur(12px)",
-  border: "1px solid rgba(48,48,56,0.6)",
-  boxShadow: "0 4px 24px rgba(0,0,0,0.4)",
+  fontSize: "clamp(11px, 2.8vw, 15px)",
 };
 
 const headerStyle = {
+  padding: "10px 12px 6px",
   display: "flex",
   justifyContent: "space-between",
   alignItems: "center",
-  padding: "10px 12px 6px",
-  position: "sticky",
-  top: 0,
-  background: "rgba(14,14,16,0.95)",
-  borderRadius: "14px 14px 0 0",
-  zIndex: 1,
+  fontWeight: 600,
+  fontSize: "clamp(13px, 3.2vw, 17px)",
+  flexShrink: 0,
 };
 
-const closeButtonStyle = {
+const scrollBtnStyle = {
   display: "flex",
   alignItems: "center",
   justifyContent: "center",
-  width: 24,
-  height: 24,
+  width: 28,
+  height: 28,
   borderRadius: 6,
-  background: "transparent",
-  border: "none",
+  background: "rgba(42,42,50,0.8)",
+  border: "1px solid rgba(48,48,56,0.6)",
   color: "#efeff1",
-  cursor: "pointer",
-  opacity: 0.6,
   padding: 0,
+  fontFamily: "inherit",
 };
 
 ReactDOM.createRoot(document.getElementById("root")).render(<ComponentApp />);

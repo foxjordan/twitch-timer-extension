@@ -12,7 +12,8 @@
       "Bash(unzip:*)",
       "mcp__plugin_playwright_playwright__browser_take_screenshot",
       "Bash(ffmpeg:*)",
-      "Bash(fly ssh console:*)"
+      "Bash(fly ssh console:*)",
+      "Bash(zip -r ../dist.zip . -x '.*' '__MACOSX/*')"
     ]
   }
 }

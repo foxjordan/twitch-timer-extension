@@ -252,6 +252,38 @@ export function renderSoundConfigPage(options = {}) {
             card.style.cssText = 'display:flex; align-items:center; gap:10px; padding:8px 10px; background:var(--surface-muted,#1a1a1e); border-radius:8px; border:1px solid var(--border,#303038);';
             card.setAttribute('data-sound-id', s.id);
 
+            // Image thumbnail
+            var thumb = document.createElement('div');
+            thumb.style.cssText = 'width:40px; height:40px; border-radius:6px; overflow:hidden; flex-shrink:0; background:var(--surface-color,#1f1f23); display:flex; align-items:center; justify-content:center;';
+            if (s.imageFilename) {
+              var img = document.createElement('img');
+              img.src = '/api/sounds/' + encodeURIComponent(s.id) + '/image';
+              img.alt = '';
+              img.style.cssText = 'width:100%; height:100%; object-fit:cover;';
+              img.onerror = function() { this.style.display = 'none'; };
+              thumb.appendChild(img);
+            } else {
+              var svgNs = 'http://www.w3.org/2000/svg';
+              var svg = document.createElementNS(svgNs, 'svg');
+              svg.setAttribute('width', '20');
+              svg.setAttribute('height', '20');
+              svg.setAttribute('viewBox', '0 0 24 24');
+              svg.setAttribute('fill', 'none');
+              svg.setAttribute('stroke', 'currentColor');
+              svg.setAttribute('stroke-width', '2');
+              svg.setAttribute('stroke-linecap', 'round');
+              svg.setAttribute('stroke-linejoin', 'round');
+              svg.style.opacity = '0.3';
+              var poly = document.createElementNS(svgNs, 'polygon');
+              poly.setAttribute('points', '11 5 6 9 2 9 2 15 6 15 11 19 11 5');
+              var path = document.createElementNS(svgNs, 'path');
+              path.setAttribute('d', 'M15.54 8.46a5 5 0 0 1 0 7.07');
+              svg.appendChild(poly);
+              svg.appendChild(path);
+              thumb.appendChild(svg);
+            }
+            card.appendChild(thumb);
+
             var info = document.createElement('div');
             info.style.cssText = 'flex:1; min-width:0;';
 
@@ -366,6 +398,70 @@ export function renderSoundConfigPage(options = {}) {
           cdInput.value = String(Math.round((s.cooldownMs || 5000) / 1000));
           cdInput.style.cssText = 'width:60px;';
           cdLabel.appendChild(cdInput);
+
+          // Image upload section
+          var imageSection = document.createElement('div');
+          imageSection.style.cssText = 'margin-top:4px;';
+
+          var imageLabel = document.createElement('label');
+          imageLabel.style.cssText = 'font-size:12px; color:var(--text-muted);';
+          imageLabel.textContent = 'Card Image (max 256 KB, PNG/JPG/GIF/WebP)';
+
+          var imageRow = document.createElement('div');
+          imageRow.style.cssText = 'display:flex; gap:6px; align-items:center; margin-top:4px;';
+
+          var imageInput = document.createElement('input');
+          imageInput.type = 'file';
+          imageInput.accept = 'image/png,image/jpeg,image/gif,image/webp';
+          imageInput.style.cssText = 'font-size:12px; flex:1;';
+
+          var imageHint = document.createElement('span');
+          imageHint.className = 'hint';
+          imageHint.style.cssText = 'margin-left:4px;';
+
+          imageInput.addEventListener('change', async function() {
+            var file = imageInput.files ? imageInput.files[0] : null;
+            if (!file) return;
+            if (file.size > 256 * 1024) { imageHint.textContent = 'File too large (max 256 KB)'; return; }
+            imageInput.disabled = true;
+            imageHint.textContent = 'Uploading…';
+            try {
+              var fd = new FormData();
+              fd.append('image', file);
+              var r = await fetch('/api/sounds/' + encodeURIComponent(s.id) + '/image', { method: 'POST', body: fd });
+              if (!r.ok) throw new Error('Upload failed');
+              imageHint.textContent = 'Image uploaded!';
+              setTimeout(function() { imageHint.textContent = ''; }, 2500);
+              await fetchSoundsAdmin();
+            } catch(e) {
+              imageHint.textContent = e.message || 'Upload failed';
+            }
+            imageInput.disabled = false;
+            imageInput.value = '';
+          });
+
+          imageRow.appendChild(imageInput);
+
+          if (s.imageFilename) {
+            var removeImgBtn = document.createElement('button');
+            removeImgBtn.textContent = 'Remove';
+            removeImgBtn.className = 'danger';
+            removeImgBtn.style.cssText = 'font-size:12px; padding:3px 8px; color:#fff; border:none; border-radius:4px; cursor:pointer;';
+            removeImgBtn.addEventListener('click', async function() {
+              flashButton(removeImgBtn);
+              setBusy(removeImgBtn, true);
+              try {
+                await fetch('/api/sounds/' + encodeURIComponent(s.id) + '/image', { method: 'DELETE' });
+                await fetchSoundsAdmin();
+              } catch(e) {}
+              setBusy(removeImgBtn, false);
+            });
+            imageRow.appendChild(removeImgBtn);
+          }
+
+          imageRow.appendChild(imageHint);
+          imageSection.appendChild(imageLabel);
+          imageSection.appendChild(imageRow);
 
           // Trim section
           var trimSection = document.createElement('div');
@@ -559,6 +655,7 @@ export function renderSoundConfigPage(options = {}) {
           form.appendChild(nameInput);
           form.appendChild(row);
           form.appendChild(cdLabel);
+          form.appendChild(imageSection);
           form.appendChild(trimSection);
           form.appendChild(btnRow);
           info.appendChild(form);

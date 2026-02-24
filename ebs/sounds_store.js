@@ -19,6 +19,22 @@ export const ALLOWED_MIME_TYPES = [
   "audio/x-wav",
 ];
 
+export const ALLOWED_IMAGE_MIME_TYPES = [
+  "image/png",
+  "image/jpeg",
+  "image/gif",
+  "image/webp",
+];
+
+const IMAGE_MIME_TO_EXT = {
+  "image/png": "png",
+  "image/jpeg": "jpg",
+  "image/gif": "gif",
+  "image/webp": "webp",
+};
+
+export const MAX_IMAGE_SIZE = 256 * 1024; // 256 KB
+
 const MIME_TO_EXT = {
   "audio/mpeg": "mp3",
   "audio/ogg": "ogg",
@@ -136,6 +152,7 @@ function normalizeSound(raw = {}) {
     originalFilename: sanitizeString(raw.originalFilename, ""),
     mimeType: sanitizeString(raw.mimeType, "audio/mpeg"),
     sizeBytes: sanitizeNumber(raw.sizeBytes, 0, 0),
+    imageFilename: sanitizeString(raw.imageFilename, ""),
     tier: VALID_TIERS.includes(raw.tier) ? raw.tier : "sound_100",
     enabled: typeof raw.enabled === "boolean" ? raw.enabled : true,
     volume: sanitizeNumber(raw.volume, 80, 0, 100),
@@ -194,6 +211,7 @@ export function updateSound(uid, soundId, patch = {}) {
   if ("enabled" in patch) sound.enabled = Boolean(patch.enabled);
   if ("volume" in patch) sound.volume = sanitizeNumber(patch.volume, sound.volume, 0, 100);
   if ("cooldownMs" in patch) sound.cooldownMs = sanitizeNumber(patch.cooldownMs, sound.cooldownMs, 0, 60000);
+  if ("imageFilename" in patch) sound.imageFilename = sanitizeString(patch.imageFilename, sound.imageFilename);
   sound.updatedAt = nowIso();
   persistSoundAlerts().catch(() => {});
   return deepClone(sound);
@@ -204,11 +222,18 @@ export async function deleteSound(uid, soundId) {
   const sound = user.sounds.get(String(soundId));
   if (!sound) return false;
   user.sounds.delete(String(soundId));
-  // Delete file from disk
+  // Delete audio file from disk
   if (sound.filename) {
     const filePath = getSoundFilePath(uid, sound);
     try {
       await unlink(filePath);
+    } catch {}
+  }
+  // Delete image file from disk
+  if (sound.imageFilename) {
+    const imgPath = path.resolve(SOUNDS_FILE_DIR, String(uid), sound.imageFilename);
+    try {
+      await unlink(imgPath);
     } catch {}
   }
   persistSoundAlerts().catch(() => {});
@@ -242,6 +267,11 @@ export function getSoundFileDir(uid) {
 export function generateFilename(uid, soundId, mimeType) {
   const ext = MIME_TO_EXT[mimeType] || "mp3";
   return `${soundId}.${ext}`;
+}
+
+export function generateImageFilename(soundId, mimeType) {
+  const ext = IMAGE_MIME_TO_EXT[mimeType] || "png";
+  return `${soundId}_img.${ext}`;
 }
 
 export async function ensureSoundDir(uid) {
@@ -309,6 +339,7 @@ export function getPublicSoundList(uid) {
       name: s.name,
       tier: s.tier,
       cooldownMs: s.cooldownMs,
+      hasImage: Boolean(s.imageFilename),
     }))
     .sort((a, b) => {
       const aIdx = VALID_TIERS.indexOf(a.tier);

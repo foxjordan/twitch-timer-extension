@@ -346,9 +346,11 @@ function ConfigApp() {
             key={s.id}
             sound={s}
             tiers={tiers}
+            auth={auth}
             onToggle={handleToggle}
             onUpdate={handleSoundUpdate}
             onDelete={handleDelete}
+            onRefresh={() => fetchSounds(auth.token)}
           />
         ))}
       </div>
@@ -395,19 +397,109 @@ function ConfigApp() {
   );
 }
 
-function SoundRow({ sound, tiers, onToggle, onUpdate, onDelete }) {
+function SoundRow({ sound, tiers, auth, onToggle, onUpdate, onDelete, onRefresh }) {
   const [editing, setEditing] = useState(false);
   const [name, setName] = useState(sound.name);
   const [tier, setTier] = useState(sound.tier);
   const [volume, setVolume] = useState(sound.volume);
+  const [imageUploading, setImageUploading] = useState(false);
+  const [imagePreviewUrl, setImagePreviewUrl] = useState(null);
+  const imageInputRef = useRef(null);
+
+  useEffect(() => {
+    if (!sound.imageFilename || !auth) return;
+    let revoked = false;
+    let blobUrl;
+    fetch(`${EBS_BASE}/api/sounds/${sound.id}/image`, {
+      headers: { Authorization: `Bearer ${auth.token}` },
+    })
+      .then((r) => (r.ok ? r.blob() : null))
+      .then((blob) => {
+        if (blob && !revoked) {
+          blobUrl = URL.createObjectURL(blob);
+          setImagePreviewUrl(blobUrl);
+        }
+      })
+      .catch(() => {});
+    return () => {
+      revoked = true;
+      if (blobUrl) URL.revokeObjectURL(blobUrl);
+    };
+  }, [sound.imageFilename, sound.id, auth?.token]);
 
   function save() {
     onUpdate(sound.id, { name, tier, volume });
     setEditing(false);
   }
 
+  async function handleImageUpload(e) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 256 * 1024) return;
+
+    setImageUploading(true);
+    try {
+      const formData = new FormData();
+      formData.append("image", file);
+      const res = await fetch(`${EBS_BASE}/api/sounds/${sound.id}/image`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${auth.token}` },
+        body: formData,
+      });
+      if (!res.ok) throw new Error("Upload failed");
+      onRefresh();
+    } catch {}
+    finally { setImageUploading(false); }
+  }
+
+  async function handleImageDelete() {
+    await fetch(`${EBS_BASE}/api/sounds/${sound.id}/image`, {
+      method: "DELETE",
+      headers: { Authorization: `Bearer ${auth.token}` },
+    }).catch(() => {});
+    setImagePreviewUrl(null);
+    onRefresh();
+  }
+
   return (
     <div style={styles.soundRow}>
+      {/* Image thumbnail */}
+      <div
+        style={{
+          width: 40,
+          height: 40,
+          borderRadius: 6,
+          overflow: "hidden",
+          flexShrink: 0,
+          background: "#0e0e10",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+        }}
+      >
+        {imagePreviewUrl ? (
+          <img
+            src={imagePreviewUrl}
+            alt=""
+            style={{ width: "100%", height: "100%", objectFit: "cover" }}
+          />
+        ) : (
+          <svg
+            width="20"
+            height="20"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            style={{ opacity: 0.3 }}
+          >
+            <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
+            <path d="M15.54 8.46a5 5 0 0 1 0 7.07" />
+          </svg>
+        )}
+      </div>
       <div style={{ flex: 1, minWidth: 0 }}>
         {editing ? (
           <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
@@ -449,6 +541,37 @@ function SoundRow({ sound, tiers, onToggle, onUpdate, onDelete }) {
                 />
                 <span>{volume}%</span>
               </label>
+            </div>
+            {/* Image upload */}
+            <div>
+              <label style={{ fontSize: 11, opacity: 0.6 }}>
+                Card Image (max 256 KB)
+              </label>
+              <div
+                style={{
+                  display: "flex",
+                  gap: 6,
+                  alignItems: "center",
+                  marginTop: 4,
+                }}
+              >
+                <input
+                  ref={imageInputRef}
+                  type="file"
+                  accept="image/png,image/jpeg,image/gif,image/webp"
+                  onChange={handleImageUpload}
+                  style={{ fontSize: 11, flex: 1 }}
+                  disabled={imageUploading}
+                />
+                {sound.imageFilename && (
+                  <button
+                    style={{ ...styles.btnSmall, background: "#c0392b" }}
+                    onClick={handleImageDelete}
+                  >
+                    Remove
+                  </button>
+                )}
+              </div>
             </div>
             <div style={{ display: "flex", gap: 6 }}>
               <button style={styles.btnSmall} onClick={save}>

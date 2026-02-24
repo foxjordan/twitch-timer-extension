@@ -21,8 +21,11 @@ import {
   getSoundFilePath,
   ensureSoundDir,
   generateFilename,
+  generateImageFilename,
   ALLOWED_MIME_TYPES,
+  ALLOWED_IMAGE_MIME_TYPES,
   MAX_FILE_SIZE,
+  MAX_IMAGE_SIZE,
   VALID_TIERS,
   SOUNDS_FILE_DIR,
   seedDefaultSounds,
@@ -38,6 +41,14 @@ const upload = multer({
   limits: { fileSize: MAX_FILE_SIZE },
   fileFilter: (_req, file, cb) => {
     cb(null, ALLOWED_MIME_TYPES.includes(file.mimetype));
+  },
+});
+
+const imageUpload = multer({
+  dest: path.resolve(SOUNDS_FILE_DIR, "tmp"),
+  limits: { fileSize: MAX_IMAGE_SIZE },
+  fileFilter: (_req, file, cb) => {
+    cb(null, ALLOWED_IMAGE_MIME_TYPES.includes(file.mimetype));
   },
 });
 
@@ -180,6 +191,73 @@ export function mountSoundRoutes(app, deps = {}) {
       soundId: req.params.soundId,
     });
     res.json({ sound });
+  });
+
+  // Upload/replace image for a sound
+  app.post("/api/sounds/:soundId/image", imageUpload.single("image"), async (req, res) => {
+    const uid = requireBroadcaster(req, res);
+    if (!uid) return;
+
+    const sound = getSound(uid, req.params.soundId);
+    if (!sound) return res.status(404).json({ error: "Sound not found" });
+
+    if (!req.file) {
+      return res.status(400).json({ error: "No image file provided or unsupported format" });
+    }
+
+    try {
+      // Delete old image if it exists
+      if (sound.imageFilename) {
+        const oldPath = path.resolve(SOUNDS_FILE_DIR, String(uid), sound.imageFilename);
+        try { await fsUnlink(oldPath); } catch {}
+      }
+
+      const imageFilename = generateImageFilename(sound.id, req.file.mimetype);
+      await ensureSoundDir(uid);
+      const destPath = path.resolve(SOUNDS_FILE_DIR, String(uid), imageFilename);
+      await rename(req.file.path, destPath);
+
+      const updated = updateSound(uid, sound.id, { imageFilename });
+      logger.info("sound_image_uploaded", { userId: uid, soundId: sound.id, imageFilename });
+      res.json({ sound: updated });
+    } catch (err) {
+      logger.error("sound_image_upload_failed", { userId: uid, soundId: req.params.soundId, message: err?.message });
+      res.status(500).json({ error: "Failed to upload image" });
+    }
+  });
+
+  // Delete image for a sound
+  app.delete("/api/sounds/:soundId/image", async (req, res) => {
+    const uid = requireBroadcaster(req, res);
+    if (!uid) return;
+
+    const sound = getSound(uid, req.params.soundId);
+    if (!sound) return res.status(404).json({ error: "Sound not found" });
+
+    if (sound.imageFilename) {
+      const imgPath = path.resolve(SOUNDS_FILE_DIR, String(uid), sound.imageFilename);
+      try { await fsUnlink(imgPath); } catch {}
+    }
+
+    const updated = updateSound(uid, sound.id, { imageFilename: "" });
+    res.json({ sound: updated });
+  });
+
+  // Serve sound image for admin preview (session/JWT auth)
+  app.get("/api/sounds/:soundId/image", (req, res) => {
+    const uid = requireBroadcaster(req, res);
+    if (!uid) return;
+    const sound = getSound(uid, req.params.soundId);
+    if (!sound || !sound.imageFilename) {
+      return res.status(404).json({ error: "Image not found" });
+    }
+    const filePath = path.resolve(SOUNDS_FILE_DIR, String(uid), sound.imageFilename);
+    res.setHeader("Cache-Control", "no-store");
+    res.sendFile(filePath, (err) => {
+      if (err && !res.headersSent) {
+        res.status(404).json({ error: "Image file not found" });
+      }
+    });
   });
 
   // Delete a sound
@@ -349,6 +427,27 @@ export function mountSoundRoutes(app, deps = {}) {
   });
 
   // ===== Public endpoints =====
+
+  // Serve sound image (Extension JWT auth — any viewer/broadcaster/mod)
+  app.get("/api/sounds/image/:soundId", (req, res) => {
+    const claims = requireExtensionAuth(req, res);
+    if (!claims) return;
+    const channelId = req.query.channelId || claims.channel_id;
+    if (!channelId) return res.status(400).json({ error: "channelId required" });
+
+    const sound = getSound(String(channelId), req.params.soundId);
+    if (!sound || !sound.imageFilename) {
+      return res.status(404).json({ error: "Image not found" });
+    }
+
+    const filePath = path.resolve(SOUNDS_FILE_DIR, String(channelId), sound.imageFilename);
+    res.setHeader("Cache-Control", "public, max-age=3600");
+    res.sendFile(filePath, (err) => {
+      if (err && !res.headersSent) {
+        res.status(404).json({ error: "Image file not found" });
+      }
+    });
+  });
 
   // Preview a sound (Extension JWT auth — any viewer/broadcaster/mod)
   app.get("/api/sounds/preview/:soundId", (req, res) => {

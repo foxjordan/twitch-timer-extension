@@ -12,6 +12,7 @@ export default defineConfig({
         panel: resolve(__dirname, 'index.html'),
         config: resolve(__dirname, 'config.html'),
         mobile: resolve(__dirname, 'mobile.html'),
+        component: resolve(__dirname, 'component.html'),
       },
     },
   },

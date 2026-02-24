@@ -285,6 +285,7 @@ export function renderSoundConfigPage(options = {}) {
             card.appendChild(thumb);
 
             var info = document.createElement('div');
+            info.className = 'sound-info';
             info.style.cssText = 'flex:1; min-width:0;';
 
             var nameDiv = document.createElement('div');
@@ -343,7 +344,7 @@ export function renderSoundConfigPage(options = {}) {
         }
 
         function openSoundEditor(s, card) {
-          var info = card.querySelector('div');
+          var info = card.querySelector('.sound-info');
           if (!info) return;
           var existing = card.querySelector('.sound-edit-form');
           if (existing) { existing.remove(); return; }

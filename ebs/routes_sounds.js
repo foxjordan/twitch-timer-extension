@@ -2,9 +2,12 @@ import { logger } from "./logger.js";
 import jwt from "jsonwebtoken";
 import multer from "multer";
 import { rename, stat as fsStat, unlink as fsUnlink } from "fs/promises";
+import { createWriteStream } from "fs";
 import { execFile } from "child_process";
 import { promisify } from "util";
+import { pipeline } from "stream/promises";
 import path from "path";
+import fetch from "node-fetch";
 
 const execFileAsync = promisify(execFile);
 
@@ -321,6 +324,25 @@ export function mountSoundRoutes(app, deps = {}) {
 
       logger.info("clip_video_downloaded", { userId: uid, soundId, clipSlug, sizeBytes });
 
+      // Download clip thumbnail as the card image
+      let imageFilename = "";
+      if (clipInfo.thumbnail_url) {
+        try {
+          imageFilename = generateImageFilename(soundId, "image/jpeg");
+          const imgPath = path.resolve(SOUNDS_FILE_DIR, String(uid), imageFilename);
+          const imgRes = await fetch(clipInfo.thumbnail_url);
+          if (imgRes.ok) {
+            await pipeline(imgRes.body, createWriteStream(imgPath));
+          } else {
+            logger.warn("clip_thumbnail_download_failed", { userId: uid, soundId, status: imgRes.status });
+            imageFilename = "";
+          }
+        } catch (err) {
+          logger.warn("clip_thumbnail_error", { userId: uid, soundId, message: err?.message });
+          imageFilename = "";
+        }
+      }
+
       const result = createSound(uid, {
         id: soundId,
         type: "clip",
@@ -328,6 +350,7 @@ export function mountSoundRoutes(app, deps = {}) {
         filename,
         mimeType: "video/mp4",
         sizeBytes,
+        imageFilename,
         clipUrl: String(clipUrl),
         clipSlug,
         tier: tier || "sound_100",

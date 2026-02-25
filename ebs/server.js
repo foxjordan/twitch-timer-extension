@@ -64,7 +64,7 @@ import {
 import { fetchActiveSubscriberCount } from "./twitch_api.js";
 import { mountSoundRoutes } from "./routes_sounds.js";
 import { mountAdminRoutes } from "./routes_admin.js";
-import { loadSoundAlerts, listSounds, getSoundSettings } from "./sounds_store.js";
+import { loadSoundAlerts, listSounds, getSoundSettings, setSoundSettings } from "./sounds_store.js";
 import { loadBans, isBanned } from "./bans.js";
 
 const app = express();
@@ -832,6 +832,7 @@ mountAdminRoutes(app, {
   capReached,
   listSounds,
   getSoundSettings,
+  setSoundSettings,
   listGoals,
   getSavedStyle,
   DEFAULT_STYLE,

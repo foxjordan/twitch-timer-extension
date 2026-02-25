@@ -110,9 +110,10 @@ export function renderSoundConfigPage(options = {}) {
         <h2>Create Alert</h2>
         <div style="display:flex; gap:4px; margin-bottom:12px;">
           <button id="tabSound" class="tab-btn active" data-tab="sound" style="font-size:12px; padding:5px 12px; border-radius:6px;">Sound</button>
-          <button id="tabClip" class="tab-btn" data-tab="clip" style="font-size:12px; padding:5px 12px; border-radius:6px;">Twitch Clip</button>
-          <button id="tabVideo" class="tab-btn" data-tab="video" style="font-size:12px; padding:5px 12px; border-radius:6px;">Video</button>
+          <button id="tabClip" class="tab-btn" data-tab="clip" style="font-size:12px; padding:5px 12px; border-radius:6px; display:none;">Twitch Clip</button>
+          <button id="tabVideo" class="tab-btn" data-tab="video" style="font-size:12px; padding:5px 12px; border-radius:6px; display:none;">Video</button>
         </div>
+        <div id="proFeatureHint" class="hint" style="margin-bottom:10px;">Video &amp; clip alerts are a Pro feature. Contact the admin to enable them.</div>
 
         <!-- Sound upload tab -->
         <form id="soundUploadForm" class="tab-panel" data-tab="sound">
@@ -324,6 +325,14 @@ export function renderSoundConfigPage(options = {}) {
             if (soundGlobalVolumeEl) { soundGlobalVolumeEl.value = settings.globalVolume ?? 100; if (soundGlobalVolumeValEl) soundGlobalVolumeValEl.textContent = soundGlobalVolumeEl.value + '%'; }
             if (soundGlobalCooldownEl) soundGlobalCooldownEl.value = Math.round((settings.globalCooldownMs || 3000) / 1000);
             if (soundMaxQueueEl) soundMaxQueueEl.value = settings.maxQueueSize ?? 5;
+            // Gate clip/video tabs behind videoClipsEnabled
+            var vcEnabled = settings.videoClipsEnabled || false;
+            var tabClipEl = document.getElementById('tabClip');
+            var tabVideoEl = document.getElementById('tabVideo');
+            var proHintEl = document.getElementById('proFeatureHint');
+            if (tabClipEl) tabClipEl.style.display = vcEnabled ? '' : 'none';
+            if (tabVideoEl) tabVideoEl.style.display = vcEnabled ? '' : 'none';
+            if (proHintEl) proHintEl.style.display = vcEnabled ? 'none' : '';
             renderSoundList(soundsCache);
           } catch (err) {
             if (soundListEl) {

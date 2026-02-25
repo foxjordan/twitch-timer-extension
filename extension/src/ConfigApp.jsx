@@ -354,8 +354,12 @@ function ConfigApp() {
         <div style={{ display: "flex", gap: 4, marginBottom: 10 }}>
           {[
             { key: "sound", label: "Sound" },
-            { key: "clip", label: "Twitch Clip" },
-            { key: "video", label: "Video" },
+            ...(settings.videoClipsEnabled
+              ? [
+                  { key: "clip", label: "Twitch Clip" },
+                  { key: "video", label: "Video" },
+                ]
+              : []),
           ].map((tab) => (
             <button
               key={tab.key}
@@ -370,6 +374,11 @@ function ConfigApp() {
             </button>
           ))}
         </div>
+        {!settings.videoClipsEnabled && (
+          <div style={{ fontSize: 11, opacity: 0.5, marginBottom: 8 }}>
+            Video &amp; clip alerts are a Pro feature.
+          </div>
+        )}
 
         {/* Sound tab */}
         {createTab === "sound" && (

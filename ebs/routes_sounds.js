@@ -209,6 +209,11 @@ export function mountSoundRoutes(app, deps = {}) {
     const uid = requireBroadcaster(req, res);
     if (!uid) return;
 
+    const settings = getSoundSettings(uid);
+    if (!settings.videoClipsEnabled) {
+      return res.status(403).json({ error: "Video & clip alerts require a Pro plan" });
+    }
+
     const { name, clipUrl, tier, volume, cooldownMs } = req.body || {};
     if (!clipUrl) {
       return res.status(400).json({ error: "clipUrl is required" });
@@ -278,6 +283,12 @@ export function mountSoundRoutes(app, deps = {}) {
   app.post("/api/sounds/video", videoUpload.single("file"), async (req, res) => {
     const uid = requireBroadcaster(req, res);
     if (!uid) return;
+
+    const videoSettings = getSoundSettings(uid);
+    if (!videoSettings.videoClipsEnabled) {
+      if (req.file) try { await fsUnlink(req.file.path); } catch {}
+      return res.status(403).json({ error: "Video & clip alerts require a Pro plan" });
+    }
 
     if (!req.file) {
       return res.status(400).json({

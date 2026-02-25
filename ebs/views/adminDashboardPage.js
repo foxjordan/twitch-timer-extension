@@ -282,6 +282,7 @@ export function renderAdminDashboardPage(options = {}) {
               pillsDiv.appendChild(span);
             }
             addPill('Sounds: ' + (u.soundCount || 0), u.soundsEnabled);
+            addPill('Video/Clips', u.videoClipsEnabled);
             addPill('Goals: ' + (u.goalCount || 0), u.goalCount > 0);
             addPill('Style', u.hasCustomStyle);
             tdFeatures.appendChild(pillsDiv);
@@ -313,6 +314,13 @@ export function renderAdminDashboardPage(options = {}) {
               banBtn.addEventListener('click', function() { doBan(u.userId, u.displayName || u.login); });
               tdActions.appendChild(banBtn);
             }
+            // Video/Clips toggle
+            var vcBtn = document.createElement('button');
+            vcBtn.className = u.videoClipsEnabled ? 'btn-ban' : 'btn-unban';
+            vcBtn.textContent = u.videoClipsEnabled ? 'Disable V/C' : 'Enable V/C';
+            vcBtn.style.marginLeft = '4px';
+            vcBtn.addEventListener('click', function() { toggleVideoClips(u.userId, !u.videoClipsEnabled); });
+            tdActions.appendChild(vcBtn);
             tr.appendChild(tdActions);
 
             tbody.appendChild(tr);
@@ -373,6 +381,23 @@ export function renderAdminDashboardPage(options = {}) {
             refresh();
           })
           .catch(function() { alert('Unban request failed'); });
+        }
+
+        function toggleVideoClips(userId, enabled) {
+          var action = enabled ? 'Enable' : 'Disable';
+          if (!confirm(action + ' video/clip alerts for user ' + userId + '?')) return;
+          fetch('/api/admin/toggle-video-clips', {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ userId: userId, enabled: enabled })
+          })
+          .then(function(r) { return r.json(); })
+          .then(function(data) {
+            if (data.error) { alert('Error: ' + data.error); return; }
+            refresh();
+          })
+          .catch(function() { alert('Toggle request failed'); });
         }
 
         refresh();

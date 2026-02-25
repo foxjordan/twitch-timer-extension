@@ -77,6 +77,7 @@ const DEFAULT_SOUND_SETTINGS = {
   globalCooldownMs: 3000,
   maxQueueSize: 5,
   overlayDurationMs: 5000,
+  videoClipsEnabled: false,
 };
 
 function nowIso() {
@@ -185,6 +186,7 @@ function sanitizeSettings(raw = {}) {
   next.globalCooldownMs = sanitizeNumber(raw.globalCooldownMs, next.globalCooldownMs, 0, 60000);
   next.maxQueueSize = sanitizeNumber(raw.maxQueueSize, next.maxQueueSize, 1, 20);
   next.overlayDurationMs = sanitizeNumber(raw.overlayDurationMs, next.overlayDurationMs, 1000, 30000);
+  if (typeof raw.videoClipsEnabled === "boolean") next.videoClipsEnabled = raw.videoClipsEnabled;
   return next;
 }
 

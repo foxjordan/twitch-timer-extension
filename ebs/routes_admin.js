@@ -24,6 +24,7 @@ export function mountAdminRoutes(app, ctx) {
     capReached,
     listSounds,
     getSoundSettings,
+    setSoundSettings,
     listGoals,
     getSavedStyle,
     DEFAULT_STYLE,
@@ -69,11 +70,13 @@ export function mountAdminRoutes(app, ctx) {
       // Sounds
       let soundCount = 0;
       let soundsEnabled = false;
+      let videoClipsEnabled = false;
       try {
         const sounds = listSounds(uid);
         soundCount = sounds.length;
         const soundSettings = getSoundSettings(uid);
         soundsEnabled = soundSettings.enabled && soundCount > 0;
+        videoClipsEnabled = soundSettings.videoClipsEnabled || false;
       } catch {}
 
       // Goals
@@ -104,6 +107,7 @@ export function mountAdminRoutes(app, ctx) {
         capReached: cap,
         soundCount,
         soundsEnabled,
+        videoClipsEnabled,
         goalCount,
         hasCustomStyle,
         defaultInitialSeconds: settings.defaultInitialSeconds || null,
@@ -178,5 +182,19 @@ export function mountAdminRoutes(app, ctx) {
     const existed = unbanUser(uid);
 
     res.json({ ok: true, userId: uid, wasBanned: existed });
+  });
+
+  // Toggle video/clips feature for a user
+  app.post("/api/admin/toggle-video-clips", (req, res) => {
+    if (!req.session?.isAdmin || !isSuperAdmin(req)) {
+      return res.status(403).json({ error: "Access denied" });
+    }
+    const { userId, enabled } = req.body || {};
+    if (!userId) return res.status(400).json({ error: "userId required" });
+
+    const uid = String(userId);
+    setSoundSettings(uid, { videoClipsEnabled: Boolean(enabled) });
+
+    res.json({ ok: true, userId: uid, videoClipsEnabled: Boolean(enabled) });
   });
 }

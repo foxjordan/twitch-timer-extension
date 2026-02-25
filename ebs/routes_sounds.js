@@ -7,6 +7,37 @@ import { promisify } from "util";
 import path from "path";
 
 const execFileAsync = promisify(execFile);
+
+/**
+ * Compress a video file in-place with H.264 CRF 28.
+ * Skips replacement if the compressed file is larger than the original.
+ * Returns the final file size in bytes.
+ */
+async function compressVideo(filePath) {
+  const tmpPath = filePath + ".compress_tmp.mp4";
+  try {
+    await execFileAsync("ffmpeg", [
+      "-i", filePath,
+      "-c:v", "libx264", "-crf", "28", "-preset", "fast",
+      "-c:a", "aac", "-b:a", "128k",
+      "-movflags", "+faststart",
+      "-y", tmpPath,
+    ], { timeout: 120000 });
+    const tmpStat = await fsStat(tmpPath);
+    if (tmpStat.size === 0) throw new Error("ffmpeg produced empty file");
+    const origStat = await fsStat(filePath);
+    if (tmpStat.size < origStat.size) {
+      await rename(tmpPath, filePath);
+      return tmpStat.size;
+    }
+    await fsUnlink(tmpPath);
+    return origStat.size;
+  } catch (err) {
+    try { await fsUnlink(tmpPath); } catch {}
+    throw err;
+  }
+}
+
 import { getBaseUrl } from "./base_url.js";
 import { getOrCreateUserKey } from "./keys.js";
 import { fetchClipInfo, downloadClipVideo } from "./twitch_api.js";
@@ -265,6 +296,15 @@ export function mountSoundRoutes(app, deps = {}) {
         sizeBytes = fileStat.size;
       } catch {}
 
+      // Compress the downloaded clip
+      try {
+        const originalSize = sizeBytes;
+        sizeBytes = await compressVideo(destPath);
+        logger.info("clip_compressed", { userId: uid, soundId, originalSize, compressedSize: sizeBytes });
+      } catch (err) {
+        logger.warn("clip_compress_failed", { userId: uid, soundId, message: err?.message });
+      }
+
       // Sanity check: file should be at least a few KB for a real video
       if (sizeBytes < 1024) {
         try { await fsUnlink(destPath); } catch {}
@@ -352,6 +392,15 @@ export function mountSoundRoutes(app, deps = {}) {
         sizeBytes = fileStat.size;
       } catch {}
 
+      // Compress the downloaded clip
+      try {
+        const originalSize = sizeBytes;
+        sizeBytes = await compressVideo(destPath);
+        logger.info("clip_redownload_compressed", { userId: uid, soundId: sound.id, originalSize, compressedSize: sizeBytes });
+      } catch (err) {
+        logger.warn("clip_redownload_compress_failed", { userId: uid, soundId: sound.id, message: err?.message });
+      }
+
       updateSound(uid, sound.id, {
         filename,
         mimeType: "video/mp4",
@@ -400,6 +449,15 @@ export function mountSoundRoutes(app, deps = {}) {
       const destPath = path.resolve(SOUNDS_FILE_DIR, String(uid), filename);
       await rename(req.file.path, destPath);
 
+      // Compress video (falls back to original if compression fails or doesn't help)
+      let sizeBytes = req.file.size;
+      try {
+        sizeBytes = await compressVideo(destPath);
+        logger.info("video_compressed", { userId: uid, soundId, originalSize: req.file.size, compressedSize: sizeBytes });
+      } catch (err) {
+        logger.warn("video_compress_failed", { userId: uid, soundId, message: err?.message });
+      }
+
       const result = createSound(uid, {
         id: soundId,
         type: "video",
@@ -407,7 +465,7 @@ export function mountSoundRoutes(app, deps = {}) {
         filename,
         originalFilename: req.file.originalname || "",
         mimeType: req.file.mimetype,
-        sizeBytes: req.file.size,
+        sizeBytes,
         tier: req.body.tier || "sound_100",
         volume: req.body.volume ? Number(req.body.volume) : 80,
         cooldownMs: req.body.cooldownMs ? Number(req.body.cooldownMs) : 5000,

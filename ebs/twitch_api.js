@@ -222,27 +222,33 @@ export async function fetchClipInfo(clipSlug, { userId } = {}) {
 
 /**
  * Download a clip's MP4 video to a local file path.
- * Returns true on success, false on failure.
+ * Returns { ok, contentType, size, error } with details.
  */
 export async function downloadClipVideo(videoUrl, destPath) {
-  if (!videoUrl || !destPath) return false;
+  if (!videoUrl || !destPath) return { ok: false, error: "Missing url or path" };
   try {
     logger.info("clip_download_start", { url: videoUrl, destPath });
     const res = await fetch(videoUrl);
     if (!res.ok) {
       const body = await res.text().catch(() => "");
       logger.warn("clip_download_failed", { status: res.status, url: videoUrl, body: body.slice(0, 200) });
-      return false;
+      return { ok: false, error: `HTTP ${res.status}`, body: body.slice(0, 200) };
     }
     const contentType = res.headers.get("content-type") || "";
-    if (!contentType.includes("video") && !contentType.includes("octet-stream")) {
-      logger.warn("clip_download_unexpected_type", { url: videoUrl, contentType });
+    const contentLength = res.headers.get("content-length");
+
+    // Reject non-video responses (HTML error pages, etc.)
+    if (contentType.includes("text/html") || contentType.includes("application/json")) {
+      const body = await res.text().catch(() => "");
+      logger.warn("clip_download_not_video", { url: videoUrl, contentType, body: body.slice(0, 200) });
+      return { ok: false, error: `Response is ${contentType}, not video`, contentType };
     }
+
     await pipeline(res.body, createWriteStream(destPath));
-    logger.info("clip_download_complete", { url: videoUrl, destPath });
-    return true;
+    logger.info("clip_download_complete", { url: videoUrl, destPath, contentType, contentLength });
+    return { ok: true, contentType, size: contentLength ? Number(contentLength) : undefined };
   } catch (err) {
     logger.error("clip_download_error", { url: videoUrl, message: err?.message });
-    return false;
+    return { ok: false, error: err?.message };
   }
 }

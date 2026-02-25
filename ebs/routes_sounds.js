@@ -246,10 +246,16 @@ export function mountSoundRoutes(app, deps = {}) {
       const filename = `${soundId}.mp4`;
       await ensureSoundDir(uid);
       const destPath = path.resolve(SOUNDS_FILE_DIR, String(uid), filename);
-      const downloaded = await downloadClipVideo(clipInfo.video_url, destPath);
-      if (!downloaded) {
+      const dlResult = await downloadClipVideo(clipInfo.video_url, destPath);
+      if (!dlResult.ok) {
         return res.status(400).json({
           error: "Failed to download clip video. The clip may be unavailable or region-restricted.",
+          debug: {
+            thumbnail_url: clipInfo.thumbnail_url,
+            derived_video_url: clipInfo.video_url,
+            download_error: dlResult.error,
+            download_content_type: dlResult.contentType,
+          },
         });
       }
 
@@ -258,6 +264,21 @@ export function mountSoundRoutes(app, deps = {}) {
         const fileStat = await fsStat(destPath);
         sizeBytes = fileStat.size;
       } catch {}
+
+      // Sanity check: file should be at least a few KB for a real video
+      if (sizeBytes < 1024) {
+        try { await fsUnlink(destPath); } catch {}
+        return res.status(400).json({
+          error: "Downloaded file is too small to be a valid video. The clip URL may have changed.",
+          debug: {
+            thumbnail_url: clipInfo.thumbnail_url,
+            derived_video_url: clipInfo.video_url,
+            download_content_type: dlResult.contentType,
+            sizeBytes,
+          },
+        });
+      }
+
       logger.info("clip_video_downloaded", { userId: uid, soundId, clipSlug, sizeBytes });
 
       const result = createSound(uid, {
@@ -278,7 +299,15 @@ export function mountSoundRoutes(app, deps = {}) {
       if (result.error) return res.status(400).json(result);
 
       logger.info("clip_created", { userId: uid, soundId, clipSlug });
-      res.status(201).json({ sound: result });
+      res.status(201).json({
+        sound: result,
+        debug: {
+          thumbnail_url: clipInfo.thumbnail_url,
+          derived_video_url: clipInfo.video_url,
+          download_content_type: dlResult.contentType,
+          sizeBytes,
+        },
+      });
     } catch (err) {
       logger.error("clip_create_failed", { userId: uid, message: err?.message });
       res.status(500).json({ error: "Failed to create clip alert" });
@@ -304,9 +333,17 @@ export function mountSoundRoutes(app, deps = {}) {
       const filename = `${sound.id}.mp4`;
       await ensureSoundDir(uid);
       const destPath = path.resolve(SOUNDS_FILE_DIR, String(uid), filename);
-      const downloaded = await downloadClipVideo(clipInfo.video_url, destPath);
-      if (!downloaded) {
-        return res.status(400).json({ error: "Failed to download clip video" });
+      const dlResult = await downloadClipVideo(clipInfo.video_url, destPath);
+      if (!dlResult.ok) {
+        return res.status(400).json({
+          error: "Failed to download clip video",
+          debug: {
+            thumbnail_url: clipInfo.thumbnail_url,
+            derived_video_url: clipInfo.video_url,
+            download_error: dlResult.error,
+            download_content_type: dlResult.contentType,
+          },
+        });
       }
 
       let sizeBytes = 0;
@@ -322,7 +359,16 @@ export function mountSoundRoutes(app, deps = {}) {
       });
 
       logger.info("clip_redownloaded", { userId: uid, soundId: sound.id, sizeBytes });
-      res.json({ ok: true, sound: getSound(uid, sound.id) });
+      res.json({
+        ok: true,
+        sound: getSound(uid, sound.id),
+        debug: {
+          thumbnail_url: clipInfo.thumbnail_url,
+          derived_video_url: clipInfo.video_url,
+          download_content_type: dlResult.contentType,
+          sizeBytes,
+        },
+      });
     } catch (err) {
       logger.error("clip_redownload_failed", { userId: uid, soundId: sound.id, message: err?.message });
       res.status(500).json({ error: "Failed to re-download clip" });

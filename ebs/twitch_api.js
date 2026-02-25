@@ -1,4 +1,6 @@
 import fetch from "node-fetch";
+import { pipeline } from "stream/promises";
+import { createWriteStream } from "fs";
 import { getUserAccessToken } from "./twitch_tokens.js";
 import { logger } from "./logger.js";
 
@@ -113,5 +115,79 @@ export async function fetchFollowerCount({ broadcasterId }) {
   } catch (err) {
     logger.error("twitch_followers_fetch_error", { message: err?.message });
     return null;
+  }
+}
+
+/**
+ * Fetch clip metadata from the Twitch Helix API.
+ * Returns { id, title, duration, thumbnail_url, video_url } or null.
+ */
+export async function fetchClipInfo(clipSlug) {
+  if (!clipSlug) return null;
+  const clientId = process.env.TWITCH_CLIENT_ID;
+  const broadcasterId = process.env.BROADCASTER_USER_ID;
+  const token =
+    (broadcasterId && getUserAccessToken(broadcasterId)) ||
+    process.env.BROADCASTER_USER_TOKEN ||
+    null;
+  if (!clientId || !token) {
+    logger.warn("clip_fetch_no_credentials");
+    return null;
+  }
+
+  try {
+    const url = `https://api.twitch.tv/helix/clips?id=${encodeURIComponent(clipSlug)}`;
+    const res = await fetch(url, {
+      headers: {
+        "Client-Id": clientId,
+        Authorization: `Bearer ${token}`,
+      },
+    });
+    if (!res.ok) {
+      logger.warn("clip_fetch_failed", { status: res.status, slug: clipSlug });
+      return null;
+    }
+    const json = await res.json();
+    const clip = json.data?.[0];
+    if (!clip) return null;
+
+    // Derive direct MP4 URL from thumbnail_url
+    // thumbnail format: https://clips-media-assets2.twitch.tv/{id}-preview-480x272.jpg
+    // video format:     https://clips-media-assets2.twitch.tv/{id}.mp4
+    let videoUrl = null;
+    if (clip.thumbnail_url) {
+      videoUrl = clip.thumbnail_url.replace(/-preview-\d+x\d+\.jpg.*$/, ".mp4");
+    }
+
+    return {
+      id: clip.id,
+      title: clip.title,
+      duration: clip.duration,
+      thumbnail_url: clip.thumbnail_url,
+      video_url: videoUrl,
+    };
+  } catch (err) {
+    logger.error("clip_fetch_error", { slug: clipSlug, message: err?.message });
+    return null;
+  }
+}
+
+/**
+ * Download a clip's MP4 video to a local file path.
+ * Returns true on success, false on failure.
+ */
+export async function downloadClipVideo(videoUrl, destPath) {
+  if (!videoUrl || !destPath) return false;
+  try {
+    const res = await fetch(videoUrl);
+    if (!res.ok) {
+      logger.warn("clip_download_failed", { status: res.status, url: videoUrl });
+      return false;
+    }
+    await pipeline(res.body, createWriteStream(destPath));
+    return true;
+  } catch (err) {
+    logger.error("clip_download_error", { url: videoUrl, message: err?.message });
+    return false;
   }
 }

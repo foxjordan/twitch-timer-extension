@@ -152,29 +152,40 @@ export function renderSoundAlertOverlayPage() {
 
         function playClip(item) {
           showPopup(item.soundName, 'clip');
-          var slug = item.clipSlug;
-          if (!slug) { advance(); return; }
+          var vol = Math.min(1, Math.max(0, (item.volume || 100) / 100));
 
+          // Play clip as a video file (downloaded at creation time)
           var container = document.createElement('div');
           container.className = 'media-container';
 
-          var iframe = document.createElement('iframe');
-          iframe.src = 'https://clips.twitch.tv/embed?clip=' + encodeURIComponent(slug)
-            + '&parent=' + encodeURIComponent(window.location.hostname)
-            + '&autoplay=true&muted=false&controls=false';
-          iframe.width = '640';
-          iframe.height = '360';
-          iframe.allow = 'autoplay';
-          container.appendChild(iframe);
-          document.body.appendChild(container);
+          var video = document.createElement('video');
+          video.src = '/api/sounds/file/' + encodeURIComponent(item.soundId) + '?key=' + encodeURIComponent(overlayKey);
+          video.volume = vol;
+          video.autoplay = true;
+          video.playsInline = true;
 
-          // Twitch clip embeds don't expose ended events cross-origin,
-          // so use a generous timeout (60s default, most clips are <60s)
-          var clipTimeout = Math.max(displayMs, 60000);
-          setTimeout(function() {
+          video.onended = function() {
             container.classList.add('exit');
             setTimeout(function() { container.remove(); advance(); }, 350);
-          }, clipTimeout);
+          };
+          video.onerror = function() {
+            container.remove();
+            advance();
+          };
+
+          container.appendChild(video);
+          document.body.appendChild(container);
+
+          // Safety timeout (5 min max)
+          setTimeout(function() {
+            if (container.parentNode) {
+              try { video.pause(); } catch(e) {}
+              container.classList.add('exit');
+              setTimeout(function() { container.remove(); advance(); }, 350);
+            }
+          }, 300000);
+
+          video.play().catch(function() { container.remove(); advance(); });
         }
 
         function playVideo(item) {

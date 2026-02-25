@@ -9,6 +9,7 @@ import path from "path";
 const execFileAsync = promisify(execFile);
 import { getBaseUrl } from "./base_url.js";
 import { getOrCreateUserKey } from "./keys.js";
+import { fetchClipInfo, downloadClipVideo } from "./twitch_api.js";
 import {
   listSounds,
   getSound,
@@ -222,10 +223,39 @@ export function mountSoundRoutes(app, deps = {}) {
 
     try {
       const soundId = `snd_${crypto.randomUUID().slice(0, 12)}`;
+
+      // Fetch clip metadata and download the video file
+      const clipInfo = await fetchClipInfo(clipSlug);
+      let filename = "";
+      let mimeType = "video/mp4";
+      let sizeBytes = 0;
+
+      if (clipInfo?.video_url) {
+        filename = `${soundId}.mp4`;
+        await ensureSoundDir(uid);
+        const destPath = path.resolve(SOUNDS_FILE_DIR, String(uid), filename);
+        const downloaded = await downloadClipVideo(clipInfo.video_url, destPath);
+        if (downloaded) {
+          try {
+            const fileStat = await fsStat(destPath);
+            sizeBytes = fileStat.size;
+          } catch {}
+          logger.info("clip_video_downloaded", { userId: uid, soundId, clipSlug, sizeBytes });
+        } else {
+          logger.warn("clip_video_download_failed", { userId: uid, clipSlug });
+          filename = "";
+        }
+      } else {
+        logger.warn("clip_no_video_url", { userId: uid, clipSlug });
+      }
+
       const result = createSound(uid, {
         id: soundId,
         type: "clip",
-        name: name || `Clip ${clipSlug.slice(0, 20)}`,
+        name: name || clipInfo?.title || `Clip ${clipSlug.slice(0, 20)}`,
+        filename,
+        mimeType: filename ? mimeType : "",
+        sizeBytes,
         clipUrl: String(clipUrl),
         clipSlug,
         tier: tier || "sound_100",
@@ -236,7 +266,7 @@ export function mountSoundRoutes(app, deps = {}) {
 
       if (result.error) return res.status(400).json(result);
 
-      logger.info("clip_created", { userId: uid, soundId, clipSlug });
+      logger.info("clip_created", { userId: uid, soundId, clipSlug, hasVideo: !!filename });
       res.status(201).json({ sound: result });
     } catch (err) {
       logger.error("clip_create_failed", { userId: uid, message: err?.message });
@@ -251,7 +281,7 @@ export function mountSoundRoutes(app, deps = {}) {
 
     if (!req.file) {
       return res.status(400).json({
-        error: "No video file provided or unsupported format. Accepted: MP4, WebM (max 5 MB)",
+        error: "No video file provided or unsupported format. Accepted: MP4, WebM (max 10 MB)",
       });
     }
 
@@ -576,8 +606,8 @@ export function mountSoundRoutes(app, deps = {}) {
       return res.status(404).json({ error: "Sound not found or disabled" });
     }
 
-    // Clip type: return embed info instead of a file
-    if (sound.type === "clip") {
+    // Clips without a downloaded file: return embed info
+    if (sound.type === "clip" && !sound.filename) {
       return res.json({
         type: "clip",
         clipSlug: sound.clipSlug,
@@ -585,9 +615,9 @@ export function mountSoundRoutes(app, deps = {}) {
       });
     }
 
-    // Sound and video types: serve the file
+    // Sound, video, and clip (with file) types: serve the file
     const filePath = getSoundFilePath(String(channelId), sound);
-    res.setHeader("Content-Type", sound.mimeType);
+    res.setHeader("Content-Type", sound.mimeType || "video/mp4");
     res.setHeader("Cache-Control", "public, max-age=3600");
     res.sendFile(filePath, (err) => {
       if (err && !res.headersSent) {
@@ -635,14 +665,14 @@ export function mountSoundRoutes(app, deps = {}) {
     const sound = getSound(String(uid), req.params.soundId);
     if (!sound) return res.status(404).json({ error: "Sound not found" });
 
-    // Clip type: return embed info (no file to serve)
-    if (sound.type === "clip") {
+    // Clips without a downloaded file: return embed info as fallback
+    if (sound.type === "clip" && !sound.filename) {
       return res.json({ type: "clip", clipSlug: sound.clipSlug, clipUrl: sound.clipUrl });
     }
 
-    // Sound and video types: serve the file
+    // Sound, video, and clip (with downloaded file) types: serve the file
     const filePath = getSoundFilePath(String(uid), sound);
-    res.setHeader("Content-Type", sound.mimeType);
+    res.setHeader("Content-Type", sound.mimeType || "video/mp4");
     res.setHeader("Cache-Control", "public, max-age=86400");
     res.sendFile(filePath, (err) => {
       if (err && !res.headersSent) {

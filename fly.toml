@@ -3,7 +3,7 @@ app = "twitch-timer-extension"
 primary_region = "sjc"
 
 [build]
-  dockerfile = "Dockerfile"
+  dockerfile = "ebs/Dockerfile"
 
 [env]
   PORT = "8080"

@@ -14,11 +14,22 @@ export function setLoggerContext(meta = {}) {
   }
 }
 
-function emit(level, message, meta = {}) {
+function formatContext(meta) {
+  const parts = [];
+  for (const [k, v] of Object.entries(meta)) {
+    if (v === undefined || v === null || v === "") continue;
+    parts.push(`${k}=${typeof v === "object" ? JSON.stringify(v) : v}`);
+  }
+  return parts.join(" ");
+}
+
+function emit(level, event, meta = {}) {
+  const ctx = formatContext(meta);
   const payload = {
     ts: new Date().toISOString(),
     level,
-    message,
+    event,
+    message: ctx ? `${event} ${ctx}` : event,
     ...baseMeta,
     ...dynamicMeta,
     ...meta,

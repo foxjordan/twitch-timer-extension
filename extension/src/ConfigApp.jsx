@@ -34,9 +34,12 @@ function ConfigApp() {
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(null);
   const fileRef = useRef(null);
+  const videoFileRef = useRef(null);
   const [newName, setNewName] = useState("");
   const [newTier, setNewTier] = useState("sound_100");
   const [newVolume, setNewVolume] = useState(80);
+  const [createTab, setCreateTab] = useState("sound");
+  const [clipUrl, setClipUrl] = useState("");
   const [overlayUrl, setOverlayUrl] = useState(null);
   const [urlCopied, setUrlCopied] = useState(false);
 
@@ -117,10 +120,83 @@ function ConfigApp() {
       await fetchSounds(auth.token);
       logEvent("sound_uploaded", { tier: newTier });
       setNewName("");
-      setNewTier("sound_tier_1");
+      setNewTier("sound_100");
       setNewVolume(80);
       if (fileRef.current) fileRef.current.value = "";
       flash("Sound uploaded");
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setUploading(false);
+    }
+  }
+
+  async function handleClipCreate(e) {
+    e.preventDefault();
+    setError(null);
+    if (!clipUrl.trim()) return setError("Enter a Twitch Clip URL");
+
+    setUploading(true);
+    try {
+      const res = await fetch(`${EBS_BASE}/api/sounds/clip`, {
+        method: "POST",
+        headers: { ...headers(), "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: newName || "Clip",
+          clipUrl: clipUrl.trim(),
+          tier: newTier,
+          volume: newVolume,
+        }),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error || "Failed to create clip alert");
+      }
+      await fetchSounds(auth.token);
+      logEvent("clip_created", { tier: newTier });
+      setNewName("");
+      setClipUrl("");
+      setNewTier("sound_100");
+      setNewVolume(80);
+      flash("Clip alert created");
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setUploading(false);
+    }
+  }
+
+  async function handleVideoUpload(e) {
+    e.preventDefault();
+    setError(null);
+    const file = videoFileRef.current?.files?.[0];
+    if (!file) return setError("Select a video file");
+    if (file.size > 5 * 1024 * 1024) return setError("Video must be under 5 MB");
+
+    setUploading(true);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("name", newName || file.name.replace(/\.[^.]+$/, ""));
+      formData.append("tier", newTier);
+      formData.append("volume", String(newVolume));
+
+      const res = await fetch(`${EBS_BASE}/api/sounds/video`, {
+        method: "POST",
+        headers: headers(),
+        body: formData,
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error || "Video upload failed");
+      }
+      await fetchSounds(auth.token);
+      logEvent("video_uploaded", { tier: newTier });
+      setNewName("");
+      setNewTier("sound_100");
+      setNewVolume(80);
+      if (videoFileRef.current) videoFileRef.current.value = "";
+      flash("Video uploaded");
     } catch (e) {
       setError(e.message);
     } finally {
@@ -209,7 +285,7 @@ function ConfigApp() {
 
   return (
     <div style={styles.container}>
-      <h2 style={styles.heading}>Sound Alerts</h2>
+      <h2 style={styles.heading}>Alerts</h2>
 
       {error && <div style={styles.error}>{error}</div>}
       {success && <div style={styles.success}>{success}</div>}
@@ -271,75 +347,214 @@ function ConfigApp() {
         </label>
       </div>
 
-      {/* Upload Form */}
+      {/* Create Alert */}
       <div style={styles.card}>
-        <h3 style={styles.subHeading}>Upload Sound</h3>
-        <div style={{ fontSize: 11, opacity: 0.5, marginBottom: 8 }}>
-          Max 1 MB. Accepted formats: MP3, OGG, WAV, WebM, M4A.
-        </div>
-        <form onSubmit={handleUpload}>
-          <div style={{ marginBottom: 8 }}>
-            <input
-              ref={fileRef}
-              type="file"
-              accept="audio/mpeg,audio/ogg,audio/wav,audio/webm,audio/mp4"
-              style={styles.fileInput}
-            />
-          </div>
-          <div style={{ marginBottom: 8 }}>
-            <input
-              type="text"
-              placeholder="Sound name"
-              value={newName}
-              onChange={(e) => setNewName(e.target.value)}
-              style={styles.textInput}
-              maxLength={100}
-            />
-          </div>
-          <div style={styles.row}>
-            <select
-              value={newTier}
-              onChange={(e) => setNewTier(e.target.value)}
-              style={styles.select}
+        <h3 style={styles.subHeading}>Create Alert</h3>
+        {/* Tabs */}
+        <div style={{ display: "flex", gap: 4, marginBottom: 10 }}>
+          {[
+            { key: "sound", label: "Sound" },
+            { key: "clip", label: "Twitch Clip" },
+            { key: "video", label: "Video" },
+          ].map((tab) => (
+            <button
+              key={tab.key}
+              onClick={() => setCreateTab(tab.key)}
+              style={{
+                ...styles.btnSmall,
+                background: createTab === tab.key ? "#9146FF" : "#303038",
+                opacity: createTab === tab.key ? 1 : 0.7,
+              }}
             >
-              {(tiers.length ? tiers : Object.keys(TIER_LABELS)).map((t) => (
-                <option key={t} value={t}>
-                  {TIER_LABELS[t] || t}
-                </option>
-              ))}
-            </select>
-            <label style={{ display: "flex", alignItems: "center", gap: 6 }}>
-              Vol
+              {tab.label}
+            </button>
+          ))}
+        </div>
+
+        {/* Sound tab */}
+        {createTab === "sound" && (
+          <form onSubmit={handleUpload}>
+            <div style={{ fontSize: 11, opacity: 0.5, marginBottom: 8 }}>
+              Max 1 MB. Accepted: MP3, OGG, WAV, WebM, M4A.
+            </div>
+            <div style={{ marginBottom: 8 }}>
               <input
-                type="range"
-                min="0"
-                max="100"
-                value={newVolume}
-                onChange={(e) => setNewVolume(Number(e.target.value))}
-                style={{ width: 80 }}
+                ref={fileRef}
+                type="file"
+                accept="audio/mpeg,audio/ogg,audio/wav,audio/webm,audio/mp4"
+                style={styles.fileInput}
               />
-              <span style={styles.muted}>{newVolume}%</span>
-            </label>
-          </div>
-          <button
-            type="submit"
-            disabled={uploading}
-            style={{
-              ...styles.btn,
-              marginTop: 8,
-              opacity: uploading ? 0.6 : 1,
-            }}
-          >
-            {uploading ? "Uploading..." : "Upload"}
-          </button>
-        </form>
+            </div>
+            <div style={{ marginBottom: 8 }}>
+              <input
+                type="text"
+                placeholder="Sound name"
+                value={newName}
+                onChange={(e) => setNewName(e.target.value)}
+                style={styles.textInput}
+                maxLength={100}
+              />
+            </div>
+            <div style={styles.row}>
+              <select
+                value={newTier}
+                onChange={(e) => setNewTier(e.target.value)}
+                style={styles.select}
+              >
+                {(tiers.length ? tiers : Object.keys(TIER_LABELS)).map((t) => (
+                  <option key={t} value={t}>
+                    {TIER_LABELS[t] || t}
+                  </option>
+                ))}
+              </select>
+              <label style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                Vol
+                <input
+                  type="range"
+                  min="0"
+                  max="100"
+                  value={newVolume}
+                  onChange={(e) => setNewVolume(Number(e.target.value))}
+                  style={{ width: 80 }}
+                />
+                <span style={styles.muted}>{newVolume}%</span>
+              </label>
+            </div>
+            <button
+              type="submit"
+              disabled={uploading}
+              style={{ ...styles.btn, marginTop: 8, opacity: uploading ? 0.6 : 1 }}
+            >
+              {uploading ? "Uploading..." : "Upload Sound"}
+            </button>
+          </form>
+        )}
+
+        {/* Clip tab */}
+        {createTab === "clip" && (
+          <form onSubmit={handleClipCreate}>
+            <div style={{ fontSize: 11, opacity: 0.5, marginBottom: 8 }}>
+              Paste a Twitch Clip URL. The clip will play in the OBS overlay when redeemed.
+            </div>
+            <div style={{ marginBottom: 8 }}>
+              <input
+                type="text"
+                placeholder="https://clips.twitch.tv/..."
+                value={clipUrl}
+                onChange={(e) => setClipUrl(e.target.value)}
+                style={styles.textInput}
+              />
+            </div>
+            <div style={{ marginBottom: 8 }}>
+              <input
+                type="text"
+                placeholder="Alert name"
+                value={newName}
+                onChange={(e) => setNewName(e.target.value)}
+                style={styles.textInput}
+                maxLength={100}
+              />
+            </div>
+            <div style={styles.row}>
+              <select
+                value={newTier}
+                onChange={(e) => setNewTier(e.target.value)}
+                style={styles.select}
+              >
+                {(tiers.length ? tiers : Object.keys(TIER_LABELS)).map((t) => (
+                  <option key={t} value={t}>
+                    {TIER_LABELS[t] || t}
+                  </option>
+                ))}
+              </select>
+              <label style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                Vol
+                <input
+                  type="range"
+                  min="0"
+                  max="100"
+                  value={newVolume}
+                  onChange={(e) => setNewVolume(Number(e.target.value))}
+                  style={{ width: 80 }}
+                />
+                <span style={styles.muted}>{newVolume}%</span>
+              </label>
+            </div>
+            <button
+              type="submit"
+              disabled={uploading}
+              style={{ ...styles.btn, marginTop: 8, opacity: uploading ? 0.6 : 1 }}
+            >
+              {uploading ? "Creating..." : "Add Clip"}
+            </button>
+          </form>
+        )}
+
+        {/* Video tab */}
+        {createTab === "video" && (
+          <form onSubmit={handleVideoUpload}>
+            <div style={{ fontSize: 11, opacity: 0.5, marginBottom: 8 }}>
+              Max 5 MB. Accepted: MP4, WebM.
+            </div>
+            <div style={{ marginBottom: 8 }}>
+              <input
+                ref={videoFileRef}
+                type="file"
+                accept="video/mp4,video/webm"
+                style={styles.fileInput}
+              />
+            </div>
+            <div style={{ marginBottom: 8 }}>
+              <input
+                type="text"
+                placeholder="Video name"
+                value={newName}
+                onChange={(e) => setNewName(e.target.value)}
+                style={styles.textInput}
+                maxLength={100}
+              />
+            </div>
+            <div style={styles.row}>
+              <select
+                value={newTier}
+                onChange={(e) => setNewTier(e.target.value)}
+                style={styles.select}
+              >
+                {(tiers.length ? tiers : Object.keys(TIER_LABELS)).map((t) => (
+                  <option key={t} value={t}>
+                    {TIER_LABELS[t] || t}
+                  </option>
+                ))}
+              </select>
+              <label style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                Vol
+                <input
+                  type="range"
+                  min="0"
+                  max="100"
+                  value={newVolume}
+                  onChange={(e) => setNewVolume(Number(e.target.value))}
+                  style={{ width: 80 }}
+                />
+                <span style={styles.muted}>{newVolume}%</span>
+              </label>
+            </div>
+            <button
+              type="submit"
+              disabled={uploading}
+              style={{ ...styles.btn, marginTop: 8, opacity: uploading ? 0.6 : 1 }}
+            >
+              {uploading ? "Uploading..." : "Upload Video"}
+            </button>
+          </form>
+        )}
       </div>
 
-      {/* Sound List */}
+      {/* Alert List */}
       <div style={styles.card}>
-        <h3 style={styles.subHeading}>Sounds ({sounds.length}/20)</h3>
+        <h3 style={styles.subHeading}>Alerts ({sounds.length}/20)</h3>
         {sounds.length === 0 && (
-          <p style={styles.muted}>No sounds uploaded yet.</p>
+          <p style={styles.muted}>No alerts created yet.</p>
         )}
         {sounds.map((s) => (
           <SoundRow
@@ -402,9 +617,11 @@ function SoundRow({ sound, tiers, auth, onToggle, onUpdate, onDelete, onRefresh 
   const [name, setName] = useState(sound.name);
   const [tier, setTier] = useState(sound.tier);
   const [volume, setVolume] = useState(sound.volume);
+  const [editClipUrl, setEditClipUrl] = useState(sound.clipUrl || "");
   const [imageUploading, setImageUploading] = useState(false);
   const [imagePreviewUrl, setImagePreviewUrl] = useState(null);
   const imageInputRef = useRef(null);
+  const soundType = sound.type || "sound";
 
   useEffect(() => {
     if (!sound.imageFilename || !auth) return;
@@ -428,7 +645,9 @@ function SoundRow({ sound, tiers, auth, onToggle, onUpdate, onDelete, onRefresh 
   }, [sound.imageFilename, sound.id, auth?.token]);
 
   function save() {
-    onUpdate(sound.id, { name, tier, volume });
+    const patch = { name, tier, volume };
+    if (soundType === "clip") patch.clipUrl = editClipUrl;
+    onUpdate(sound.id, patch);
     setEditing(false);
   }
 
@@ -483,18 +702,20 @@ function SoundRow({ sound, tiers, auth, onToggle, onUpdate, onDelete, onRefresh 
             alt=""
             style={{ width: "100%", height: "100%", objectFit: "cover" }}
           />
+        ) : soundType === "clip" ? (
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ opacity: 0.3 }}>
+            <rect x="2" y="2" width="20" height="20" rx="2.18" ry="2.18" />
+            <line x1="7" y1="2" x2="7" y2="22" />
+            <line x1="17" y1="2" x2="17" y2="22" />
+            <line x1="2" y1="12" x2="22" y2="12" />
+          </svg>
+        ) : soundType === "video" ? (
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ opacity: 0.3 }}>
+            <polygon points="23 7 16 12 23 17 23 7" />
+            <rect x="1" y="5" width="15" height="14" rx="2" ry="2" />
+          </svg>
         ) : (
-          <svg
-            width="20"
-            height="20"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            style={{ opacity: 0.3 }}
-          >
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ opacity: 0.3 }}>
             <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
             <path d="M15.54 8.46a5 5 0 0 1 0 7.07" />
           </svg>
@@ -510,6 +731,15 @@ function SoundRow({ sound, tiers, auth, onToggle, onUpdate, onDelete, onRefresh 
               style={styles.textInput}
               maxLength={100}
             />
+            {soundType === "clip" && (
+              <input
+                type="text"
+                placeholder="Clip URL"
+                value={editClipUrl}
+                onChange={(e) => setEditClipUrl(e.target.value)}
+                style={styles.textInput}
+              />
+            )}
             <div style={styles.row}>
               <select
                 value={tier}
@@ -587,7 +817,21 @@ function SoundRow({ sound, tiers, auth, onToggle, onUpdate, onDelete, onRefresh 
           </div>
         ) : (
           <>
-            <div style={{ fontWeight: 600, fontSize: 14 }}>{sound.name}</div>
+            <div style={{ fontWeight: 600, fontSize: 14, display: "flex", alignItems: "center", gap: 6 }}>
+              {sound.name}
+              {soundType !== "sound" && (
+                <span style={{
+                  fontSize: 10,
+                  padding: "1px 5px",
+                  borderRadius: 4,
+                  background: soundType === "clip" ? "#2d7d46" : "#2d5a7d",
+                  fontWeight: 500,
+                  textTransform: "uppercase",
+                }}>
+                  {soundType}
+                </span>
+              )}
+            </div>
             <div style={{ fontSize: 12, opacity: 0.6 }}>
               {TIER_LABELS[sound.tier] || sound.tier} &middot; Vol{" "}
               {sound.volume}%

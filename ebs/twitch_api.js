@@ -122,16 +122,16 @@ export async function fetchFollowerCount({ broadcasterId }) {
  * Fetch clip metadata from the Twitch Helix API.
  * Returns { id, title, duration, thumbnail_url, video_url } or null.
  */
-export async function fetchClipInfo(clipSlug) {
+export async function fetchClipInfo(clipSlug, { userId } = {}) {
   if (!clipSlug) return null;
   const clientId = process.env.TWITCH_CLIENT_ID;
-  const broadcasterId = process.env.BROADCASTER_USER_ID;
+  const uid = userId || process.env.BROADCASTER_USER_ID;
   const token =
-    (broadcasterId && getUserAccessToken(broadcasterId)) ||
+    (uid && getUserAccessToken(String(uid))) ||
     process.env.BROADCASTER_USER_TOKEN ||
     null;
   if (!clientId || !token) {
-    logger.warn("clip_fetch_no_credentials");
+    logger.warn("clip_fetch_no_credentials", { userId: uid, hasClientId: !!clientId });
     return null;
   }
 
@@ -179,12 +179,19 @@ export async function fetchClipInfo(clipSlug) {
 export async function downloadClipVideo(videoUrl, destPath) {
   if (!videoUrl || !destPath) return false;
   try {
+    logger.info("clip_download_start", { url: videoUrl, destPath });
     const res = await fetch(videoUrl);
     if (!res.ok) {
-      logger.warn("clip_download_failed", { status: res.status, url: videoUrl });
+      const body = await res.text().catch(() => "");
+      logger.warn("clip_download_failed", { status: res.status, url: videoUrl, body: body.slice(0, 200) });
       return false;
     }
+    const contentType = res.headers.get("content-type") || "";
+    if (!contentType.includes("video") && !contentType.includes("octet-stream")) {
+      logger.warn("clip_download_unexpected_type", { url: videoUrl, contentType });
+    }
     await pipeline(res.body, createWriteStream(destPath));
+    logger.info("clip_download_complete", { url: videoUrl, destPath });
     return true;
   } catch (err) {
     logger.error("clip_download_error", { url: videoUrl, message: err?.message });

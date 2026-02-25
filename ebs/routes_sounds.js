@@ -229,37 +229,43 @@ export function mountSoundRoutes(app, deps = {}) {
     try {
       const soundId = `snd_${crypto.randomUUID().slice(0, 12)}`;
 
-      // Fetch clip metadata and download the video file
-      const clipInfo = await fetchClipInfo(clipSlug);
-      let filename = "";
-      let mimeType = "video/mp4";
-      let sizeBytes = 0;
-
-      if (clipInfo?.video_url) {
-        filename = `${soundId}.mp4`;
-        await ensureSoundDir(uid);
-        const destPath = path.resolve(SOUNDS_FILE_DIR, String(uid), filename);
-        const downloaded = await downloadClipVideo(clipInfo.video_url, destPath);
-        if (downloaded) {
-          try {
-            const fileStat = await fsStat(destPath);
-            sizeBytes = fileStat.size;
-          } catch {}
-          logger.info("clip_video_downloaded", { userId: uid, soundId, clipSlug, sizeBytes });
-        } else {
-          logger.warn("clip_video_download_failed", { userId: uid, clipSlug });
-          filename = "";
-        }
-      } else {
-        logger.warn("clip_no_video_url", { userId: uid, clipSlug });
+      // Fetch clip metadata from Twitch Helix API
+      const clipInfo = await fetchClipInfo(clipSlug, { userId: uid });
+      if (!clipInfo) {
+        return res.status(400).json({
+          error: "Could not fetch clip info from Twitch. Check that the clip URL is valid and the clip exists.",
+        });
       }
+      if (!clipInfo.video_url) {
+        return res.status(400).json({
+          error: "Could not determine video URL for this clip. The clip may not be available for download.",
+        });
+      }
+
+      // Download the clip video file
+      const filename = `${soundId}.mp4`;
+      await ensureSoundDir(uid);
+      const destPath = path.resolve(SOUNDS_FILE_DIR, String(uid), filename);
+      const downloaded = await downloadClipVideo(clipInfo.video_url, destPath);
+      if (!downloaded) {
+        return res.status(400).json({
+          error: "Failed to download clip video. The clip may be unavailable or region-restricted.",
+        });
+      }
+
+      let sizeBytes = 0;
+      try {
+        const fileStat = await fsStat(destPath);
+        sizeBytes = fileStat.size;
+      } catch {}
+      logger.info("clip_video_downloaded", { userId: uid, soundId, clipSlug, sizeBytes });
 
       const result = createSound(uid, {
         id: soundId,
         type: "clip",
-        name: name || clipInfo?.title || `Clip ${clipSlug.slice(0, 20)}`,
+        name: name || clipInfo.title || `Clip ${clipSlug.slice(0, 20)}`,
         filename,
-        mimeType: filename ? mimeType : "",
+        mimeType: "video/mp4",
         sizeBytes,
         clipUrl: String(clipUrl),
         clipSlug,
@@ -271,11 +277,55 @@ export function mountSoundRoutes(app, deps = {}) {
 
       if (result.error) return res.status(400).json(result);
 
-      logger.info("clip_created", { userId: uid, soundId, clipSlug, hasVideo: !!filename });
+      logger.info("clip_created", { userId: uid, soundId, clipSlug });
       res.status(201).json({ sound: result });
     } catch (err) {
       logger.error("clip_create_failed", { userId: uid, message: err?.message });
       res.status(500).json({ error: "Failed to create clip alert" });
+    }
+  });
+
+  // Re-download clip video for an existing clip alert
+  app.post("/api/sounds/clip/:soundId/redownload", async (req, res) => {
+    const uid = requireBroadcaster(req, res);
+    if (!uid) return;
+
+    const sound = getSound(uid, req.params.soundId);
+    if (!sound) return res.status(404).json({ error: "Sound not found" });
+    if (sound.type !== "clip") return res.status(400).json({ error: "Not a clip alert" });
+    if (!sound.clipSlug) return res.status(400).json({ error: "No clip slug stored" });
+
+    try {
+      const clipInfo = await fetchClipInfo(sound.clipSlug, { userId: uid });
+      if (!clipInfo?.video_url) {
+        return res.status(400).json({ error: "Could not resolve video URL for this clip" });
+      }
+
+      const filename = `${sound.id}.mp4`;
+      await ensureSoundDir(uid);
+      const destPath = path.resolve(SOUNDS_FILE_DIR, String(uid), filename);
+      const downloaded = await downloadClipVideo(clipInfo.video_url, destPath);
+      if (!downloaded) {
+        return res.status(400).json({ error: "Failed to download clip video" });
+      }
+
+      let sizeBytes = 0;
+      try {
+        const fileStat = await fsStat(destPath);
+        sizeBytes = fileStat.size;
+      } catch {}
+
+      updateSound(uid, sound.id, {
+        filename,
+        mimeType: "video/mp4",
+        sizeBytes,
+      });
+
+      logger.info("clip_redownloaded", { userId: uid, soundId: sound.id, sizeBytes });
+      res.json({ ok: true, sound: getSound(uid, sound.id) });
+    } catch (err) {
+      logger.error("clip_redownload_failed", { userId: uid, soundId: sound.id, message: err?.message });
+      res.status(500).json({ error: "Failed to re-download clip" });
     }
   });
 
@@ -617,13 +667,9 @@ export function mountSoundRoutes(app, deps = {}) {
       return res.status(404).json({ error: "Sound not found or disabled" });
     }
 
-    // Clips without a downloaded file: return embed info
+    // Clips without a downloaded file: no playable content
     if (sound.type === "clip" && !sound.filename) {
-      return res.json({
-        type: "clip",
-        clipSlug: sound.clipSlug,
-        clipUrl: sound.clipUrl,
-      });
+      return res.status(404).json({ error: "Clip video not downloaded" });
     }
 
     // Sound, video, and clip (with file) types: serve the file
@@ -676,9 +722,9 @@ export function mountSoundRoutes(app, deps = {}) {
     const sound = getSound(String(uid), req.params.soundId);
     if (!sound) return res.status(404).json({ error: "Sound not found" });
 
-    // Clips without a downloaded file: return embed info as fallback
+    // Clips without a downloaded file: no playable content
     if (sound.type === "clip" && !sound.filename) {
-      return res.json({ type: "clip", clipSlug: sound.clipSlug, clipUrl: sound.clipUrl });
+      return res.status(404).json({ error: "Clip video not downloaded" });
     }
 
     // Sound, video, and clip (with downloaded file) types: serve the file

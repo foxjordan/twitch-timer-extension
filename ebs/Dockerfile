@@ -4,6 +4,9 @@ FROM node:20-alpine
 # Build context is the ebs/ folder (via fly.toml or --dockerfile path)
 WORKDIR /app
 
+# Install ffmpeg for video/audio compression and trimming
+RUN apk add --no-cache ffmpeg
+
 # Install prod deps first for better layer caching
 COPY package*.json ./
 # Install deps (no dev dependencies)

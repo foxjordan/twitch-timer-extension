@@ -180,7 +180,7 @@ export function renderSoundConfigPage(options = {}) {
 
         <!-- Video upload tab -->
         <form id="videoUploadForm" class="tab-panel" data-tab="video" style="display:none;">
-          <div class="hint" style="margin-bottom:8px;">Max 5 MB. Accepted formats: MP4, WebM. The video will play through the browser source when redeemed.</div>
+          <div class="hint" style="margin-bottom:8px;">Max 10 MB. Accepted formats: MP4, WebM. The video will play through the browser source when redeemed.</div>
           <div style="margin-bottom:8px;">
             <input type="file" id="videoFile" accept="video/mp4,video/webm" style="font-size:12px;">
           </div>
@@ -947,7 +947,7 @@ export function renderSoundConfigPage(options = {}) {
             var videoUploadHintEl = document.getElementById('videoUploadHint');
             var file = videoFileEl ? videoFileEl.files[0] : null;
             if (!file) { if (videoUploadHintEl) videoUploadHintEl.textContent = 'Select a video file'; return; }
-            if (file.size > 5 * 1024 * 1024) { if (videoUploadHintEl) videoUploadHintEl.textContent = 'File must be under 5 MB'; return; }
+            if (file.size > 10 * 1024 * 1024) { if (videoUploadHintEl) videoUploadHintEl.textContent = 'File must be under 10 MB'; return; }
             flashButton(videoUploadBtn);
             setBusy(videoUploadBtn, true);
             if (videoUploadHintEl) videoUploadHintEl.textContent = 'Uploading…';

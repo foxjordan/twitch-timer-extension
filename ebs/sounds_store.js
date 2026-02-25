@@ -55,7 +55,7 @@ const MIME_TO_EXT = {
 };
 
 export const MAX_FILE_SIZE = 1 * 1024 * 1024; // 1 MB
-export const MAX_VIDEO_FILE_SIZE = 5 * 1024 * 1024; // 5 MB
+export const MAX_VIDEO_FILE_SIZE = 10 * 1024 * 1024; // 10 MB
 export const MAX_SOUNDS_PER_USER = 20;
 
 export const VALID_TIERS = [

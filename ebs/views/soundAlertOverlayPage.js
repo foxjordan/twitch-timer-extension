@@ -161,17 +161,20 @@ export function renderSoundAlertOverlayPage() {
           var iframe = document.createElement('iframe');
           iframe.src = 'https://clips.twitch.tv/embed?clip=' + encodeURIComponent(slug)
             + '&parent=' + encodeURIComponent(window.location.hostname)
-            + '&autoplay=true&muted=false';
+            + '&autoplay=true&muted=false&controls=false';
           iframe.width = '640';
           iframe.height = '360';
           iframe.allow = 'autoplay';
           container.appendChild(iframe);
           document.body.appendChild(container);
 
+          // Twitch clip embeds don't expose ended events cross-origin,
+          // so use a generous timeout (60s default, most clips are <60s)
+          var clipTimeout = Math.max(displayMs, 60000);
           setTimeout(function() {
             container.classList.add('exit');
             setTimeout(function() { container.remove(); advance(); }, 350);
-          }, displayMs);
+          }, clipTimeout);
         }
 
         function playVideo(item) {
@@ -199,14 +202,14 @@ export function renderSoundAlertOverlayPage() {
           container.appendChild(video);
           document.body.appendChild(container);
 
-          // Safety timeout in case video hangs
+          // Safety timeout in case video hangs (5 min max)
           setTimeout(function() {
             if (container.parentNode) {
               try { video.pause(); } catch(e) {}
               container.classList.add('exit');
               setTimeout(function() { container.remove(); advance(); }, 350);
             }
-          }, Math.max(displayMs, 30000));
+          }, 300000);
 
           video.play().catch(function() { container.remove(); advance(); });
         }

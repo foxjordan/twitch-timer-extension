@@ -171,7 +171,7 @@ function ConfigApp() {
     setError(null);
     const file = videoFileRef.current?.files?.[0];
     if (!file) return setError("Select a video file");
-    if (file.size > 5 * 1024 * 1024) return setError("Video must be under 5 MB");
+    if (file.size > 10 * 1024 * 1024) return setError("Video must be under 10 MB");
 
     setUploading(true);
     try {
@@ -494,7 +494,7 @@ function ConfigApp() {
         {createTab === "video" && (
           <form onSubmit={handleVideoUpload}>
             <div style={{ fontSize: 11, opacity: 0.5, marginBottom: 8 }}>
-              Max 5 MB. Accepted: MP4, WebM.
+              Max 10 MB. Accepted: MP4, WebM.
             </div>
             <div style={{ marginBottom: 8 }}>
               <input

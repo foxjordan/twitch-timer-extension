@@ -167,7 +167,73 @@ export async function fetchFollowerCount({ broadcasterId }) {
 }
 
 /**
- * Fetch clip metadata from the Twitch Helix API.
+ * Fetch the clip video source URL via Twitch's GQL API.
+ * Returns the highest-quality MP4 URL or null.
+ */
+async function fetchClipVideoUrl(clipSlug) {
+  // Twitch's public web client ID (used by the web player)
+  const GQL_CLIENT_ID = "kimne78kx3ncx6brgo4mv6wki5h1ko";
+  try {
+    const res = await fetch("https://gql.twitch.tv/gql", {
+      method: "POST",
+      headers: {
+        "Client-Id": GQL_CLIENT_ID,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify([
+        {
+          operationName: "VideoAccessToken_Clip",
+          variables: { slug: clipSlug },
+          extensions: {
+            persistedQuery: {
+              version: 1,
+              sha256Hash:
+                "36b89d2507fce29e5ca551df756d27c1cfe079e2609642b4390aa4c35796eb11",
+            },
+          },
+        },
+      ]),
+    });
+    if (!res.ok) {
+      logger.warn("clip_gql_failed", { status: res.status, slug: clipSlug });
+      return null;
+    }
+    const json = await res.json();
+    const clip = json?.[0]?.data?.clip;
+    if (!clip?.videoQualities?.length) {
+      logger.warn("clip_gql_no_qualities", { slug: clipSlug });
+      return null;
+    }
+
+    // Pick the highest quality (source) — sorted by quality desc
+    const qualities = clip.videoQualities.sort(
+      (a, b) => Number(b.quality) - Number(a.quality)
+    );
+    const best = qualities[0];
+
+    // Build the signed URL with the playback access token
+    const token = clip.playbackAccessToken;
+    if (!token) {
+      logger.warn("clip_gql_no_token", { slug: clipSlug });
+      return best.sourceURL || null;
+    }
+
+    const videoUrl =
+      best.sourceURL +
+      "?sig=" +
+      encodeURIComponent(token.signature) +
+      "&token=" +
+      encodeURIComponent(token.value);
+
+    return videoUrl;
+  } catch (err) {
+    logger.error("clip_gql_error", { slug: clipSlug, message: err?.message });
+    return null;
+  }
+}
+
+/**
+ * Fetch clip metadata from the Twitch Helix API + video URL from GQL.
  * Returns { id, title, duration, thumbnail_url, video_url } or null.
  */
 export async function fetchClipInfo(clipSlug, { userId } = {}) {
@@ -184,6 +250,7 @@ export async function fetchClipInfo(clipSlug, { userId } = {}) {
   }
 
   try {
+    // Fetch metadata from Helix API
     const url = `https://api.twitch.tv/helix/clips?id=${encodeURIComponent(clipSlug)}`;
     const res = await fetch(url, {
       headers: {
@@ -199,13 +266,8 @@ export async function fetchClipInfo(clipSlug, { userId } = {}) {
     const clip = json.data?.[0];
     if (!clip) return null;
 
-    // Derive direct MP4 URL from thumbnail_url
-    // thumbnail format: https://clips-media-assets2.twitch.tv/{id}-preview-480x272.jpg
-    // video format:     https://clips-media-assets2.twitch.tv/{id}.mp4
-    let videoUrl = null;
-    if (clip.thumbnail_url) {
-      videoUrl = clip.thumbnail_url.replace(/-preview-\d+x\d+\.jpg.*$/, ".mp4");
-    }
+    // Fetch actual video URL from GQL
+    const videoUrl = await fetchClipVideoUrl(clipSlug);
 
     return {
       id: clip.id,
@@ -237,8 +299,8 @@ export async function downloadClipVideo(videoUrl, destPath) {
     const contentType = res.headers.get("content-type") || "";
     const contentLength = res.headers.get("content-length");
 
-    // Reject non-video responses (HTML error pages, etc.)
-    if (contentType.includes("text/html") || contentType.includes("application/json")) {
+    // Reject non-video responses (HTML error pages, images, etc.)
+    if (contentType.includes("text/html") || contentType.includes("application/json") || contentType.includes("image/")) {
       const body = await res.text().catch(() => "");
       logger.warn("clip_download_not_video", { url: videoUrl, contentType, body: body.slice(0, 200) });
       return { ok: false, error: `Response is ${contentType}, not video`, contentType };

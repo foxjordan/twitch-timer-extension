@@ -8,6 +8,54 @@ import { logger } from "./logger.js";
 const displayNameCache = new Map();
 const DISPLAY_NAME_TTL = 5 * 60 * 1000;
 
+// App access token cache (client credentials flow)
+let appToken = null;
+let appTokenExpiresAt = 0;
+
+async function getAppAccessToken() {
+  const clientId = process.env.TWITCH_CLIENT_ID;
+  const clientSecret = process.env.TWITCH_CLIENT_SECRET;
+  if (!clientId || !clientSecret) return null;
+
+  // Return cached token if still valid (with 60s buffer)
+  if (appToken && Date.now() < appTokenExpiresAt - 60000) return appToken;
+
+  try {
+    const res = await fetch("https://id.twitch.tv/oauth2/token", {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({
+        client_id: clientId,
+        client_secret: clientSecret,
+        grant_type: "client_credentials",
+      }),
+    });
+    if (!res.ok) {
+      logger.warn("app_token_fetch_failed", { status: res.status });
+      return null;
+    }
+    const json = await res.json();
+    appToken = json.access_token;
+    appTokenExpiresAt = Date.now() + (json.expires_in || 3600) * 1000;
+    return appToken;
+  } catch (err) {
+    logger.error("app_token_fetch_error", { message: err?.message });
+    return null;
+  }
+}
+
+/**
+ * Resolve the best available Twitch API token.
+ * Tries: user token → env token → app access token (client credentials).
+ */
+async function resolveHelixToken(userId) {
+  const uid = userId || process.env.BROADCASTER_USER_ID;
+  const userToken = uid ? getUserAccessToken(String(uid)) : null;
+  if (userToken) return userToken;
+  if (process.env.BROADCASTER_USER_TOKEN) return process.env.BROADCASTER_USER_TOKEN;
+  return getAppAccessToken();
+}
+
 export async function fetchUserDisplayName(userId) {
   if (!userId) return null;
   const uid = String(userId);
@@ -125,13 +173,13 @@ export async function fetchFollowerCount({ broadcasterId }) {
 export async function fetchClipInfo(clipSlug, { userId } = {}) {
   if (!clipSlug) return null;
   const clientId = process.env.TWITCH_CLIENT_ID;
-  const uid = userId || process.env.BROADCASTER_USER_ID;
-  const token =
-    (uid && getUserAccessToken(String(uid))) ||
-    process.env.BROADCASTER_USER_TOKEN ||
-    null;
-  if (!clientId || !token) {
-    logger.warn("clip_fetch_no_credentials", { userId: uid, hasClientId: !!clientId });
+  if (!clientId) {
+    logger.warn("clip_fetch_no_client_id");
+    return null;
+  }
+  const token = await resolveHelixToken(userId);
+  if (!token) {
+    logger.warn("clip_fetch_no_token", { userId });
     return null;
   }
 

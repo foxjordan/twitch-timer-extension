@@ -49,6 +49,11 @@ export function renderSoundConfigPage(options = {}) {
       .btn-click { animation: btnpulse .18s ease; }
       button.danger { background: #b91c1c; }
       .hint { font-size: 12px; color: var(--text-muted); }
+      .tab-btn { background: var(--secondary-button-bg); color: var(--secondary-button-text); border: 1px solid var(--secondary-button-border); }
+      .tab-btn.active { background: var(--accent-color); color: #fff; border-color: var(--accent-color); }
+      .type-badge { display:inline-block; padding:1px 6px; border-radius:4px; font-size:10px; font-weight:600; text-transform:uppercase; letter-spacing:0.04em; margin-left:6px; }
+      .type-badge.clip { background:rgba(145,70,255,0.15); color:#bf94ff; }
+      .type-badge.video { background:rgba(0,180,120,0.15); color:#00c882; }
       ${THEME_TOGGLE_STYLES}
       ${GLOBAL_HEADER_STYLES}
     </style>
@@ -100,11 +105,18 @@ export function renderSoundConfigPage(options = {}) {
         <span id="soundSettingsHint" class="hint" style="margin-left:8px;"></span>
       </div>
 
-      <!-- Upload Sound -->
+      <!-- Create Alert -->
       <div class="card">
-        <h2>Upload Sound</h2>
-        <div class="hint" style="margin-bottom:8px;">Max 1 MB. Accepted formats: MP3, OGG, WAV, WebM, M4A.</div>
-        <form id="soundUploadForm">
+        <h2>Create Alert</h2>
+        <div style="display:flex; gap:4px; margin-bottom:12px;">
+          <button id="tabSound" class="tab-btn active" data-tab="sound" style="font-size:12px; padding:5px 12px; border-radius:6px;">Sound</button>
+          <button id="tabClip" class="tab-btn" data-tab="clip" style="font-size:12px; padding:5px 12px; border-radius:6px;">Twitch Clip</button>
+          <button id="tabVideo" class="tab-btn" data-tab="video" style="font-size:12px; padding:5px 12px; border-radius:6px;">Video</button>
+        </div>
+
+        <!-- Sound upload tab -->
+        <form id="soundUploadForm" class="tab-panel" data-tab="sound">
+          <div class="hint" style="margin-bottom:8px;">Max 1 MB. Accepted formats: MP3, OGG, WAV, WebM, M4A.</div>
           <div style="margin-bottom:8px;">
             <input type="file" id="soundFile" accept="audio/mpeg,audio/ogg,audio/wav,audio/webm,audio/mp4" style="font-size:12px;">
           </div>
@@ -130,14 +142,78 @@ export function renderSoundConfigPage(options = {}) {
               <span id="soundUploadVolumeVal" style="font-size:12px; opacity:0.7;">80%</span>
             </label>
           </div>
-          <button type="submit" id="soundUploadBtn">Upload</button>
+          <button type="submit" id="soundUploadBtn">Upload Sound</button>
           <span id="soundUploadHint" class="hint" style="margin-left:8px;"></span>
+        </form>
+
+        <!-- Twitch Clip tab -->
+        <form id="clipUploadForm" class="tab-panel" data-tab="clip" style="display:none;">
+          <div class="hint" style="margin-bottom:8px;">Paste a Twitch Clip URL. The clip will play with audio through the browser source when redeemed.</div>
+          <div style="margin-bottom:8px;">
+            <input type="text" id="clipName" placeholder="Alert name" maxlength="100" style="width:100%; max-width:300px;">
+          </div>
+          <div style="margin-bottom:8px;">
+            <input type="text" id="clipUrl" placeholder="https://clips.twitch.tv/..." style="width:100%; max-width:400px;">
+          </div>
+          <div class="row2" style="margin-bottom:8px;">
+            <select id="clipTier">
+              <option value="sound_10">10 Bits</option>
+              <option value="sound_25">25 Bits</option>
+              <option value="sound_50">50 Bits</option>
+              <option value="sound_75">75 Bits</option>
+              <option value="sound_100" selected>100 Bits</option>
+              <option value="sound_150">150 Bits</option>
+              <option value="sound_200">200 Bits</option>
+              <option value="sound_300">300 Bits</option>
+              <option value="sound_500">500 Bits</option>
+              <option value="sound_1000">1000 Bits</option>
+            </select>
+            <label style="display:flex; align-items:center; gap:6px; font-size:13px;">
+              Vol
+              <input type="range" id="clipVolume" min="0" max="100" value="80" style="width:80px">
+              <span id="clipVolumeVal" style="font-size:12px; opacity:0.7;">80%</span>
+            </label>
+          </div>
+          <button type="submit" id="clipUploadBtn">Add Clip</button>
+          <span id="clipUploadHint" class="hint" style="margin-left:8px;"></span>
+        </form>
+
+        <!-- Video upload tab -->
+        <form id="videoUploadForm" class="tab-panel" data-tab="video" style="display:none;">
+          <div class="hint" style="margin-bottom:8px;">Max 5 MB. Accepted formats: MP4, WebM. The video will play through the browser source when redeemed.</div>
+          <div style="margin-bottom:8px;">
+            <input type="file" id="videoFile" accept="video/mp4,video/webm" style="font-size:12px;">
+          </div>
+          <div style="margin-bottom:8px;">
+            <input type="text" id="videoName" placeholder="Video name" maxlength="100" style="width:100%; max-width:300px;">
+          </div>
+          <div class="row2" style="margin-bottom:8px;">
+            <select id="videoTier">
+              <option value="sound_10">10 Bits</option>
+              <option value="sound_25">25 Bits</option>
+              <option value="sound_50">50 Bits</option>
+              <option value="sound_75">75 Bits</option>
+              <option value="sound_100" selected>100 Bits</option>
+              <option value="sound_150">150 Bits</option>
+              <option value="sound_200">200 Bits</option>
+              <option value="sound_300">300 Bits</option>
+              <option value="sound_500">500 Bits</option>
+              <option value="sound_1000">1000 Bits</option>
+            </select>
+            <label style="display:flex; align-items:center; gap:6px; font-size:13px;">
+              Vol
+              <input type="range" id="videoVolume" min="0" max="100" value="80" style="width:80px">
+              <span id="videoVolumeVal" style="font-size:12px; opacity:0.7;">80%</span>
+            </label>
+          </div>
+          <button type="submit" id="videoUploadBtn">Upload Video</button>
+          <span id="videoUploadHint" class="hint" style="margin-left:8px;"></span>
         </form>
       </div>
 
       <!-- Sound List -->
       <div class="card">
-        <h2>Sounds (<span id="soundCount">0</span>/20)</h2>
+        <h2>Alerts (<span id="soundCount">0</span>/20)</h2>
         <div id="soundList" style="display:flex; flex-direction:column; gap:6px;">
           <div class="hint">Loading sounds…</div>
         </div>
@@ -198,6 +274,30 @@ export function renderSoundConfigPage(options = {}) {
         });
         if (soundUploadVolumeEl) soundUploadVolumeEl.addEventListener('input', function() {
           if (soundUploadVolumeValEl) soundUploadVolumeValEl.textContent = this.value + '%';
+        });
+
+        // Clip/video volume sliders
+        var clipVolumeEl = document.getElementById('clipVolume');
+        var clipVolumeValEl = document.getElementById('clipVolumeVal');
+        var videoVolumeEl = document.getElementById('videoVolume');
+        var videoVolumeValEl = document.getElementById('videoVolumeVal');
+        if (clipVolumeEl) clipVolumeEl.addEventListener('input', function() {
+          if (clipVolumeValEl) clipVolumeValEl.textContent = this.value + '%';
+        });
+        if (videoVolumeEl) videoVolumeEl.addEventListener('input', function() {
+          if (videoVolumeValEl) videoVolumeValEl.textContent = this.value + '%';
+        });
+
+        // Tab switching
+        document.querySelectorAll('.tab-btn').forEach(function(btn) {
+          btn.addEventListener('click', function() {
+            document.querySelectorAll('.tab-btn').forEach(function(b) { b.classList.remove('active'); });
+            btn.classList.add('active');
+            var tab = btn.getAttribute('data-tab');
+            document.querySelectorAll('.tab-panel').forEach(function(panel) {
+              panel.style.display = panel.getAttribute('data-tab') === tab ? '' : 'none';
+            });
+          });
         });
 
         // Copy URL button
@@ -292,9 +392,19 @@ export function renderSoundConfigPage(options = {}) {
             nameDiv.style.cssText = 'font-weight:600; font-size:14px;';
             nameDiv.textContent = s.name;
 
+            // Type badge
+            if (s.type && s.type !== 'sound') {
+              var badge = document.createElement('span');
+              badge.className = 'type-badge ' + s.type;
+              badge.textContent = s.type;
+              nameDiv.appendChild(badge);
+            }
+
             var metaDiv = document.createElement('div');
             metaDiv.style.cssText = 'font-size:12px; opacity:0.6;';
-            metaDiv.textContent = (TIER_LABELS[s.tier] || s.tier) + ' \\u00b7 Vol ' + s.volume + '%';
+            var metaText = (TIER_LABELS[s.tier] || s.tier) + ' \\u00b7 Vol ' + s.volume + '%';
+            if (s.type === 'clip' && s.clipUrl) metaText += ' \\u00b7 ' + s.clipUrl.slice(0, 40);
+            metaDiv.textContent = metaText;
 
             info.appendChild(nameDiv);
             info.appendChild(metaDiv);
@@ -632,12 +742,22 @@ export function renderSoundConfigPage(options = {}) {
           saveBtn.addEventListener('click', async function() {
             flashButton(saveBtn);
             setBusy(saveBtn, true);
-            await updateSoundAdmin(s.id, {
+            var patch = {
               name: nameInput.value,
               tier: tierSelect.value,
               volume: Number(volRange.value),
               cooldownMs: Number(cdInput.value) * 1000
-            });
+            };
+            if (s.type === 'clip') {
+              var clipUrlInput = document.getElementById('editClipUrl_' + s.id);
+              if (clipUrlInput) {
+                patch.clipUrl = clipUrlInput.value;
+                // Extract slug from URL
+                var m = clipUrlInput.value.match(/clips\\.twitch\\.tv\\/([A-Za-z0-9_-]+)/) || clipUrlInput.value.match(/twitch\\.tv\\/[^/]+\\/clip\\/([A-Za-z0-9_-]+)/);
+                if (m) patch.clipSlug = m[1];
+              }
+            }
+            await updateSoundAdmin(s.id, patch);
             setBusy(saveBtn, false);
           });
           var cancelBtn = document.createElement('button');
@@ -657,7 +777,30 @@ export function renderSoundConfigPage(options = {}) {
           form.appendChild(row);
           form.appendChild(cdLabel);
           form.appendChild(imageSection);
-          form.appendChild(trimSection);
+
+          // Clip URL field (only for clip type)
+          if (s.type === 'clip') {
+            var clipSection = document.createElement('div');
+            clipSection.style.cssText = 'margin-top:4px;';
+            var clipLabel = document.createElement('label');
+            clipLabel.style.cssText = 'font-size:12px; color:var(--text-muted);';
+            clipLabel.textContent = 'Twitch Clip URL';
+            var clipInput = document.createElement('input');
+            clipInput.type = 'text';
+            clipInput.value = s.clipUrl || '';
+            clipInput.placeholder = 'https://clips.twitch.tv/...';
+            clipInput.style.cssText = 'width:100%; max-width:400px; margin-top:4px;';
+            clipInput.id = 'editClipUrl_' + s.id;
+            clipSection.appendChild(clipLabel);
+            clipSection.appendChild(clipInput);
+            form.appendChild(clipSection);
+          }
+
+          // Trim section (only for sound type)
+          if (!s.type || s.type === 'sound') {
+            form.appendChild(trimSection);
+          }
+
           form.appendChild(btnRow);
           info.appendChild(form);
         }
@@ -743,6 +886,93 @@ export function renderSoundConfigPage(options = {}) {
               if (soundUploadHintEl) soundUploadHintEl.textContent = err.message || 'Upload failed';
             }
             setBusy(soundUploadBtn, false);
+          });
+        }
+
+        // Clip form handler
+        var clipUploadForm = document.getElementById('clipUploadForm');
+        if (clipUploadForm) {
+          clipUploadForm.addEventListener('submit', async function(e) {
+            e.preventDefault();
+            var clipUrlEl = document.getElementById('clipUrl');
+            var clipNameEl = document.getElementById('clipName');
+            var clipTierEl = document.getElementById('clipTier');
+            var clipVolumeEl = document.getElementById('clipVolume');
+            var clipUploadBtn = document.getElementById('clipUploadBtn');
+            var clipUploadHintEl = document.getElementById('clipUploadHint');
+            var url = clipUrlEl ? clipUrlEl.value.trim() : '';
+            if (!url) { if (clipUploadHintEl) clipUploadHintEl.textContent = 'Enter a Twitch Clip URL'; return; }
+            flashButton(clipUploadBtn);
+            setBusy(clipUploadBtn, true);
+            if (clipUploadHintEl) clipUploadHintEl.textContent = 'Creating…';
+            try {
+              var r = await fetch('/api/sounds/clip', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  name: (clipNameEl ? clipNameEl.value : '') || 'Clip',
+                  clipUrl: url,
+                  tier: clipTierEl ? clipTierEl.value : 'sound_100',
+                  volume: clipVolumeEl ? Number(clipVolumeEl.value) : 80,
+                })
+              });
+              if (!r.ok) {
+                var body = await r.json().catch(function() { return {}; });
+                throw new Error(body.error || 'Failed to create clip');
+              }
+              if (clipUrlEl) clipUrlEl.value = '';
+              if (clipNameEl) clipNameEl.value = '';
+              if (clipUploadHintEl) {
+                clipUploadHintEl.textContent = 'Clip added!';
+                setTimeout(function() { clipUploadHintEl.textContent = ''; }, 2500);
+              }
+              await fetchSoundsAdmin();
+            } catch (err) {
+              if (clipUploadHintEl) clipUploadHintEl.textContent = err.message || 'Failed';
+            }
+            setBusy(clipUploadBtn, false);
+          });
+        }
+
+        // Video form handler
+        var videoUploadForm = document.getElementById('videoUploadForm');
+        if (videoUploadForm) {
+          videoUploadForm.addEventListener('submit', async function(e) {
+            e.preventDefault();
+            var videoFileEl = document.getElementById('videoFile');
+            var videoNameEl = document.getElementById('videoName');
+            var videoTierEl = document.getElementById('videoTier');
+            var videoVolumeEl = document.getElementById('videoVolume');
+            var videoUploadBtn = document.getElementById('videoUploadBtn');
+            var videoUploadHintEl = document.getElementById('videoUploadHint');
+            var file = videoFileEl ? videoFileEl.files[0] : null;
+            if (!file) { if (videoUploadHintEl) videoUploadHintEl.textContent = 'Select a video file'; return; }
+            if (file.size > 5 * 1024 * 1024) { if (videoUploadHintEl) videoUploadHintEl.textContent = 'File must be under 5 MB'; return; }
+            flashButton(videoUploadBtn);
+            setBusy(videoUploadBtn, true);
+            if (videoUploadHintEl) videoUploadHintEl.textContent = 'Uploading…';
+            try {
+              var fd = new FormData();
+              fd.append('file', file);
+              fd.append('name', (videoNameEl ? videoNameEl.value : '') || file.name.replace(/\\.[^.]+$/, ''));
+              fd.append('tier', videoTierEl ? videoTierEl.value : 'sound_100');
+              fd.append('volume', videoVolumeEl ? videoVolumeEl.value : '80');
+              var r = await fetch('/api/sounds/video', { method: 'POST', body: fd });
+              if (!r.ok) {
+                var body = await r.json().catch(function() { return {}; });
+                throw new Error(body.error || 'Upload failed');
+              }
+              if (videoFileEl) videoFileEl.value = '';
+              if (videoNameEl) videoNameEl.value = '';
+              if (videoUploadHintEl) {
+                videoUploadHintEl.textContent = 'Video uploaded!';
+                setTimeout(function() { videoUploadHintEl.textContent = ''; }, 2500);
+              }
+              await fetchSoundsAdmin();
+            } catch (err) {
+              if (videoUploadHintEl) videoUploadHintEl.textContent = err.message || 'Upload failed';
+            }
+            setBusy(videoUploadBtn, false);
           });
         }
 

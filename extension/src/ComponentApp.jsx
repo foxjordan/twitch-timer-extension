@@ -38,6 +38,50 @@ function SpeakerIcon() {
   );
 }
 
+function ClipIcon() {
+  return (
+    <svg
+      width="100%"
+      height="100%"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      style={{ opacity: 0.4, padding: "22%" }}
+    >
+      <rect x="2" y="2" width="20" height="20" rx="2.18" ry="2.18" />
+      <line x1="7" y1="2" x2="7" y2="22" />
+      <line x1="17" y1="2" x2="17" y2="22" />
+      <line x1="2" y1="12" x2="22" y2="12" />
+      <line x1="2" y1="7" x2="7" y2="7" />
+      <line x1="2" y1="17" x2="7" y2="17" />
+      <line x1="17" y1="7" x2="22" y2="7" />
+      <line x1="17" y1="17" x2="22" y2="17" />
+    </svg>
+  );
+}
+
+function VideoIcon() {
+  return (
+    <svg
+      width="100%"
+      height="100%"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      style={{ opacity: 0.4, padding: "22%" }}
+    >
+      <polygon points="23 7 16 12 23 17 23 7" />
+      <rect x="1" y="5" width="15" height="14" rx="2" ry="2" />
+    </svg>
+  );
+}
+
 function useImageUrl(soundId, hasImage, auth) {
   const [url, setUrl] = useState(null);
   useEffect(() => {
@@ -128,13 +172,18 @@ function SoundCard({ sound, auth, disabled, onBuy, onPreview, isPreviewPlaying, 
               alt={sound.name}
               style={{ width: "100%", height: "100%", objectFit: "cover" }}
             />
+          ) : (sound.type || "sound") === "clip" ? (
+            <ClipIcon />
+          ) : (sound.type || "sound") === "video" ? (
+            <VideoIcon />
           ) : (
             <SpeakerIcon />
           )}
         </div>
-        {/* Preview overlay on hover */}
-        {hovered && !disabled && (
+        {/* Preview overlay on hover (sound/video types only) */}
+        {hovered && !disabled && (sound.type || "sound") !== "clip" && (
           <div
+            data-preview="true"
             onClick={(e) => {
               e.stopPropagation();
               onPreview(e, sound);
@@ -322,6 +371,9 @@ function ComponentApp() {
     const currentAuth = authRef.current;
     if (!currentAuth) return;
 
+    // Skip preview for clip types
+    if ((sound.type || "sound") === "clip") return;
+
     if (previewAudioRef.current) {
       previewAudioRef.current.pause();
       previewAudioRef.current = null;
@@ -333,6 +385,13 @@ function ComponentApp() {
 
     setPreviewing(sound.id);
     logEvent("sound_preview", { sound_name: sound.name });
+
+    // Create Audio element synchronously in the user gesture handler
+    // to preserve the gesture chain for Twitch iframe sandbox autoplay
+    const audio = new Audio();
+    audio.volume = 0.5;
+    previewAudioRef.current = audio;
+
     fetch(
       `${EBS_BASE}/api/sounds/preview/${sound.id}?channelId=${currentAuth.channelId}`,
       { headers: { Authorization: `Bearer ${currentAuth.token}` } }
@@ -343,17 +402,18 @@ function ComponentApp() {
       })
       .then((blob) => {
         const url = URL.createObjectURL(blob);
-        const audio = new Audio(url);
-        audio.volume = 0.5;
-        previewAudioRef.current = audio;
+        audio.src = url;
         audio.onended = () => {
           setPreviewing(null);
           previewAudioRef.current = null;
           URL.revokeObjectURL(url);
         };
-        audio.play().catch(() => setPreviewing(null));
+        return audio.play();
       })
-      .catch(() => setPreviewing(null));
+      .catch(() => {
+        setPreviewing(null);
+        previewAudioRef.current = null;
+      });
   }
 
   function getCost(tier) {

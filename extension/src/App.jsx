@@ -18,8 +18,221 @@ const TIER_COSTS = {
   sound_1000: "1000",
 };
 
+function SpeakerIcon() {
+  return (
+    <svg
+      width="100%"
+      height="100%"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      style={{ opacity: 0.4, padding: "22%" }}
+    >
+      <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
+      <path d="M15.54 8.46a5 5 0 0 1 0 7.07" />
+      <path d="M19.07 4.93a10 10 0 0 1 0 14.14" />
+    </svg>
+  );
+}
+
+function ClipIcon() {
+  return (
+    <svg
+      width="100%"
+      height="100%"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      style={{ opacity: 0.4, padding: "22%" }}
+    >
+      <rect x="2" y="2" width="20" height="20" rx="2.18" ry="2.18" />
+      <line x1="7" y1="2" x2="7" y2="22" />
+      <line x1="17" y1="2" x2="17" y2="22" />
+      <line x1="2" y1="12" x2="22" y2="12" />
+      <line x1="2" y1="7" x2="7" y2="7" />
+      <line x1="2" y1="17" x2="7" y2="17" />
+      <line x1="17" y1="7" x2="22" y2="7" />
+      <line x1="17" y1="17" x2="22" y2="17" />
+    </svg>
+  );
+}
+
+function VideoIcon() {
+  return (
+    <svg
+      width="100%"
+      height="100%"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      style={{ opacity: 0.4, padding: "22%" }}
+    >
+      <polygon points="23 7 16 12 23 17 23 7" />
+      <rect x="1" y="5" width="15" height="14" rx="2" ry="2" />
+    </svg>
+  );
+}
+
+function useImageUrl(soundId, hasImage, auth) {
+  const [url, setUrl] = useState(null);
+  useEffect(() => {
+    if (!hasImage || !auth) return;
+    let revoked = false;
+    let blobUrl;
+    fetch(
+      `${EBS_BASE}/api/sounds/image/${soundId}?channelId=${auth.channelId}`,
+      { headers: { Authorization: `Bearer ${auth.token}` } }
+    )
+      .then((r) => (r.ok ? r.blob() : null))
+      .then((blob) => {
+        if (blob && !revoked) {
+          blobUrl = URL.createObjectURL(blob);
+          setUrl(blobUrl);
+        }
+      })
+      .catch(() => {});
+    return () => {
+      revoked = true;
+      if (blobUrl) URL.revokeObjectURL(blobUrl);
+    };
+  }, [soundId, hasImage, auth?.token, auth?.channelId]);
+  return url;
+}
+
+function SoundCard({ sound, auth, disabled, onBuy, onPreview, isPreviewPlaying, getCost }) {
+  const [hovered, setHovered] = useState(false);
+  const imageUrl = useImageUrl(sound.id, sound.hasImage, auth);
+
+  return (
+    <div
+      onClick={() => !disabled && onBuy(sound)}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        padding: "6px 4px",
+        borderRadius: 10,
+        background: disabled
+          ? "#16161a"
+          : hovered
+            ? "#373741"
+            : "#2a2a32",
+        border: "1px solid #303038",
+        cursor: disabled ? "not-allowed" : "pointer",
+        opacity: disabled ? 0.5 : 1,
+        transition: "background 0.15s, transform 0.1s",
+        transform: hovered && !disabled ? "scale(1.04)" : "scale(1)",
+        minWidth: 0,
+        position: "relative",
+      }}
+    >
+      {/* Image or default icon — square */}
+      <div
+        style={{
+          width: "100%",
+          paddingBottom: "100%",
+          borderRadius: 8,
+          position: "relative",
+          background: "#0e0e10",
+          overflow: "hidden",
+          marginBottom: 4,
+        }}
+      >
+        <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
+          {imageUrl ? (
+            <img
+              src={imageUrl}
+              alt={sound.name}
+              style={{ width: "100%", height: "100%", objectFit: "cover" }}
+            />
+          ) : (sound.type || "sound") === "clip" ? (
+            <ClipIcon />
+          ) : (sound.type || "sound") === "video" ? (
+            <VideoIcon />
+          ) : (
+            <SpeakerIcon />
+          )}
+        </div>
+        {/* Preview overlay on hover (sound/video types only) */}
+        {hovered && !disabled && (sound.type || "sound") !== "clip" && (
+          <div
+            data-preview="true"
+            onClick={(e) => {
+              e.stopPropagation();
+              onPreview(e, sound);
+            }}
+            style={{
+              position: "absolute",
+              inset: 0,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              background: "rgba(0,0,0,0.5)",
+              borderRadius: 8,
+              cursor: "pointer",
+            }}
+          >
+            <span style={{ fontSize: 18, color: "#fff" }}>
+              {isPreviewPlaying ? "\u25A0" : "\u25B6"}
+            </span>
+          </div>
+        )}
+      </div>
+      {/* Name */}
+      <div
+        style={{
+          fontSize: 12,
+          fontWeight: 600,
+          textAlign: "center",
+          overflow: "hidden",
+          textOverflow: "ellipsis",
+          whiteSpace: "nowrap",
+          width: "100%",
+          marginBottom: 2,
+        }}
+      >
+        {sound.name}
+      </div>
+      {/* Bits cost */}
+      <div
+        style={{
+          fontSize: 11,
+          opacity: 0.7,
+          display: "flex",
+          alignItems: "center",
+          gap: 3,
+        }}
+      >
+        <span
+          style={{
+            width: 8,
+            height: 8,
+            borderRadius: "50%",
+            background: "linear-gradient(135deg, #9146FF, #772CE8)",
+            display: "inline-block",
+            flexShrink: 0,
+          }}
+        />
+        {getCost(sound.tier)}
+      </div>
+    </div>
+  );
+}
+
 function App() {
   const authRef = useRef(null);
+  const [auth, setAuth] = useState(null);
   const [loading, setLoading] = useState(true);
   const [sounds, setSounds] = useState([]);
   const [soundsEnabled, setSoundsEnabled] = useState(false);
@@ -47,12 +260,11 @@ function App() {
   useEffect(() => {
     setupAnalytics();
 
-    // Twitch extension lifecycle
     window.Twitch?.ext?.onAuthorized((authData) => {
       authRef.current = authData;
+      setAuth(authData);
       logEvent("panel_loaded", { channel_id: authData.channelId });
 
-      // Check Bits availability
       if (window.Twitch?.ext?.features?.isBitsEnabled) {
         setBitsEnabled(true);
         window.Twitch.ext.bits
@@ -61,18 +273,15 @@ function App() {
           .catch(() => {});
       }
 
-      // Watch for feature flag changes
       window.Twitch?.ext?.features?.onChanged?.((changed) => {
         if (changed.includes("isBitsEnabled")) {
           setBitsEnabled(Boolean(window.Twitch?.ext?.features?.isBitsEnabled));
         }
       });
 
-      // Fetch sounds for this channel
       fetchSounds(authData.token, authData.channelId);
     });
 
-    // Transaction complete handler
     window.Twitch?.ext?.bits?.onTransactionComplete?.((tx) => {
       const pending = pendingSoundRef.current;
       const currentAuth = authRef.current;
@@ -107,7 +316,6 @@ function App() {
       pendingSoundRef.current = null;
     });
 
-    // PubSub listener for sound alerts
     window.Twitch?.ext?.listen?.("broadcast", (_t, _c, message) => {
       try {
         const data = JSON.parse(message);
@@ -128,10 +336,12 @@ function App() {
 
   function handlePreview(e, sound) {
     e.stopPropagation();
-    const auth = authRef.current;
-    if (!auth) return;
+    const currentAuth = authRef.current;
+    if (!currentAuth) return;
 
-    // If already previewing this sound, stop it
+    // Skip preview for clip types
+    if ((sound.type || "sound") === "clip") return;
+
     if (previewAudioRef.current) {
       previewAudioRef.current.pause();
       previewAudioRef.current = null;
@@ -143,9 +353,16 @@ function App() {
 
     setPreviewing(sound.id);
     logEvent("sound_preview", { sound_name: sound.name });
+
+    // Create Audio element synchronously in the user gesture handler
+    // to preserve the gesture chain for Twitch iframe sandbox autoplay
+    const audio = new Audio();
+    audio.volume = 0.5;
+    previewAudioRef.current = audio;
+
     fetch(
-      `${EBS_BASE}/api/sounds/preview/${sound.id}?channelId=${auth.channelId}`,
-      { headers: { Authorization: `Bearer ${auth.token}` } },
+      `${EBS_BASE}/api/sounds/preview/${sound.id}?channelId=${currentAuth.channelId}`,
+      { headers: { Authorization: `Bearer ${currentAuth.token}` } },
     )
       .then((r) => {
         if (!r.ok) throw new Error("fetch failed");
@@ -153,17 +370,18 @@ function App() {
       })
       .then((blob) => {
         const url = URL.createObjectURL(blob);
-        const audio = new Audio(url);
-        audio.volume = 0.5;
-        previewAudioRef.current = audio;
+        audio.src = url;
         audio.onended = () => {
           setPreviewing(null);
           previewAudioRef.current = null;
           URL.revokeObjectURL(url);
         };
-        audio.play().catch(() => setPreviewing(null));
+        return audio.play();
       })
-      .catch(() => setPreviewing(null));
+      .catch(() => {
+        setPreviewing(null);
+        previewAudioRef.current = null;
+      });
   }
 
   function getCost(tier) {
@@ -193,26 +411,32 @@ function App() {
               animation: "pulse 1.5s ease-in-out infinite",
             }}
           />
-          {[1, 2, 3].map((i) => (
-            <div
-              key={i}
-              style={{
-                height: 36,
-                borderRadius: 8,
-                background: "#2a2a32",
-                marginBottom: 4,
-                animation: "pulse 1.5s ease-in-out infinite",
-                animationDelay: `${i * 0.15}s`,
-              }}
-            />
-          ))}
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(3, 1fr)",
+              gap: 6,
+            }}
+          >
+            {[1, 2, 3, 4, 5, 6].map((i) => (
+              <div
+                key={i}
+                style={{
+                  paddingBottom: "120%",
+                  borderRadius: 8,
+                  background: "#2a2a32",
+                  animation: "pulse 1.5s ease-in-out infinite",
+                  animationDelay: `${i * 0.1}s`,
+                }}
+              />
+            ))}
+          </div>
         </div>
         <style>{`@keyframes pulse { 0%,100% { opacity:.4 } 50% { opacity:.7 } }`}</style>
       </div>
     );
   }
 
-  // No sounds configured or alerts disabled
   if (!soundsEnabled || sounds.length === 0) {
     return (
       <div style={{ padding: 12 }}>
@@ -279,7 +503,7 @@ function App() {
               fontSize: 12,
               cursor: "pointer",
               padding: 0,
-              marginBottom: 6,
+              marginBottom: 8,
               textDecoration: "underline",
               opacity: 0.8,
             }}
@@ -288,85 +512,28 @@ function App() {
           </button>
         )}
 
-        <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fill, minmax(80px, 1fr))",
+            gap: 6,
+          }}
+        >
           {sounds.map((sound) => {
             const onCooldown =
               cooldowns[sound.id] && Date.now() < cooldowns[sound.id];
             const disabled = !bitsEnabled || onCooldown;
-            const isPreviewPlaying = previewing === sound.id;
             return (
-              <div
+              <SoundCard
                 key={sound.id}
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 4,
-                }}
-              >
-                <button
-                  onClick={(e) => handlePreview(e, sound)}
-                  title={isPreviewPlaying ? "Stop preview" : "Preview sound"}
-                  style={{
-                    flexShrink: 0,
-                    width: 32,
-                    height: 36,
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    background: isPreviewPlaying ? "#9146FF33" : "#2a2a32",
-                    border: "1px solid #303038",
-                    borderRadius: 8,
-                    color: isPreviewPlaying ? "#bf94ff" : "#efeff1",
-                    cursor: "pointer",
-                    fontSize: 14,
-                    padding: 0,
-                    transition: "background 0.15s",
-                  }}
-                >
-                  {isPreviewPlaying ? "\u25A0" : "\u25B6"}
-                </button>
-                <button
-                  disabled={disabled}
-                  onClick={() => handleSoundClick(sound)}
-                  style={{
-                    flex: 1,
-                    display: "flex",
-                    justifyContent: "space-between",
-                    alignItems: "center",
-                    padding: "8px 12px",
-                    background: disabled ? "#16161a" : "#2a2a32",
-                    border: "1px solid #303038",
-                    borderRadius: 8,
-                    color: "#efeff1",
-                    cursor: disabled ? "not-allowed" : "pointer",
-                    opacity: disabled ? 0.5 : 1,
-                    fontSize: 13,
-                    transition: "background 0.15s",
-                  }}
-                >
-                  <span style={{ fontWeight: 600 }}>{sound.name}</span>
-                  <span
-                    style={{
-                      fontSize: 12,
-                      opacity: 0.7,
-                      display: "flex",
-                      alignItems: "center",
-                      gap: 4,
-                    }}
-                  >
-                    <span
-                      style={{
-                        display: "inline-block",
-                        width: 12,
-                        height: 12,
-                        borderRadius: "50%",
-                        background: "linear-gradient(135deg, #9146FF, #772CE8)",
-                      }}
-                    />
-                    {getCost(sound.tier)}
-                  </span>
-                </button>
-              </div>
+                sound={sound}
+                auth={auth}
+                disabled={disabled}
+                onBuy={handleSoundClick}
+                onPreview={handlePreview}
+                isPreviewPlaying={previewing === sound.id}
+                getCost={getCost}
+              />
             );
           })}
         </div>

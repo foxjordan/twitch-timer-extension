@@ -19,6 +19,11 @@ export const ALLOWED_MIME_TYPES = [
   "audio/x-wav",
 ];
 
+export const ALLOWED_VIDEO_MIME_TYPES = [
+  "video/mp4",
+  "video/webm",
+];
+
 export const ALLOWED_IMAGE_MIME_TYPES = [
   "image/png",
   "image/jpeg",
@@ -33,6 +38,11 @@ const IMAGE_MIME_TO_EXT = {
   "image/webp": "webp",
 };
 
+const VIDEO_MIME_TO_EXT = {
+  "video/mp4": "mp4",
+  "video/webm": "webm",
+};
+
 export const MAX_IMAGE_SIZE = 256 * 1024; // 256 KB
 
 const MIME_TO_EXT = {
@@ -45,6 +55,7 @@ const MIME_TO_EXT = {
 };
 
 export const MAX_FILE_SIZE = 1 * 1024 * 1024; // 1 MB
+export const MAX_VIDEO_FILE_SIZE = 5 * 1024 * 1024; // 5 MB
 export const MAX_SOUNDS_PER_USER = 20;
 
 export const VALID_TIERS = [
@@ -143,16 +154,21 @@ async function persistSoundAlerts() {
 
 // ===== Normalization =====
 
+export const VALID_TYPES = ["sound", "clip", "video"];
+
 function normalizeSound(raw = {}) {
   const now = nowIso();
   return {
     id: raw.id ? String(raw.id) : `snd_${crypto.randomUUID().slice(0, 12)}`,
+    type: VALID_TYPES.includes(raw.type) ? raw.type : "sound",
     name: sanitizeString(raw.name, "Untitled Sound"),
     filename: sanitizeString(raw.filename, ""),
     originalFilename: sanitizeString(raw.originalFilename, ""),
     mimeType: sanitizeString(raw.mimeType, "audio/mpeg"),
     sizeBytes: sanitizeNumber(raw.sizeBytes, 0, 0),
     imageFilename: sanitizeString(raw.imageFilename, ""),
+    clipUrl: sanitizeString(raw.clipUrl, ""),
+    clipSlug: sanitizeString(raw.clipSlug, ""),
     tier: VALID_TIERS.includes(raw.tier) ? raw.tier : "sound_100",
     enabled: typeof raw.enabled === "boolean" ? raw.enabled : true,
     volume: sanitizeNumber(raw.volume, 80, 0, 100),
@@ -207,11 +223,14 @@ export function updateSound(uid, soundId, patch = {}) {
   const sound = user.sounds.get(String(soundId));
   if (!sound) return null;
   if ("name" in patch) sound.name = sanitizeString(patch.name, sound.name);
+  if ("type" in patch && VALID_TYPES.includes(patch.type)) sound.type = patch.type;
   if ("tier" in patch && VALID_TIERS.includes(patch.tier)) sound.tier = patch.tier;
   if ("enabled" in patch) sound.enabled = Boolean(patch.enabled);
   if ("volume" in patch) sound.volume = sanitizeNumber(patch.volume, sound.volume, 0, 100);
   if ("cooldownMs" in patch) sound.cooldownMs = sanitizeNumber(patch.cooldownMs, sound.cooldownMs, 0, 60000);
   if ("imageFilename" in patch) sound.imageFilename = sanitizeString(patch.imageFilename, sound.imageFilename);
+  if ("clipUrl" in patch) sound.clipUrl = sanitizeString(patch.clipUrl, sound.clipUrl);
+  if ("clipSlug" in patch) sound.clipSlug = sanitizeString(patch.clipSlug, sound.clipSlug);
   sound.updatedAt = nowIso();
   persistSoundAlerts().catch(() => {});
   return deepClone(sound);
@@ -265,7 +284,7 @@ export function getSoundFileDir(uid) {
 }
 
 export function generateFilename(uid, soundId, mimeType) {
-  const ext = MIME_TO_EXT[mimeType] || "mp3";
+  const ext = MIME_TO_EXT[mimeType] || VIDEO_MIME_TO_EXT[mimeType] || "mp3";
   return `${soundId}.${ext}`;
 }
 
@@ -337,6 +356,7 @@ export function getPublicSoundList(uid) {
     .map((s) => ({
       id: s.id,
       name: s.name,
+      type: s.type || "sound",
       tier: s.tier,
       cooldownMs: s.cooldownMs,
       hasImage: Boolean(s.imageFilename),

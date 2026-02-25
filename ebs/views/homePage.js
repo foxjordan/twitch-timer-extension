@@ -203,10 +203,11 @@ export function renderHomePage(options = {}) {
         <div class="feature-text">
           <div class="tag-pill">Twitch Extension</div><span class="beta-badge">Beta</span>
           <h2>Live Bit Alerts for your stream</h2>
-          <p>A companion Twitch Extension that fires custom sound effects when viewers cheer Bits. Viewers can browse the active sounds right inside their Twitch panel.</p>
+          <p>A companion Twitch Extension that fires custom sound effects when viewers cheer Bits. Available as both a panel below the video and a component overlay on top of it &mdash; viewers never have to scroll away from the action.</p>
           <ul class="feature-bullets">
-            <li>Viewer panel displays the active sound alert list</li>
-            <li>Upload custom sounds for any Bit threshold</li>
+            <li>Component overlay lets viewers browse and redeem sounds without leaving the video</li>
+            <li>Panel view also available below the stream for a traditional layout</li>
+            <li>Upload custom sounds and card images for any Bit threshold</li>
             <li>Configure directly from the Twitch Extension dashboard</li>
             <li>OBS Browser Source overlay for on-screen alerts</li>
           </ul>
@@ -220,13 +221,13 @@ export function renderHomePage(options = {}) {
         </div>
         <div class="feature-screenshots">
           <div class="screenshot-card">
-            <img src="/assets/screenshots/bit-alerts-viewer.png" alt="Bit Alerts viewer panel showing sound alerts" loading="lazy" />
+            <img src="/assets/componentScreeshot.png" alt="Bit Alerts component overlay on the video player — viewers browse and redeem sounds without scrolling away" loading="lazy" />
+          </div>
+          <div class="screenshot-card">
+            <img src="/assets/screenshots/bit-alerts-viewer.png" alt="Bit Alerts viewer panel showing sound alert cards" loading="lazy" />
           </div>
           <div class="screenshot-card">
             <img src="/assets/screenshots/bit-alerts-streamer-config.png" class="compact" alt="Sound alerts configuration for uploading and managing sounds" loading="lazy" />
-          </div>
-          <div class="screenshot-card">
-            <img src="/assets/screenshots/bit-alerts-dashboard.png" class="compact" alt="Bit Alerts extension configuration in Twitch dashboard" loading="lazy" />
           </div>
         </div>
       </div>

@@ -746,7 +746,7 @@ mountSoundRoutes(app, {
   requireOverlayAuth,
   getSessionUserId: (req) => req.session?.twitchUser?.id,
   getUserIdForKey,
-  onSoundAlert: ({ channelId, soundId, soundName, tier, txId, viewerUserId }) => {
+  onSoundAlert: ({ channelId, soundId, soundName, tier, txId, viewerUserId, type, clipSlug, volume }) => {
     addLogEntry({
       type: "sound_alert",
       userId: String(channelId),
@@ -761,6 +761,9 @@ mountSoundRoutes(app, {
       channelId,
       txId,
       ts: Date.now(),
+      type: type || "sound",
+      clipSlug: clipSlug || "",
+      volume: volume || 80,
     });
     for (const client of Array.from(sseClients)) {
       if (

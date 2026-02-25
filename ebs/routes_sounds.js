@@ -24,9 +24,12 @@ import {
   generateImageFilename,
   ALLOWED_MIME_TYPES,
   ALLOWED_IMAGE_MIME_TYPES,
+  ALLOWED_VIDEO_MIME_TYPES,
   MAX_FILE_SIZE,
   MAX_IMAGE_SIZE,
+  MAX_VIDEO_FILE_SIZE,
   VALID_TIERS,
+  VALID_TYPES,
   SOUNDS_FILE_DIR,
   seedDefaultSounds,
 } from "./sounds_store.js";
@@ -51,6 +54,26 @@ const imageUpload = multer({
     cb(null, ALLOWED_IMAGE_MIME_TYPES.includes(file.mimetype));
   },
 });
+
+const videoUpload = multer({
+  dest: path.resolve(SOUNDS_FILE_DIR, "tmp"),
+  limits: { fileSize: MAX_VIDEO_FILE_SIZE },
+  fileFilter: (_req, file, cb) => {
+    cb(null, ALLOWED_VIDEO_MIME_TYPES.includes(file.mimetype));
+  },
+});
+
+// Extract clip slug from Twitch clip URLs
+function extractClipSlug(url) {
+  if (!url || typeof url !== "string") return null;
+  // https://clips.twitch.tv/SlugHere or https://clips.twitch.tv/SlugHere?...
+  let m = url.match(/clips\.twitch\.tv\/([A-Za-z0-9_-]+)/);
+  if (m) return m[1];
+  // https://www.twitch.tv/channel/clip/SlugHere
+  m = url.match(/twitch\.tv\/[^/]+\/clip\/([A-Za-z0-9_-]+)/);
+  if (m) return m[1];
+  return null;
+}
 
 // ===== Extension JWT helpers =====
 
@@ -100,10 +123,10 @@ export function mountSoundRoutes(app, deps = {}) {
     return null;
   }
 
-  const notify = (channelId, soundId, soundName, tier, txId, viewerUserId) => {
+  const notify = (channelId, soundId, soundName, tier, txId, viewerUserId, extra = {}) => {
     try {
       if (typeof onSoundAlert === "function") {
-        onSoundAlert({ channelId, soundId, soundName, tier, txId, viewerUserId });
+        onSoundAlert({ channelId, soundId, soundName, tier, txId, viewerUserId, ...extra });
       }
     } catch {}
   };
@@ -177,6 +200,93 @@ export function mountSoundRoutes(app, deps = {}) {
         message: err?.message,
       });
       res.status(500).json({ error: "Failed to upload sound" });
+    }
+  });
+
+  // Create a Twitch Clip alert (no file upload needed)
+  app.post("/api/sounds/clip", async (req, res) => {
+    const uid = requireBroadcaster(req, res);
+    if (!uid) return;
+
+    const { name, clipUrl, tier, volume, cooldownMs } = req.body || {};
+    if (!clipUrl) {
+      return res.status(400).json({ error: "clipUrl is required" });
+    }
+
+    const clipSlug = extractClipSlug(clipUrl);
+    if (!clipSlug) {
+      return res.status(400).json({
+        error: "Invalid Twitch Clip URL. Use a URL like https://clips.twitch.tv/SlugHere or https://twitch.tv/channel/clip/SlugHere",
+      });
+    }
+
+    try {
+      const soundId = `snd_${crypto.randomUUID().slice(0, 12)}`;
+      const result = createSound(uid, {
+        id: soundId,
+        type: "clip",
+        name: name || `Clip ${clipSlug.slice(0, 20)}`,
+        clipUrl: String(clipUrl),
+        clipSlug,
+        tier: tier || "sound_100",
+        volume: volume ? Number(volume) : 80,
+        cooldownMs: cooldownMs ? Number(cooldownMs) : 5000,
+        enabled: true,
+      });
+
+      if (result.error) return res.status(400).json(result);
+
+      logger.info("clip_created", { userId: uid, soundId, clipSlug });
+      res.status(201).json({ sound: result });
+    } catch (err) {
+      logger.error("clip_create_failed", { userId: uid, message: err?.message });
+      res.status(500).json({ error: "Failed to create clip alert" });
+    }
+  });
+
+  // Upload a video alert
+  app.post("/api/sounds/video", videoUpload.single("file"), async (req, res) => {
+    const uid = requireBroadcaster(req, res);
+    if (!uid) return;
+
+    if (!req.file) {
+      return res.status(400).json({
+        error: "No video file provided or unsupported format. Accepted: MP4, WebM (max 5 MB)",
+      });
+    }
+
+    try {
+      const soundId = `snd_${crypto.randomUUID().slice(0, 12)}`;
+      const filename = generateFilename(uid, soundId, req.file.mimetype);
+
+      await ensureSoundDir(uid);
+      const destPath = path.resolve(SOUNDS_FILE_DIR, String(uid), filename);
+      await rename(req.file.path, destPath);
+
+      const result = createSound(uid, {
+        id: soundId,
+        type: "video",
+        name: req.body.name || req.file.originalname || "Untitled Video",
+        filename,
+        originalFilename: req.file.originalname || "",
+        mimeType: req.file.mimetype,
+        sizeBytes: req.file.size,
+        tier: req.body.tier || "sound_100",
+        volume: req.body.volume ? Number(req.body.volume) : 80,
+        cooldownMs: req.body.cooldownMs ? Number(req.body.cooldownMs) : 5000,
+        enabled: true,
+      });
+
+      if (result.error) {
+        try { await fsUnlink(destPath); } catch {}
+        return res.status(400).json(result);
+      }
+
+      logger.info("video_uploaded", { userId: uid, soundId, filename, size: req.file.size });
+      res.status(201).json({ sound: result });
+    } catch (err) {
+      logger.error("video_upload_failed", { userId: uid, message: err?.message });
+      res.status(500).json({ error: "Failed to upload video" });
     }
   });
 
@@ -306,7 +416,11 @@ export function mountSoundRoutes(app, deps = {}) {
     if (!uid) return;
     const sound = getSound(uid, req.params.soundId);
     if (!sound) return res.status(404).json({ error: "Sound not found" });
-    notify(String(uid), sound.id, sound.name, sound.tier, null, null);
+    notify(String(uid), sound.id, sound.name, sound.tier, null, null, {
+      type: sound.type || "sound",
+      clipSlug: sound.clipSlug || "",
+      volume: sound.volume || 80,
+    });
     res.json({ ok: true, sound: { id: sound.id, name: sound.name } });
   });
 
@@ -449,7 +563,7 @@ export function mountSoundRoutes(app, deps = {}) {
     });
   });
 
-  // Preview a sound (Extension JWT auth — any viewer/broadcaster/mod)
+  // Preview a sound/video/clip (Extension JWT auth — any viewer/broadcaster/mod)
   app.get("/api/sounds/preview/:soundId", (req, res) => {
     const claims = requireExtensionAuth(req, res);
     if (!claims) return;
@@ -461,12 +575,23 @@ export function mountSoundRoutes(app, deps = {}) {
     if (!sound || !sound.enabled) {
       return res.status(404).json({ error: "Sound not found or disabled" });
     }
+
+    // Clip type: return embed info instead of a file
+    if (sound.type === "clip") {
+      return res.json({
+        type: "clip",
+        clipSlug: sound.clipSlug,
+        clipUrl: sound.clipUrl,
+      });
+    }
+
+    // Sound and video types: serve the file
     const filePath = getSoundFilePath(String(channelId), sound);
     res.setHeader("Content-Type", sound.mimeType);
     res.setHeader("Cache-Control", "public, max-age=3600");
     res.sendFile(filePath, (err) => {
       if (err && !res.headersSent) {
-        res.status(404).json({ error: "Sound file not found" });
+        res.status(404).json({ error: "File not found" });
       }
     });
   });
@@ -489,7 +614,7 @@ export function mountSoundRoutes(app, deps = {}) {
     });
   });
 
-  // Serve sound file (for overlay playback)
+  // Serve sound/video file (for overlay playback)
   app.get("/api/sounds/file/:soundId", (req, res) => {
     if (!requireOverlayAuth(req, res)) return;
 
@@ -510,12 +635,18 @@ export function mountSoundRoutes(app, deps = {}) {
     const sound = getSound(String(uid), req.params.soundId);
     if (!sound) return res.status(404).json({ error: "Sound not found" });
 
+    // Clip type: return embed info (no file to serve)
+    if (sound.type === "clip") {
+      return res.json({ type: "clip", clipSlug: sound.clipSlug, clipUrl: sound.clipUrl });
+    }
+
+    // Sound and video types: serve the file
     const filePath = getSoundFilePath(String(uid), sound);
     res.setHeader("Content-Type", sound.mimeType);
     res.setHeader("Cache-Control", "public, max-age=86400");
     res.sendFile(filePath, (err) => {
       if (err && !res.headersSent) {
-        res.status(404).json({ error: "Sound file not found" });
+        res.status(404).json({ error: "File not found" });
       }
     });
   });
@@ -579,7 +710,11 @@ export function mountSoundRoutes(app, deps = {}) {
       viewerUserId: claims.user_id,
     });
 
-    notify(String(channelId), sound.id, sound.name, sound.tier, txId, claims.user_id);
+    notify(String(channelId), sound.id, sound.name, sound.tier, txId, claims.user_id, {
+      type: sound.type || "sound",
+      clipSlug: sound.clipSlug || "",
+      volume: sound.volume || 80,
+    });
 
     res.json({ ok: true, sound: { id: sound.id, name: sound.name } });
   });

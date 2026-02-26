@@ -76,43 +76,57 @@ export function renderSoundConfigPage(options = {}) {
     })}
     <main>
       <h1>Sound Alerts</h1>
-      <p class="subtitle">Viewers spend Bits to trigger sound alerts on your stream. Upload sounds, configure settings, and copy the OBS Browser Source URL.</p>
+      <p class="subtitle" style="margin-bottom:12px;">Viewers spend Bits to trigger sound alerts on your stream.</p>
 
-      <!-- Settings -->
-      <div class="card">
-        <h2>Settings</h2>
-        <div style="margin-bottom:6px;">
-          <label style="display:flex; align-items:center; gap:8px; font-size:13px;">
-            <input type="checkbox" id="soundEnabled" checked>
-            Enabled
-          </label>
+      <!-- Browser Source URL (pinned at top) -->
+      <div class="card" style="padding:12px 16px;">
+        <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+          <button id="copySoundUrl" style="padding:5px 12px; font-size:12px; white-space:nowrap;">Copy URL</button>
+          <code id="soundOverlayUrl" style="flex:1; min-width:0; font-size:12px; word-break:break-all; opacity:0.8;"></code>
         </div>
-        <div style="margin-bottom:6px;">
-          <label style="font-size:13px; display:flex; align-items:center; gap:8px;">
-            Global Volume
-            <input type="range" id="soundGlobalVolume" min="0" max="100" value="100" style="width:120px">
-            <span id="soundGlobalVolumeVal" style="font-size:12px; opacity:0.7;">100%</span>
-          </label>
-        </div>
-        <div style="margin-bottom:6px;">
-          <label style="font-size:13px; display:flex; align-items:center; gap:8px;">
-            Cooldown (sec)
-            <input type="number" id="soundGlobalCooldown" min="0" max="60" value="3" style="width:60px">
-          </label>
-        </div>
-        <div style="margin-bottom:6px;">
-          <label style="font-size:13px; display:flex; align-items:center; gap:8px;">
-            Max Queue
-            <input type="number" id="soundMaxQueue" min="1" max="20" value="5" style="width:60px">
-          </label>
-        </div>
-        <button id="saveSoundSettings" style="margin-top:4px;">Save Settings</button>
-        <span id="soundSettingsHint" class="hint" style="margin-left:8px;"></span>
+        <div class="hint" style="margin-top:4px;">Add as a Browser Source in OBS (width: 800, height: 200)</div>
       </div>
 
-      <!-- Create Alert -->
-      <div class="card">
-        <h2>Create Alert</h2>
+      <!-- Settings (collapsible, collapsed by default) -->
+      <div class="card" id="settingsCard">
+        <h2 style="cursor:pointer; display:flex; align-items:center; justify-content:space-between; margin:0;" id="settingsToggle">
+          Settings
+          <span id="settingsArrow" style="font-size:12px; transition:transform .2s;">&#9662;</span>
+        </h2>
+        <div id="settingsBody" style="display:none; margin-top:12px;">
+          <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px 20px;">
+            <label style="display:flex; align-items:center; gap:8px; font-size:13px;">
+              <input type="checkbox" id="soundEnabled" checked>
+              Enabled
+            </label>
+            <label style="font-size:13px; display:flex; align-items:center; gap:8px;">
+              Cooldown (sec)
+              <input type="number" id="soundGlobalCooldown" min="0" max="60" value="3" style="width:60px">
+            </label>
+            <label style="font-size:13px; display:flex; align-items:center; gap:8px;">
+              Global Volume
+              <input type="range" id="soundGlobalVolume" min="0" max="100" value="100" style="width:100px">
+              <span id="soundGlobalVolumeVal" style="font-size:12px; opacity:0.7;">100%</span>
+            </label>
+            <label style="font-size:13px; display:flex; align-items:center; gap:8px;">
+              Max Queue
+              <input type="number" id="soundMaxQueue" min="1" max="20" value="5" style="width:60px">
+            </label>
+          </div>
+          <div style="margin-top:10px;">
+            <button id="saveSoundSettings">Save Settings</button>
+            <span id="soundSettingsHint" class="hint" style="margin-left:8px;"></span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Create Alert (collapsible, open by default) -->
+      <div class="card" id="createAlertCard">
+        <h2 style="cursor:pointer; display:flex; align-items:center; justify-content:space-between; margin:0;" id="createAlertToggle">
+          Create Alert
+          <span id="createAlertArrow" style="font-size:12px; transition:transform .2s; transform:rotate(180deg);">&#9662;</span>
+        </h2>
+        <div id="createAlertBody" style="margin-top:12px;">
         <div style="display:flex; gap:4px; margin-bottom:12px;">
           <button id="tabSound" class="tab-btn active" data-tab="sound" style="font-size:12px; padding:5px 12px; border-radius:6px;">Sound</button>
           <button id="tabClip" class="tab-btn" data-tab="clip" style="font-size:12px; padding:5px 12px; border-radius:6px; display:none;">Twitch Clip</button>
@@ -188,6 +202,7 @@ export function renderSoundConfigPage(options = {}) {
           <button type="submit" id="videoUploadBtn">Upload Video</button>
           <span id="videoUploadHint" class="hint" style="margin-left:8px;"></span>
         </form>
+        </div>
       </div>
 
       <!-- Sound List -->
@@ -198,15 +213,6 @@ export function renderSoundConfigPage(options = {}) {
         </div>
       </div>
 
-      <!-- OBS URL -->
-      <div class="card">
-        <h2>Browser Source URL</h2>
-        <code id="soundOverlayUrl" style="display:block; padding:8px 10px; background:var(--surface-muted,#1a1a1e); border-radius:6px; font-size:12px; word-break:break-all;"></code>
-        <div style="margin-top:8px; display:flex; gap:12px; align-items:center;">
-          <button id="copySoundUrl">Copy URL</button>
-          <div class="hint">Add as a Browser Source in OBS (width: 800, height: 200)</div>
-        </div>
-      </div>
     </main>
 
     <script>
@@ -286,6 +292,28 @@ export function renderSoundConfigPage(options = {}) {
             setTimeout(function() { copySoundBtn.textContent = old; }, 900);
           });
         }
+
+        // Collapsible sections
+        function setupCollapsible(toggleId, bodyId, arrowId, startOpen) {
+          var toggle = document.getElementById(toggleId);
+          var body = document.getElementById(bodyId);
+          var arrow = document.getElementById(arrowId);
+          if (!toggle || !body) return;
+          if (startOpen) {
+            body.style.display = '';
+            if (arrow) arrow.style.transform = 'rotate(180deg)';
+          } else {
+            body.style.display = 'none';
+            if (arrow) arrow.style.transform = '';
+          }
+          toggle.addEventListener('click', function() {
+            var open = body.style.display !== 'none';
+            body.style.display = open ? 'none' : '';
+            if (arrow) arrow.style.transform = open ? '' : 'rotate(180deg)';
+          });
+        }
+        setupCollapsible('settingsToggle', 'settingsBody', 'settingsArrow', false);
+        setupCollapsible('createAlertToggle', 'createAlertBody', 'createAlertArrow', true);
 
         var soundsCache = [];
 

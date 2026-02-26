@@ -1,5 +1,6 @@
 import { renderOverlayPage } from "./views/overlayPage.js";
 import { renderOverlayConfigPage } from "./views/overlayConfigPage.js";
+import { renderGoalsConfigPage } from "./views/goalsConfigPage.js";
 import { renderGoalsOverlayPage } from "./views/goalsOverlayPage.js";
 import { renderWheelOverlayPage } from "./views/wheelOverlayPage.js";
 import { renderSoundAlertOverlayPage } from "./views/soundAlertOverlayPage.js";
@@ -69,6 +70,29 @@ export function mountOverlayPageRoutes(app, deps) {
       base: "",
       adminName,
       userKey,
+      showAdminLink: isSuperAdmin(req),
+    });
+
+    res.setHeader("Content-Type", "text/html; charset=utf-8");
+    res.send(html);
+  });
+
+  app.get("/goals/config", requireAdmin, (req, res) => {
+    const adminName = String(
+      req.session?.twitchUser?.display_name ||
+        req.session?.twitchUser?.login ||
+        "Admin"
+    );
+    const userKey = String(
+      req.session?.userOverlayKey || req.session?.twitchUser?.id || ""
+    );
+    const settings = getUserSettings(req.session?.twitchUser?.id);
+
+    const html = renderGoalsConfigPage({
+      base: "",
+      adminName,
+      userKey,
+      settings,
       showAdminLink: isSuperAdmin(req),
     });
 

@@ -61,6 +61,61 @@ export function renderSoundConfigPage(options = {}) {
       .type-badge.video { background:rgba(0,180,120,0.15); color:#00c882; }
       ${THEME_TOGGLE_STYLES}
       ${GLOBAL_HEADER_STYLES}
+
+      /* Floating extension promo */
+      .ext-promo {
+        position: fixed;
+        right: 20px;
+        top: 50%;
+        transform: translateY(-50%);
+        z-index: 90;
+        width: 180px;
+        background: var(--surface-color);
+        border: 1px solid var(--surface-border);
+        border-radius: 14px;
+        padding: 16px 14px;
+        box-shadow: 0 4px 24px rgba(0,0,0,0.12);
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        font-size: 12px;
+        line-height: 1.4;
+      }
+      .ext-promo-title {
+        font-weight: 700;
+        font-size: 13px;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+      }
+      .ext-promo a {
+        display: block;
+        text-align: center;
+        padding: 7px 10px;
+        border-radius: 8px;
+        text-decoration: none;
+        font-weight: 600;
+        font-size: 12px;
+        transition: filter .15s ease;
+      }
+      .ext-promo a:hover { filter: brightness(1.1); }
+      .ext-promo .ext-link {
+        background: #9146ff;
+        color: #fff;
+      }
+      .ext-promo .ext-request {
+        background: var(--secondary-button-bg);
+        color: var(--secondary-button-text);
+        border: 1px solid var(--secondary-button-border);
+      }
+      .ext-promo .ext-hint {
+        color: var(--text-muted);
+        font-size: 11px;
+        text-align: center;
+      }
+      @media (max-width: 1100px) {
+        .ext-promo { display: none; }
+      }
     </style>
   </head>
   <body>
@@ -74,6 +129,19 @@ export function renderSoundConfigPage(options = {}) {
       showUtilitiesLink: true,
       showAdminLink,
     })}
+
+    <!-- Floating extension promo -->
+    <aside class="ext-promo">
+      <div class="ext-promo-title">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#9146ff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+        Twitch Extension
+      </div>
+      <div style="color:var(--text-muted);">Let viewers trigger sounds directly from your channel page.</div>
+      <a class="ext-link" href="https://dashboard.twitch.tv/extensions/l7iuxz2tipmi4ly2g2vg5uzmdqkhx3-0.0.2" target="_blank" rel="noopener noreferrer">Install Extension</a>
+      <a class="ext-request" href="https://docs.google.com/forms/d/e/1FAIpQLSdOH9xH51BnCU2OeJB05TNLze78GEGYzFTgWPjaqQgsA6MXcw/viewform" target="_blank" rel="noopener noreferrer">Request Access</a>
+      <div class="ext-hint">Access approval required during early release</div>
+    </aside>
+
     <main>
       <h1>Sound Alerts</h1>
       <p class="subtitle" style="margin-bottom:12px;">Viewers spend Bits to trigger sound alerts on your stream.</p>

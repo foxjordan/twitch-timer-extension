@@ -184,7 +184,7 @@ export function renderGlobalHeader(options = {}) {
 
   const navLinks = [
     { href: homeHref, label: "Home", key: "home" },
-    { href: configHref, label: "Configurator", key: "config" },
+    { href: configHref, label: "Countdown", key: "config" },
     { href: soundsHref, label: "Sound Alerts", key: "sounds" },
     { href: `${base}/goals/config`, label: "Goals", key: "goals" },
     ...(showUtilitiesLink

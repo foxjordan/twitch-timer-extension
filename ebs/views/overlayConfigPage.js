@@ -73,21 +73,34 @@ export function renderOverlayConfigPage(options = {}) {
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Timer Overlay Configurator</title>
+    <title>Countdown Timer – Livestreamer Hub</title>
     <link rel="icon" type="image/png" href="/assets/convertico-coin_24x24.png">
     <script id="Cookiebot" src="https://consent.cookiebot.com/uc.js" data-cbid="6770198d-2c1f-46f8-af4b-694edc70484c" type="text/javascript"></script>
     ${renderThemeBootstrapScript()}
     ${renderFirebaseScript()}
     <style>
       ${THEME_CSS_VARS}
-      body { margin: 0; font-family: Inter, system-ui, Arial, sans-serif; background: var(--page-bg); color: var(--text-color); }
-      .row { display: flex; gap: 16px; padding: 16px; }
+      body { margin: 0; font-family: Inter, system-ui, Arial, sans-serif; background: var(--page-bg); color: var(--text-color); min-height: 100vh; display: flex; flex-direction: column; }
+      .page-content { flex: 1; width: min(1100px, 100%); margin: 0 auto; padding: 24px 20px 48px; }
+      .page-header { margin-bottom: 20px; }
+      .page-header h1 { margin: 0 0 4px; font-size: 26px; }
+      .page-header .subtitle { margin: 0; color: var(--text-muted); font-size: 14px; }
+      .source-bar { display: flex; align-items: center; gap: 10px; margin-bottom: 20px; background: var(--surface-color); border: 1px solid var(--surface-border); border-radius: 12px; padding: 10px 14px; }
+      .source-bar .url { flex: 1; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; background: var(--code-bg); border: 1px solid var(--code-border); padding: 6px 10px; border-radius: 8px; overflow: auto; font-size: 13px; white-space: nowrap; }
+      .source-bar .hint { font-size: 12px; color: var(--text-muted); white-space: nowrap; }
+      .hero-preview { margin-bottom: 20px; text-align: center; }
+      .hero-preview iframe { width: 100%; max-width: 720px; height: 180px; border: 1px solid var(--surface-border); background: var(--surface-muted); border-radius: 12px; box-shadow: 0 8px 30px var(--goal-card-shadow); }
+      .hero-preview .hint { margin-top: 6px; font-size: 12px; color: var(--text-muted); }
       .panel { background: var(--surface-color); border: 1px solid var(--surface-border); border-radius: 12px; padding: 16px; }
-      .controls { width: 420px; }
       .control { display: grid; grid-template-columns: 140px 1fr; align-items: center; gap: 8px; margin-bottom: 10px; }
       .control label { color: var(--text-muted); font-size: 13px; }
-      .preview { flex: 1; min-height: 320px; }
       .row2 { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
+      .bottom-grid { display: grid; grid-template-columns: 1fr 2fr; gap: 16px; margin-top: 16px; }
+      .bottom-right-split { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+      @media (max-width: 900px) {
+        .bottom-grid { grid-template-columns: 1fr; }
+        .bottom-right-split { grid-template-columns: 1fr; }
+      }
       input[type="text"], input[type="number"], select, textarea {
         width: 100%;
         max-width: 100%;
@@ -109,8 +122,6 @@ export function renderOverlayConfigPage(options = {}) {
       button:disabled { opacity: 0.5; cursor: not-allowed; }
       @keyframes btnpulse { 0% { transform: scale(0.99); } 100% { transform: scale(1); } }
       .btn-click { animation: btnpulse .18s ease; }
-      .url { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; background: var(--code-bg); border: 1px solid var(--code-border); padding: 8px; border-radius: 8px; overflow: auto; }
-      iframe { width: 100%; height: 180px; border: 1px solid var(--surface-border); background: var(--surface-muted); border-radius: 12px; box-shadow: 0 8px 30px var(--goal-card-shadow); }
       .hint { font-size: 12px; color: var(--text-muted); }
       .log-box { margin-top: 8px; padding: 8px; background: var(--log-bg); border: 1px solid var(--log-border); border-radius: 8px; max-height: 160px; overflow-y: auto; font-size: 12px; }
       .log-line { margin-bottom: 4px; white-space: nowrap; text-overflow: ellipsis; overflow: hidden; }
@@ -141,13 +152,138 @@ export function renderOverlayConfigPage(options = {}) {
       showUtilitiesLink: true,
       showAdminLink,
     })}
-    <div class="row">
-      <div class="panel controls">
-        <div class="${sectionClass("style")}" data-section="style">
-          <button class="section-toggle" data-section-toggle="style" aria-expanded="${sectionExpandedAttr(
-            "style",
+    <div class="page-content">
+      <!-- Browser Source URL -->
+      <div class="page-header">
+        <h1>Countdown Timer</h1>
+        <p class="subtitle">Configure your countdown timer overlay for OBS or Streamlabs.</p>
+      </div>
+      <div class="source-bar">
+        <button id="copy" style="flex-shrink:0;">Copy URL</button>
+        <div class="url" id="url"></div>
+        <span class="hint">Browser Source URL</span>
+      </div>
+
+      <!-- Hero Preview -->
+      <div class="hero-preview">
+        <iframe id="preview" referrerpolicy="no-referrer"></iframe>
+        <div class="hint">Pause/Resume and Start actions update the live overlay immediately.</div>
+      </div>
+
+      <!-- Timer Controls + Bonus Time -->
+      <div class="panel">
+        <div class="${sectionClass("timer")}" data-section="timer">
+          <button class="section-toggle" data-section-toggle="timer" aria-expanded="${sectionExpandedAttr(
+            "timer",
           )}">
-            <span>Overlay Style</span>
+            <span>Timer Controls</span>
+            <span class="section-arrow">▾</span>
+          </button>
+          <div class="section-body" ${sectionBodyAttr("timer")}>
+            <div class="control"><label>Hours</label><input id="h" class="time-input" type="number" min="0" step="1" value="${defH}"></div>
+            <div class="control"><label>Minutes</label><input id="m" class="time-input" type="number" min="0" max="59" step="1" value="${defM}"></div>
+            <div class="control"><label>Seconds</label><input id="s" class="time-input" type="number" min="0" max="59" step="1" value="${defS}"></div>
+            <div class="control"><label>Max Stream Length</label>
+              <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+                <div style="display:flex; gap:8px; align-items:center;">
+                  <input id="maxH" type="number" min="0" step="1" value="0" style="max-width:80px">h
+                  <input id="maxM" type="number" min="0" max="59" step="1" value="0" style="max-width:80px">m
+                  <input id="maxS" type="number" min="0" max="59" step="1" value="0" style="max-width:80px">s
+                </div>
+                <button class="secondary" id="clearMax" title="Remove the max cap">Clear Max</button>
+              </div>
+            </div>
+            <div class="row2">
+              <button id="startTimer">Start Timer</button>
+              <button class="secondary" id="pause">Pause</button>
+              <button class="secondary" id="resume">Resume</button>
+              <button class="secondary" id="endTimer">End Timer</button>
+              <button class="secondary" id="restartTimer">Restart Timer</button>
+            </div>
+            <div class="row2">
+              <button class="secondary" id="saveDefault">Save Default</button>
+            </div>
+            <div class="row2" style="margin-top:12px;">
+              <button class="secondary" data-add="300">+5 min</button>
+              <button class="secondary" data-add="600">+10 min</button>
+              <button class="secondary" data-add="1800">+30 min</button>
+            </div>
+            <div class="row2">
+              <input id="addCustomSeconds" type="number" min="1" step="1" placeholder="Seconds" style="max-width:140px" />
+              <button class="secondary" id="addCustomBtn">Add</button>
+            </div>
+            <div class="row2" id="devCustomBits">
+              <input id="devBitsInput" type="number" min="0" step="1" placeholder="Bits amount (testing)" style="max-width:150px" />
+              <button class="secondary" id="devApplyBits" title="Apply custom bits based on rules">Apply Bits</button>
+            </div>
+
+            <div style="margin-top:12px; padding-top:12px; border-top:1px solid var(--section-border,#303038);">
+              <div style="font-weight:600; font-size:13px; margin-bottom:8px;">Bonus Time</div>
+              <div class="row2" style="align-items:center;">
+                <button id="bonusToggle" class="secondary" style="min-width:160px;">Activate Bonus Time</button>
+                <span id="bonusStatus" style="font-size:12px; opacity:0.7;"></span>
+              </div>
+              <div style="margin-top:8px; display:flex; gap:12px; flex-wrap:wrap; align-items:end;">
+                <div>
+                  <label style="font-size:12px; display:block; margin-bottom:2px;">Start Time</label>
+                  <input id="bonusStart" type="datetime-local" style="font-size:12px;" />
+                </div>
+                <div>
+                  <label style="font-size:12px; display:block; margin-bottom:2px;">End Time</label>
+                  <input id="bonusEnd" type="datetime-local" style="font-size:12px;" />
+                </div>
+                <button class="secondary" id="bonusScheduleSave" style="font-size:12px;">Save Schedule</button>
+                <button class="secondary" id="bonusScheduleClear" style="font-size:12px;">Clear Schedule</button>
+              </div>
+              <div class="hint" id="bonusScheduleHint" style="margin-top:4px;"></div>
+            </div>
+
+            <div class="hint" style="margin-top:8px">Current remaining: <span id="remain">--:--</span></div>
+            <div class="hint" id="capStatus" style="margin-top:4px; opacity:0.8"></div>
+
+            <div style="margin-top:12px; padding-top:12px; border-top:1px solid var(--section-border,#303038);">
+              <div style="font-weight:600; font-size:13px; margin-bottom:8px;">Max Time Reached Display</div>
+              <label style="display:flex; align-items:center; gap:8px; margin-bottom:8px; cursor:pointer;">
+                <input type="checkbox" id="showCapMessage" />
+                Display max time reached message on overlay
+              </label>
+              <div id="capMessageRow" style="display:none; margin-bottom:8px;">
+                <input id="capMessageText" type="text" placeholder="e.g. Thanks for watching! Stream ending soon." maxlength="200" style="width:100%; box-sizing:border-box; margin-bottom:8px;" />
+                <div style="display:flex; gap:12px; align-items:center; flex-wrap:wrap;">
+                  <label style="display:flex; align-items:center; gap:4px; font-size:12px;">Color <input id="capMsgColor" type="color" value="#ffffff" style="width:32px; height:24px; border:none; cursor:pointer;" /></label>
+                  <label style="font-size:12px;">Position
+                    <select id="capMsgPosition" style="margin-left:4px;">
+                      <option value="below">Below countdown</option>
+                      <option value="above">Above countdown</option>
+                    </select>
+                  </label>
+                  <label style="font-size:12px;">Size
+                    <select id="capMsgSize" style="margin-left:4px;">
+                      <option value="larger">Larger</option>
+                      <option value="same">Same</option>
+                      <option value="smaller">Smaller</option>
+                    </select>
+                  </label>
+                </div>
+              </div>
+              <div class="row2">
+                <button class="secondary" id="saveCapMsg">Save Message Settings</button>
+                <button class="secondary" id="forceCapBtn" title="Manually force cap-reached state">Force Max Reached</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Bottom Grid: Styles (1/3) | Rules + Event Log + Testing (2/3) -->
+      <div class="bottom-grid">
+        <!-- Left column: Countdown Styles -->
+        <div class="panel">
+          <div class="${sectionClass("style")}" data-section="style">
+            <button class="section-toggle" data-section-toggle="style" aria-expanded="${sectionExpandedAttr(
+              "style",
+            )}">
+              <span>Countdown Styles</span>
             <span class="section-arrow">▾</span>
           </button>
           <div class="section-body" ${sectionBodyAttr("style")}>
@@ -263,214 +399,113 @@ export function renderOverlayConfigPage(options = {}) {
             </div>
           </div>
         </div>
+        </div><!-- end left column (Countdown Styles) -->
 
-        <div class="${sectionClass("rules")}" data-section="rules">
-          <button class="section-toggle" data-section-toggle="rules" aria-expanded="${sectionExpandedAttr(
-            "rules",
-          )}">
-            <span>Rules</span>
-            <span class="section-arrow">▾</span>
-          </button>
-          <div class="section-body" ${sectionBodyAttr("rules")}>
-            <div class="control"><label>Min. Bits to Trigger</label><input id="r_bits_per" type="number" min="1" step="1" value="100"></div>
-            <div class="control"><label>Bits add (sec)</label><input id="r_bits_add" type="number" min="0" step="1" value="60"></div>
-            <div class="control"><label>T1 Subs add (sec)</label><input id="r_sub_1000" type="number" min="0" step="1" value="300"></div>
-            <div class="control"><label>T2 Subs add (sec)</label><input id="r_sub_2000" type="number" min="0" step="1" value="600"></div>
-            <div class="control"><label>T3 Subs add (sec)</label><input id="r_sub_3000" type="number" min="0" step="1" value="900"></div>
-            <div class="control"><label>Resub base (sec)</label><input id="r_resub_base" type="number" min="0" step="1" value="300"></div>
-            <div class="control"><label>Gift sub per-sub (sec)</label><input id="r_gift_per" type="number" min="0" step="1" value="300"></div>
-            <div class="control"><label>Charity per $1 (sec)</label><input id="r_charity_per_usd" type="number" min="0" step="1" value="60"></div>
-            <div class="control"><label>Follows add (sec)</label>
-              <div style="display:flex; gap:8px; align-items:center;">
-                <input id="r_follow_add" type="number" min="0" step="1" value="600" style="max-width:140px" />
-                <label style="display:flex; gap:6px; align-items:center; opacity:.85;"><input id="r_follow_enabled" type="checkbox" /> Enabled</label>
+        <!-- Right column: Rules, then Event Log + Testing side by side -->
+        <div>
+          <div class="panel" style="margin-bottom:16px;">
+            <div class="${sectionClass("rules")}" data-section="rules">
+              <button class="section-toggle" data-section-toggle="rules" aria-expanded="${sectionExpandedAttr(
+                "rules",
+              )}">
+                <span>Rules</span>
+                <span class="section-arrow">▾</span>
+              </button>
+              <div class="section-body" ${sectionBodyAttr("rules")}>
+                <div class="control"><label>Min. Bits to Trigger</label><input id="r_bits_per" type="number" min="1" step="1" value="100"></div>
+                <div class="control"><label>Bits add (sec)</label><input id="r_bits_add" type="number" min="0" step="1" value="60"></div>
+                <div class="control"><label>T1 Subs add (sec)</label><input id="r_sub_1000" type="number" min="0" step="1" value="300"></div>
+                <div class="control"><label>T2 Subs add (sec)</label><input id="r_sub_2000" type="number" min="0" step="1" value="600"></div>
+                <div class="control"><label>T3 Subs add (sec)</label><input id="r_sub_3000" type="number" min="0" step="1" value="900"></div>
+                <div class="control"><label>Resub base (sec)</label><input id="r_resub_base" type="number" min="0" step="1" value="300"></div>
+                <div class="control"><label>Gift sub per-sub (sec)</label><input id="r_gift_per" type="number" min="0" step="1" value="300"></div>
+                <div class="control"><label>Charity per $1 (sec)</label><input id="r_charity_per_usd" type="number" min="0" step="1" value="60"></div>
+                <div class="control"><label>Follows add (sec)</label>
+                  <div style="display:flex; gap:8px; align-items:center;">
+                    <input id="r_follow_add" type="number" min="0" step="1" value="600" style="max-width:140px" />
+                    <label style="display:flex; gap:6px; align-items:center; opacity:.85;"><input id="r_follow_enabled" type="checkbox" /> Enabled</label>
+                  </div>
+                </div>
+                <div class="control"><label>Hype Train Multiplier</label><input id="r_hype" type="number" min="0" step="0.1" value="2"></div>
+                <div class="control"><label>Bonus Time Multiplier</label><input id="r_bonus" type="number" min="0" step="0.1" value="2"></div>
+                <div class="control"><label style="display:flex; gap:6px; align-items:center;"><input id="r_bonus_stack" type="checkbox" /> Stack bonus with hype train</label>
+                  <div class="hint" style="margin-top:2px;">When enabled, multipliers multiply together. When disabled, only the higher multiplier applies.</div>
+                </div>
+                <div class="row2"><button id="saveRules">Save Rules</button></div>
               </div>
-            </div>
-            <div class="control"><label>Hype Train Multiplier</label><input id="r_hype" type="number" min="0" step="0.1" value="2"></div>
-            <div class="control"><label>Bonus Time Multiplier</label><input id="r_bonus" type="number" min="0" step="0.1" value="2"></div>
-            <div class="control"><label style="display:flex; gap:6px; align-items:center;"><input id="r_bonus_stack" type="checkbox" /> Stack bonus with hype train</label>
-              <div class="hint" style="margin-top:2px;">When enabled, multipliers multiply together. When disabled, only the higher multiplier applies.</div>
-            </div>
-            <div class="row2"><button id="saveRules">Save Rules</button></div>
-          </div>
-        </div>
-
-        <div class="${sectionClass("testing")}" data-section="testing">
-          <button class="section-toggle" data-section-toggle="testing" aria-expanded="${sectionExpandedAttr(
-            "testing",
-          )}">
-            <span>Testing Tools</span>
-            <span class="section-arrow">▾</span>
-          </button>
-          <div class="section-body" ${sectionBodyAttr("testing")}>
-            <div class="row2" id="devTests">
-              <button class="secondary" data-test-seconds="${
-                devTest.bitsSeconds
-              }" title="Simulate ${devTest.bitsPer} bits">
-                Quick: ${devTest.bitsPer} bits (+${devTest.bitsSeconds}s)
-              </button>
-              <button class="secondary" data-test-seconds="${
-                devTest.subSeconds
-              }" title="Simulate Tier 1 sub">
-                Quick: 1x T1 sub (+${devTest.subSeconds}s)
-              </button>
-              <button class="secondary" data-test-seconds="${
-                devTest.giftSeconds
-              }" title="Simulate single gift sub">
-                Quick: 1x gift sub (+${devTest.giftSeconds}s)
-              </button>
-            </div>
-            <div class="row2" id="devCustomSubs">
-              <input id="devSubCount" type="number" min="1" step="1" value="1" style="max-width:100px" />
-              <select id="devSubTier" style="max-width:160px">
-                <option value="1000">Tier 1</option>
-                <option value="2000">Tier 2</option>
-                <option value="3000">Tier 3</option>
-              </select>
-              <button class="secondary" id="devApplySubs" title="Apply N subs">Apply Subs</button>
-            </div>
-            <div class="row2" id="devCustomGifts">
-              <input id="devGiftCount" type="number" min="1" step="1" value="1" style="max-width:100px" />
-              <button class="secondary" id="devApplyGifts" title="Apply N gift subs">Apply Gift Subs</button>
-            </div>
-            <div class="row2" id="devHypeControls">
-              <button class="secondary" id="testHypeOn">Force Hype On</button>
-              <button class="secondary" id="testHypeOff">Force Hype Off</button>
-            </div>
-            <div style="margin-top:10px; padding-top:10px; border-top:1px solid var(--section-border,#303038)">
-              <div class="hint">Sound Alert management and testing has moved to the <a href="/sounds/config" style="color:var(--accent-color)">Sound Alerts</a> page.</div>
             </div>
           </div>
-        </div>
-      </div>
-      <div class="panel preview">
-        <div style="margin-bottom:8px; opacity:0.85">Live Preview</div>
-        <iframe id="preview" referrerpolicy="no-referrer"></iframe>
-        <div style="margin-top:8px" class="url" id="url"></div>
-        <div style="margin-top:8px; display:flex; gap:12px; align-items:center; flex-wrap:wrap;">
-          <button id="copy">Copy URL</button>
-          <div class="hint">Add as a Browser Source in OBS</div>
-        </div>
-        <div style="margin-top:8px" class="hint">Pause/Resume and Start actions update the live overlay immediately.</div>
-        <div class="${sectionClass("timer")}" data-section="timer">
-          <button class="section-toggle" data-section-toggle="timer" aria-expanded="${sectionExpandedAttr(
-            "timer",
-          )}">
-            <span>Timer Controls</span>
-            <span class="section-arrow">▾</span>
-          </button>
-          <div class="section-body" ${sectionBodyAttr("timer")}>
-            <div class="control"><label>Hours</label><input id="h" class="time-input" type="number" min="0" step="1" value="${defH}"></div>
-            <div class="control"><label>Minutes</label><input id="m" class="time-input" type="number" min="0" max="59" step="1" value="${defM}"></div>
-            <div class="control"><label>Seconds</label><input id="s" class="time-input" type="number" min="0" max="59" step="1" value="${defS}"></div>
-            <div class="control"><label>Max Stream Length</label>
-              <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
-                <div style="display:flex; gap:8px; align-items:center;">
-                  <input id="maxH" type="number" min="0" step="1" value="0" style="max-width:80px">h
-                  <input id="maxM" type="number" min="0" max="59" step="1" value="0" style="max-width:80px">m
-                  <input id="maxS" type="number" min="0" max="59" step="1" value="0" style="max-width:80px">s
-                </div>
-                <button class="secondary" id="clearMax" title="Remove the max cap">Clear Max</button>
-              </div>
-            </div> 
-            <div class="row2">
-              <button id="startTimer">Start Timer</button>
-              <button class="secondary" id="pause">Pause</button>
-              <button class="secondary" id="resume">Resume</button>
-              <button class="secondary" id="endTimer">End Timer</button>
-              <button class="secondary" id="restartTimer">Restart Timer</button>
-            </div>
-            <div class="row2">
-              <button class="secondary" id="saveDefault">Save Default</button>
-            </div>
-            <div class="row2" style="margin-top:12px;">
-              <button class="secondary" data-add="300">+5 min</button>
-              <button class="secondary" data-add="600">+10 min</button>
-              <button class="secondary" data-add="1800">+30 min</button>
-            </div>
-            <div class="row2">
-              <input id="addCustomSeconds" type="number" min="1" step="1" placeholder="Seconds" style="max-width:140px" />
-              <button class="secondary" id="addCustomBtn">Add</button>
-            </div>
-            <div class="row2" id="devCustomBits">
-              <input id="devBitsInput" type="number" min="0" step="1" placeholder="Bits amount (testing)" style="max-width:150px" />
-              <button class="secondary" id="devApplyBits" title="Apply custom bits based on rules">Apply Bits</button>
-            </div>
 
-            <div style="margin-top:12px; padding-top:12px; border-top:1px solid var(--section-border,#303038);">
-              <div style="font-weight:600; font-size:13px; margin-bottom:8px;">Bonus Time</div>
-              <div class="row2" style="align-items:center;">
-                <button id="bonusToggle" class="secondary" style="min-width:160px;">Activate Bonus Time</button>
-                <span id="bonusStatus" style="font-size:12px; opacity:0.7;"></span>
-              </div>
-              <div style="margin-top:8px; display:flex; gap:12px; flex-wrap:wrap; align-items:end;">
-                <div>
-                  <label style="font-size:12px; display:block; margin-bottom:2px;">Start Time</label>
-                  <input id="bonusStart" type="datetime-local" style="font-size:12px;" />
+          <div class="bottom-right-split">
+            <div class="panel">
+              <div class="${sectionClass("events")}" data-section="events">
+                <button class="section-toggle" data-section-toggle="events" aria-expanded="${sectionExpandedAttr(
+                  "events",
+                )}">
+                  <span>Event Log</span>
+                  <span class="section-arrow">▾</span>
+                </button>
+                <div class="section-body" ${sectionBodyAttr("events")}>
+                  <div id="eventLog" class="log-box"></div>
+                  <div class="row2" style="margin-top:8px;">
+                    <button class="secondary" id="clearLog">Clear Log</button>
+                  </div>
                 </div>
-                <div>
-                  <label style="font-size:12px; display:block; margin-bottom:2px;">End Time</label>
-                  <input id="bonusEnd" type="datetime-local" style="font-size:12px;" />
-                </div>
-                <button class="secondary" id="bonusScheduleSave" style="font-size:12px;">Save Schedule</button>
-                <button class="secondary" id="bonusScheduleClear" style="font-size:12px;">Clear Schedule</button>
               </div>
-              <div class="hint" id="bonusScheduleHint" style="margin-top:4px;"></div>
             </div>
-
-            <div class="hint" style="margin-top:8px">Current remaining: <span id="remain">--:--</span></div>
-            <div class="hint" id="capStatus" style="margin-top:4px; opacity:0.8"></div>
-
-            <div style="margin-top:12px; padding-top:12px; border-top:1px solid var(--section-border,#303038);">
-              <div style="font-weight:600; font-size:13px; margin-bottom:8px;">Max Time Reached Display</div>
-              <label style="display:flex; align-items:center; gap:8px; margin-bottom:8px; cursor:pointer;">
-                <input type="checkbox" id="showCapMessage" />
-                Display max time reached message on overlay
-              </label>
-              <div id="capMessageRow" style="display:none; margin-bottom:8px;">
-                <input id="capMessageText" type="text" placeholder="e.g. Thanks for watching! Stream ending soon." maxlength="200" style="width:100%; box-sizing:border-box; margin-bottom:8px;" />
-                <div style="display:flex; gap:12px; align-items:center; flex-wrap:wrap;">
-                  <label style="display:flex; align-items:center; gap:4px; font-size:12px;">Color <input id="capMsgColor" type="color" value="#ffffff" style="width:32px; height:24px; border:none; cursor:pointer;" /></label>
-                  <label style="font-size:12px;">Position
-                    <select id="capMsgPosition" style="margin-left:4px;">
-                      <option value="below">Below countdown</option>
-                      <option value="above">Above countdown</option>
+            <div class="panel">
+              <div class="${sectionClass("testing")}" data-section="testing">
+                <button class="section-toggle" data-section-toggle="testing" aria-expanded="${sectionExpandedAttr(
+                  "testing",
+                )}">
+                  <span>Testing Tools</span>
+                  <span class="section-arrow">▾</span>
+                </button>
+                <div class="section-body" ${sectionBodyAttr("testing")}>
+                  <div class="row2" id="devTests">
+                    <button class="secondary" data-test-seconds="${
+                      devTest.bitsSeconds
+                    }" title="Simulate ${devTest.bitsPer} bits">
+                      Quick: ${devTest.bitsPer} bits (+${devTest.bitsSeconds}s)
+                    </button>
+                    <button class="secondary" data-test-seconds="${
+                      devTest.subSeconds
+                    }" title="Simulate Tier 1 sub">
+                      Quick: 1x T1 sub (+${devTest.subSeconds}s)
+                    </button>
+                    <button class="secondary" data-test-seconds="${
+                      devTest.giftSeconds
+                    }" title="Simulate single gift sub">
+                      Quick: 1x gift sub (+${devTest.giftSeconds}s)
+                    </button>
+                  </div>
+                  <div class="row2" id="devCustomSubs">
+                    <input id="devSubCount" type="number" min="1" step="1" value="1" style="max-width:100px" />
+                    <select id="devSubTier" style="max-width:160px">
+                      <option value="1000">Tier 1</option>
+                      <option value="2000">Tier 2</option>
+                      <option value="3000">Tier 3</option>
                     </select>
-                  </label>
-                  <label style="font-size:12px;">Size
-                    <select id="capMsgSize" style="margin-left:4px;">
-                      <option value="larger">Larger</option>
-                      <option value="same">Same</option>
-                      <option value="smaller">Smaller</option>
-                    </select>
-                  </label>
+                    <button class="secondary" id="devApplySubs" title="Apply N subs">Apply Subs</button>
+                  </div>
+                  <div class="row2" id="devCustomGifts">
+                    <input id="devGiftCount" type="number" min="1" step="1" value="1" style="max-width:100px" />
+                    <button class="secondary" id="devApplyGifts" title="Apply N gift subs">Apply Gift Subs</button>
+                  </div>
+                  <div class="row2" id="devHypeControls">
+                    <button class="secondary" id="testHypeOn">Force Hype On</button>
+                    <button class="secondary" id="testHypeOff">Force Hype Off</button>
+                  </div>
+                  <div style="margin-top:10px; padding-top:10px; border-top:1px solid var(--section-border,#303038)">
+                    <div class="hint">Sound Alert management and testing has moved to the <a href="/sounds/config" style="color:var(--accent-color)">Sound Alerts</a> page.</div>
+                  </div>
                 </div>
               </div>
-              <div class="row2">
-                <button class="secondary" id="saveCapMsg">Save Message Settings</button>
-                <button class="secondary" id="forceCapBtn" title="Manually force cap-reached state">Force Max Reached</button>
-              </div>
             </div>
           </div>
-        </div>
-
-        <div class="${sectionClass("events")}" data-section="events">
-          <button class="section-toggle" data-section-toggle="events" aria-expanded="${sectionExpandedAttr(
-            "events",
-          )}">
-            <span>Event Log</span>
-            <span class="section-arrow">▾</span>
-          </button>
-          <div class="section-body" ${sectionBodyAttr("events")}>
-            <div id="eventLog" class="log-box"></div>
-            <div class="row2" style="margin-top:8px;">
-              <button class="secondary" id="clearLog">Clear Log</button>
-            </div>
-          </div>
-        </div>
-
-      </div>
-    </div>
+        </div><!-- end right column -->
+      </div><!-- end bottom-grid -->
+    </div><!-- end page-content -->
     <footer class="global-footer">
       <a href="${privacyUrl}">Privacy Policy</a>
       <a href="${gdprUrl}">GDPR / UK GDPR Disclosure</a>

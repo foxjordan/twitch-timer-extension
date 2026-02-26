@@ -17,23 +17,6 @@ export function renderOverlayConfigPage(options = {}) {
     showAdminLink = false,
   } = options;
 
-  const safeNum = (val, fallback = 0) => {
-    const num = Number(val);
-    return Number.isFinite(num) ? num : fallback;
-  };
-
-  const devCharityUsd = 5;
-  const devTest = {
-    bitsSeconds: safeNum(rulesSnapshot?.bits?.add_seconds, 60),
-    bitsPer: safeNum(rulesSnapshot?.bits?.per, 100),
-    subSeconds: safeNum(rulesSnapshot?.sub?.["1000"], 300),
-    resubSeconds: safeNum(rulesSnapshot?.resub?.base_seconds, 300),
-    giftSeconds: safeNum(rulesSnapshot?.gift_sub?.per_sub_seconds, 300),
-    charityUsd: devCharityUsd,
-    charitySeconds:
-      safeNum(rulesSnapshot?.charity?.per_usd, 60) * devCharityUsd,
-  };
-
   const defSecs = Number(settings.defaultInitialSeconds || 0);
   const defH = Math.floor(defSecs / 3600);
   const defM = Math.floor((defSecs % 3600) / 60);
@@ -95,11 +78,17 @@ export function renderOverlayConfigPage(options = {}) {
       .control { display: grid; grid-template-columns: 140px 1fr; align-items: center; gap: 8px; margin-bottom: 10px; }
       .control label { color: var(--text-muted); font-size: 13px; }
       .row2 { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
+      .timer-top { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 12px; }
+      .timer-top .timer-col h3 { margin: 0 0 8px; font-size: 13px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.04em; }
+      .timer-col .hms { display: flex; gap: 6px; align-items: center; }
+      .timer-col .hms input { width: 56px; text-align: center; padding: 6px 4px; }
+      .timer-col .hms span { font-size: 12px; color: var(--text-muted); font-weight: 500; }
+      .timer-actions { display: flex; gap: 8px; flex-wrap: wrap; padding-top: 12px; border-top: 1px solid var(--section-border, #303038); }
+      .timer-addons { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-top: 10px; }
+      @media (max-width: 600px) { .timer-top { grid-template-columns: 1fr; } }
       .bottom-grid { display: grid; grid-template-columns: 1fr 2fr; gap: 16px; margin-top: 16px; }
-      .bottom-right-split { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
       @media (max-width: 900px) {
         .bottom-grid { grid-template-columns: 1fr; }
-        .bottom-right-split { grid-template-columns: 1fr; }
       }
       input[type="text"], input[type="number"], select, textarea {
         width: 100%;
@@ -113,7 +102,7 @@ export function renderOverlayConfigPage(options = {}) {
       }
       input[type="checkbox"] { transform: scale(1.1); }
       input[type="color"] { height: 32px; }
-      .time-input { max-width: 50%; }
+
       button { background: var(--accent-color); color: #ffffff; border: 0; padding: 8px 10px; border-radius: 8px; cursor: pointer; }
       button.secondary { background: var(--secondary-button-bg); color: var(--secondary-button-text); border: 1px solid var(--secondary-button-border); }
       button { transition: transform .04s ease, box-shadow .15s ease, filter .15s ease, opacity .2s; }
@@ -180,40 +169,42 @@ export function renderOverlayConfigPage(options = {}) {
             <span class="section-arrow">▾</span>
           </button>
           <div class="section-body" ${sectionBodyAttr("timer")}>
-            <div class="control"><label>Hours</label><input id="h" class="time-input" type="number" min="0" step="1" value="${defH}"></div>
-            <div class="control"><label>Minutes</label><input id="m" class="time-input" type="number" min="0" max="59" step="1" value="${defM}"></div>
-            <div class="control"><label>Seconds</label><input id="s" class="time-input" type="number" min="0" max="59" step="1" value="${defS}"></div>
-            <div class="control"><label>Max Stream Length</label>
-              <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
-                <div style="display:flex; gap:8px; align-items:center;">
-                  <input id="maxH" type="number" min="0" step="1" value="0" style="max-width:80px">h
-                  <input id="maxM" type="number" min="0" max="59" step="1" value="0" style="max-width:80px">m
-                  <input id="maxS" type="number" min="0" max="59" step="1" value="0" style="max-width:80px">s
+            <div class="timer-top">
+              <div class="timer-col">
+                <h3>Starting Time</h3>
+                <div class="hms">
+                  <input id="h" type="number" min="0" step="1" value="${defH}"><span>h</span>
+                  <input id="m" type="number" min="0" max="59" step="1" value="${defM}"><span>m</span>
+                  <input id="s" type="number" min="0" max="59" step="1" value="${defS}"><span>s</span>
                 </div>
-                <button class="secondary" id="clearMax" title="Remove the max cap">Clear Max</button>
+              </div>
+              <div class="timer-col">
+                <h3>Maximum Time</h3>
+                <div class="hms">
+                  <input id="maxH" type="number" min="0" step="1" value="0"><span>h</span>
+                  <input id="maxM" type="number" min="0" max="59" step="1" value="0"><span>m</span>
+                  <input id="maxS" type="number" min="0" max="59" step="1" value="0"><span>s</span>
+                  <button class="secondary" id="clearMax" title="Remove the max cap" style="font-size:12px; padding:4px 10px;">Clear</button>
+                </div>
               </div>
             </div>
-            <div class="row2">
+            <div class="timer-actions">
               <button id="startTimer">Start Timer</button>
               <button class="secondary" id="pause">Pause</button>
               <button class="secondary" id="resume">Resume</button>
               <button class="secondary" id="endTimer">End Timer</button>
               <button class="secondary" id="restartTimer">Restart Timer</button>
-            </div>
-            <div class="row2">
               <button class="secondary" id="saveDefault">Save Default</button>
             </div>
-            <div class="row2" style="margin-top:12px;">
+            <div class="timer-addons">
               <button class="secondary" data-add="300">+5 min</button>
               <button class="secondary" data-add="600">+10 min</button>
               <button class="secondary" data-add="1800">+30 min</button>
-            </div>
-            <div class="row2">
-              <input id="addCustomSeconds" type="number" min="1" step="1" placeholder="Seconds" style="max-width:140px" />
+              <span style="color:var(--section-border);">|</span>
+              <input id="addCustomSeconds" type="number" min="1" step="1" placeholder="Seconds" style="width:90px" />
               <button class="secondary" id="addCustomBtn">Add</button>
-            </div>
-            <div class="row2" id="devCustomBits">
-              <input id="devBitsInput" type="number" min="0" step="1" placeholder="Bits amount (testing)" style="max-width:150px" />
+              <span style="color:var(--section-border);">|</span>
+              <input id="devBitsInput" type="number" min="0" step="1" placeholder="Bits" style="width:80px" />
               <button class="secondary" id="devApplyBits" title="Apply custom bits based on rules">Apply Bits</button>
             </div>
 
@@ -287,12 +278,6 @@ export function renderOverlayConfigPage(options = {}) {
             <span class="section-arrow">▾</span>
           </button>
           <div class="section-body" ${sectionBodyAttr("style")}>
-            <div class="control"><label>Overlay Key</label>
-              <div style="display:flex; gap:8px; align-items:center;">
-                <input id="key" type="text" value="${userKey}" readonly>
-                <button class="secondary" id="rotateKey" title="Generate a new overlay key">Rotate</button>
-              </div>
-            </div>
             <div class="control"><label>Font Size</label><input id="fontSize" type="number" min="10" max="300" step="1" value="${
               initial.fontSize
             }"></div>
@@ -436,8 +421,7 @@ export function renderOverlayConfigPage(options = {}) {
             </div>
           </div>
 
-          <div class="bottom-right-split">
-            <div class="panel">
+          <div class="panel" style="margin-top:16px;">
               <div class="${sectionClass("events")}" data-section="events">
                 <button class="section-toggle" data-section-toggle="events" aria-expanded="${sectionExpandedAttr(
                   "events",
@@ -452,34 +436,23 @@ export function renderOverlayConfigPage(options = {}) {
                   </div>
                 </div>
               </div>
-            </div>
-            <div class="panel">
+          </div>
+          <div class="panel" style="margin-top:16px;">
               <div class="${sectionClass("testing")}" data-section="testing">
                 <button class="section-toggle" data-section-toggle="testing" aria-expanded="${sectionExpandedAttr(
                   "testing",
                 )}">
-                  <span>Testing Tools</span>
+                  <span>Debug Utils</span>
                   <span class="section-arrow">▾</span>
                 </button>
                 <div class="section-body" ${sectionBodyAttr("testing")}>
-                  <div class="row2" id="devTests">
-                    <button class="secondary" data-test-seconds="${
-                      devTest.bitsSeconds
-                    }" title="Simulate ${devTest.bitsPer} bits">
-                      Quick: ${devTest.bitsPer} bits (+${devTest.bitsSeconds}s)
-                    </button>
-                    <button class="secondary" data-test-seconds="${
-                      devTest.subSeconds
-                    }" title="Simulate Tier 1 sub">
-                      Quick: 1x T1 sub (+${devTest.subSeconds}s)
-                    </button>
-                    <button class="secondary" data-test-seconds="${
-                      devTest.giftSeconds
-                    }" title="Simulate single gift sub">
-                      Quick: 1x gift sub (+${devTest.giftSeconds}s)
-                    </button>
+                  <div class="control"><label>Overlay Key</label>
+                    <div style="display:flex; gap:8px; align-items:center;">
+                      <input id="key" type="text" value="${userKey}" readonly>
+                      <button class="secondary" id="rotateKey" title="Generate a new overlay key">Rotate</button>
+                    </div>
                   </div>
-                  <div class="row2" id="devCustomSubs">
+                  <div class="row2" id="devTests">
                     <input id="devSubCount" type="number" min="1" step="1" value="1" style="max-width:100px" />
                     <select id="devSubTier" style="max-width:160px">
                       <option value="1000">Tier 1</option>
@@ -501,7 +474,6 @@ export function renderOverlayConfigPage(options = {}) {
                   </div>
                 </div>
               </div>
-            </div>
           </div>
         </div><!-- end right column -->
       </div><!-- end bottom-grid -->
@@ -962,25 +934,6 @@ export function renderOverlayConfigPage(options = {}) {
           window.DEV_RULES = ${
             rulesSnapshot ? JSON.stringify(rulesSnapshot) : "null"
           };
-          Array.from(devPanel.querySelectorAll('[data-test-seconds]')).forEach(function(btn){
-            btn.addEventListener('click', async function(e){
-              e.preventDefault();
-              var secs = parseInt(btn.getAttribute('data-test-seconds'), 10) || 0;
-              if (secs <= 0) return;
-              var meta = { source: 'dev_quick_test', label: btn.textContent.trim(), requestedSeconds: secs };
-              flashButton(btn);
-              setBusy(btn, true);
-              try {
-                const m = await getTestMultiplier();
-                meta.hypeMultiplier = m.hypeMultiplier;
-                meta.bonusMultiplier = m.bonusMultiplier;
-                secs = Math.floor(secs * m.multiplier);
-              } catch(e) {}
-              await addTime(secs, meta);
-              await updateCapStatus();
-              setBusy(btn, false);
-            });
-          });
           // Custom bits
           const bitsBtn = document.getElementById('devApplyBits');
           if (bitsBtn) bitsBtn.addEventListener('click', async function(e){

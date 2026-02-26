@@ -188,7 +188,7 @@ export function renderGlobalHeader(options = {}) {
     { href: soundsHref, label: "Sound Alerts", key: "sounds" },
     { href: `${base}/goals/config`, label: "Goals", key: "goals" },
     ...(showUtilitiesLink
-      ? [{ href: utilitiesHref, label: "Utilities (WIP)", key: "utilities" }]
+      ? [{ href: utilitiesHref, label: "Extras (WIP)", key: "utilities" }]
       : []),
     ...(showAdminLink
       ? [{ href: adminHref, label: "Admin", key: "admin" }]

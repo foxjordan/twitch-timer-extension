@@ -179,7 +179,7 @@ export function renderOverlayConfigPage(options = {}) {
       <div class="panel controls">
         <div class="${sectionClass("style")}" data-section="style">
           <button class="section-toggle" data-section-toggle="style" aria-expanded="${sectionExpandedAttr(
-            "style"
+            "style",
           )}">
             <span>Overlay Style</span>
             <span class="section-arrow">▾</span>
@@ -300,7 +300,7 @@ export function renderOverlayConfigPage(options = {}) {
 
         <div class="${sectionClass("rules")}" data-section="rules">
           <button class="section-toggle" data-section-toggle="rules" aria-expanded="${sectionExpandedAttr(
-            "rules"
+            "rules",
           )}">
             <span>Rules</span>
             <span class="section-arrow">▾</span>
@@ -320,7 +320,7 @@ export function renderOverlayConfigPage(options = {}) {
                 <label style="display:flex; gap:6px; align-items:center; opacity:.85;"><input id="r_follow_enabled" type="checkbox" /> Enabled</label>
               </div>
             </div>
-            <div class="control"><label>Hype Train Modifier</label><input id="r_hype" type="number" min="0" step="0.1" value="2"></div>
+            <div class="control"><label>Hype Train Multiplier</label><input id="r_hype" type="number" min="0" step="0.1" value="2"></div>
             <div class="control"><label>Bonus Time Multiplier</label><input id="r_bonus" type="number" min="0" step="0.1" value="2"></div>
             <div class="control"><label style="display:flex; gap:6px; align-items:center;"><input id="r_bonus_stack" type="checkbox" /> Stack bonus with hype train</label>
               <div class="hint" style="margin-top:2px;">When enabled, multipliers multiply together. When disabled, only the higher multiplier applies.</div>
@@ -331,7 +331,7 @@ export function renderOverlayConfigPage(options = {}) {
 
         <div class="${sectionClass("testing")}" data-section="testing">
           <button class="section-toggle" data-section-toggle="testing" aria-expanded="${sectionExpandedAttr(
-            "testing"
+            "testing",
           )}">
             <span>Testing Tools</span>
             <span class="section-arrow">▾</span>
@@ -388,7 +388,7 @@ export function renderOverlayConfigPage(options = {}) {
         <div style="margin-top:8px" class="hint">Pause/Resume and Start actions update the live overlay immediately.</div>
         <div class="${sectionClass("timer")}" data-section="timer">
           <button class="section-toggle" data-section-toggle="timer" aria-expanded="${sectionExpandedAttr(
-            "timer"
+            "timer",
           )}">
             <span>Timer Controls</span>
             <span class="section-arrow">▾</span>
@@ -490,7 +490,7 @@ export function renderOverlayConfigPage(options = {}) {
 
         <div class="${sectionClass("events")}" data-section="events">
           <button class="section-toggle" data-section-toggle="events" aria-expanded="${sectionExpandedAttr(
-            "events"
+            "events",
           )}">
             <span>Event Log</span>
             <span class="section-arrow">▾</span>
@@ -505,7 +505,7 @@ export function renderOverlayConfigPage(options = {}) {
 
         <div class="${sectionClass("goals")}" data-section="goals">
           <button class="section-toggle" data-section-toggle="goals" aria-expanded="${sectionExpandedAttr(
-            "goals"
+            "goals",
           )}">
             <span>Goal Tracking Bars (Experimental)</span>
             <span class="section-arrow">▾</span>

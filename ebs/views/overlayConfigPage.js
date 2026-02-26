@@ -71,9 +71,12 @@ export function renderOverlayConfigPage(options = {}) {
       .source-bar { display: flex; align-items: center; gap: 10px; margin-bottom: 20px; background: var(--surface-color); border: 1px solid var(--surface-border); border-radius: 12px; padding: 10px 14px; }
       .source-bar .url { flex: 1; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; background: var(--code-bg); border: 1px solid var(--code-border); padding: 6px 10px; border-radius: 8px; overflow: auto; font-size: 13px; white-space: nowrap; }
       .source-bar .hint { font-size: 12px; color: var(--text-muted); white-space: nowrap; }
-      .hero-preview { margin-bottom: 20px; text-align: center; }
+      .hero-preview { margin-bottom: 20px; text-align: center; position: relative; display: inline-block; width: 100%; }
       .hero-preview iframe { width: 100%; max-width: 720px; height: 180px; border: 1px solid var(--surface-border); background: var(--surface-muted); border-radius: 12px; box-shadow: 0 8px 30px var(--goal-card-shadow); }
       .hero-preview .hint { margin-top: 6px; font-size: 12px; color: var(--text-muted); }
+      .hero-preview .edit-style-btn { position: absolute; top: 8px; right: calc(50% - 360px + 8px); background: var(--surface-color); border: 1px solid var(--surface-border); border-radius: 8px; padding: 5px 7px; cursor: pointer; color: var(--text-muted); line-height: 0; opacity: 0.7; transition: opacity .15s, color .15s; }
+      .hero-preview .edit-style-btn:hover { opacity: 1; color: var(--accent-color); }
+      @media (max-width: 900px) { .hero-preview .edit-style-btn { right: 8px; } }
       .panel { background: var(--surface-color); border: 1px solid var(--surface-border); border-radius: 12px; padding: 16px; }
       .control { display: grid; grid-template-columns: 140px 1fr; align-items: center; gap: 8px; margin-bottom: 10px; }
       .control label { color: var(--text-muted); font-size: 13px; }
@@ -156,6 +159,9 @@ export function renderOverlayConfigPage(options = {}) {
       <!-- Hero Preview -->
       <div class="hero-preview">
         <iframe id="preview" referrerpolicy="no-referrer"></iframe>
+        <button class="edit-style-btn" id="editStyleBtn" title="Edit Countdown Styles">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.83 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg>
+        </button>
         <div class="hint">Pause/Resume and Start actions update the live overlay immediately.</div>
       </div>
 
@@ -688,10 +694,12 @@ export function renderOverlayConfigPage(options = {}) {
         return { multiplier: total, hypeMultiplier: hm, bonusMultiplier: bm };
       }
 
+      var _bonusHasSchedule = false;
       function updateBonusUI(bonusActive, startMs, endMs) {
         const btn = document.getElementById('bonusToggle');
         const status = document.getElementById('bonusStatus');
         const hint = document.getElementById('bonusScheduleHint');
+        _bonusHasSchedule = (startMs > 0 || endMs > 0);
         if (btn) {
           btn.textContent = bonusActive ? 'Deactivate Bonus Time' : 'Activate Bonus Time';
           btn.style.background = bonusActive ? 'var(--accent,#9147ff)' : '';
@@ -776,6 +784,16 @@ export function renderOverlayConfigPage(options = {}) {
           if (!el) return;
           el.addEventListener('input', () => { saveStyle(); });
           el.addEventListener('change', () => { saveStyle(); });
+        });
+        document.getElementById('editStyleBtn').addEventListener('click', function() {
+          var section = document.querySelector('[data-section="style"]');
+          if (section) {
+            if (section.classList.contains('collapsed')) {
+              var toggle = section.querySelector('.section-toggle');
+              if (toggle) toggle.click();
+            }
+            section.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          }
         });
         document.getElementById('logout').addEventListener('click', (e) => {
           e.preventDefault();
@@ -1057,6 +1075,8 @@ export function renderOverlayConfigPage(options = {}) {
         function updateRemain(){ fetch('/api/timer/state').then(function(r){return r.json();}).then(function(j){ document.getElementById('remain').textContent = fmt(j.remaining||0); }).catch(function(){}); }
         updateRemain(); setInterval(updateRemain, 1000);
         updateCapStatus(); setInterval(updateCapStatus, 3000);
+        function pollBonus(){ if (!_bonusHasSchedule) return; getBonusState().then(function(s){ updateBonusUI(s.bonusActive, s.bonusStartEpochMs, s.bonusEndEpochMs); }).catch(function(){}); }
+        setInterval(pollBonus, 3000);
 
         // Load rules and populate inputs
         fetch('/api/rules').then(r=>r.json()).then(function(rr){

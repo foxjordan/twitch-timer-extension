@@ -321,6 +321,10 @@ export function renderOverlayConfigPage(options = {}) {
               </div>
             </div>
             <div class="control"><label>Hype Train Modifier</label><input id="r_hype" type="number" min="0" step="0.1" value="2"></div>
+            <div class="control"><label>Bonus Time Multiplier</label><input id="r_bonus" type="number" min="0" step="0.1" value="2"></div>
+            <div class="control"><label style="display:flex; gap:6px; align-items:center;"><input id="r_bonus_stack" type="checkbox" /> Stack bonus with hype train</label>
+              <div class="hint" style="margin-top:2px;">When enabled, multipliers multiply together. When disabled, only the higher multiplier applies.</div>
+            </div>
             <div class="row2"><button id="saveRules">Save Rules</button></div>
           </div>
         </div>
@@ -426,6 +430,28 @@ export function renderOverlayConfigPage(options = {}) {
               <input id="devBitsInput" type="number" min="0" step="1" placeholder="Bits amount (testing)" style="max-width:150px" />
               <button class="secondary" id="devApplyBits" title="Apply custom bits based on rules">Apply Bits</button>
             </div>
+
+            <div style="margin-top:12px; padding-top:12px; border-top:1px solid var(--section-border,#303038);">
+              <div style="font-weight:600; font-size:13px; margin-bottom:8px;">Bonus Time</div>
+              <div class="row2" style="align-items:center;">
+                <button id="bonusToggle" class="secondary" style="min-width:160px;">Activate Bonus Time</button>
+                <span id="bonusStatus" style="font-size:12px; opacity:0.7;"></span>
+              </div>
+              <div style="margin-top:8px; display:flex; gap:12px; flex-wrap:wrap; align-items:end;">
+                <div>
+                  <label style="font-size:12px; display:block; margin-bottom:2px;">Start Time</label>
+                  <input id="bonusStart" type="datetime-local" style="font-size:12px;" />
+                </div>
+                <div>
+                  <label style="font-size:12px; display:block; margin-bottom:2px;">End Time</label>
+                  <input id="bonusEnd" type="datetime-local" style="font-size:12px;" />
+                </div>
+                <button class="secondary" id="bonusScheduleSave" style="font-size:12px;">Save Schedule</button>
+                <button class="secondary" id="bonusScheduleClear" style="font-size:12px;">Clear Schedule</button>
+              </div>
+              <div class="hint" id="bonusScheduleHint" style="margin-top:4px;"></div>
+            </div>
+
             <div class="hint" style="margin-top:8px">Current remaining: <span id="remain">--:--</span></div>
             <div class="hint" id="capStatus" style="margin-top:4px; opacity:0.8"></div>
 
@@ -718,6 +744,39 @@ export function renderOverlayConfigPage(options = {}) {
 
       async function getHypeActive() {
         try { const r = await fetch('/api/hype'); const j = await r.json(); return !!j.hype; } catch(e) { return false; }
+      }
+
+      async function getBonusState() {
+        try { const r = await fetch('/api/timer/bonus'); return await r.json(); } catch(e) { return { bonusActive: false, bonusStartEpochMs: 0, bonusEndEpochMs: 0 }; }
+      }
+
+      async function getTestMultiplier() {
+        const hype = await getHypeActive();
+        const bonus = await getBonusState();
+        if (!window.DEV_RULES) return { multiplier: 1, hypeMultiplier: 1, bonusMultiplier: 1 };
+        const hm = hype ? (Number(window.DEV_RULES.hypeTrain?.multiplier) || 1) : 1;
+        const bm = bonus.bonusActive ? (Number(window.DEV_RULES.bonusTime?.multiplier) || 1) : 1;
+        const stack = Boolean(window.DEV_RULES.bonusTime?.stackWithHype);
+        const total = stack ? (hm * bm) : Math.max(hm, bm);
+        return { multiplier: total, hypeMultiplier: hm, bonusMultiplier: bm };
+      }
+
+      function updateBonusUI(bonusActive, startMs, endMs) {
+        const btn = document.getElementById('bonusToggle');
+        const status = document.getElementById('bonusStatus');
+        const hint = document.getElementById('bonusScheduleHint');
+        if (btn) {
+          btn.textContent = bonusActive ? 'Deactivate Bonus Time' : 'Activate Bonus Time';
+          btn.style.background = bonusActive ? 'var(--accent,#9147ff)' : '';
+          btn.style.color = bonusActive ? '#fff' : '';
+        }
+        if (status) status.textContent = bonusActive ? 'ACTIVE' : '';
+        if (hint) {
+          const parts = [];
+          if (startMs > 0) parts.push('Start: ' + new Date(startMs).toLocaleString());
+          if (endMs > 0) parts.push('End: ' + new Date(endMs).toLocaleString());
+          hint.textContent = parts.length ? 'Scheduled — ' + parts.join(' | ') : '';
+        }
       }
 
       function num(v, d){ const n = Number(v); return Number.isFinite(n) ? n : d; }
@@ -1737,14 +1796,11 @@ export function renderOverlayConfigPage(options = {}) {
               var meta = { source: 'dev_quick_test', label: btn.textContent.trim(), requestedSeconds: secs };
               flashButton(btn);
               setBusy(btn, true);
-              // Apply hype multiplier if active
               try {
-                const hype = await getHypeActive();
-                if (hype && window.DEV_RULES && window.DEV_RULES.hypeTrain) {
-                  const mult = Number(window.DEV_RULES.hypeTrain.multiplier) || 1;
-                  meta.hypeMultiplier = mult;
-                  secs = Math.floor(secs * mult);
-                }
+                const m = await getTestMultiplier();
+                meta.hypeMultiplier = m.hypeMultiplier;
+                meta.bonusMultiplier = m.bonusMultiplier;
+                secs = Math.floor(secs * m.multiplier);
               } catch(e) {}
               await addTime(secs, meta);
               await updateCapStatus();
@@ -1759,11 +1815,11 @@ export function renderOverlayConfigPage(options = {}) {
             if (!window.DEV_RULES || bits <= 0) return;
             let secs = Math.floor(bits / (Number(window.DEV_RULES.bits?.per)||100)) * (Number(window.DEV_RULES.bits?.add_seconds)||0);
             const meta = { source: 'dev_custom_bits', label: 'Custom Bits', bits: bits, requestedSeconds: secs };
-            const hype = await getHypeActive();
-            if (hype) {
-              const mult = Number(window.DEV_RULES.hypeTrain?.multiplier)||1;
-              meta.hypeMultiplier = mult;
-              secs = Math.floor(secs * mult);
+            const m = await getTestMultiplier();
+            if (m.multiplier > 1) {
+              meta.hypeMultiplier = m.hypeMultiplier;
+              meta.bonusMultiplier = m.bonusMultiplier;
+              secs = Math.floor(secs * m.multiplier);
             }
             flashButton(bitsBtn); setBusy(bitsBtn,true); await addTime(secs, meta); await updateCapStatus(); setBusy(bitsBtn,false);
           });
@@ -1776,12 +1832,12 @@ export function renderOverlayConfigPage(options = {}) {
             if (!window.DEV_RULES) return;
             let per = Number((window.DEV_RULES.sub||{})[tier] ?? (window.DEV_RULES.sub||{})['1000'] ?? 0);
             let secs = Math.floor(count * per);
-            const hype = await getHypeActive();
+            const m = await getTestMultiplier();
             const meta = { source: 'dev_custom_subs', label: 'Custom Subs', subCount: count, subTier: tier, requestedSeconds: secs };
-            if (hype) {
-              const mult = Number(window.DEV_RULES.hypeTrain?.multiplier)||1;
-              meta.hypeMultiplier = mult;
-              secs = Math.floor(secs * mult);
+            if (m.multiplier > 1) {
+              meta.hypeMultiplier = m.hypeMultiplier;
+              meta.bonusMultiplier = m.bonusMultiplier;
+              secs = Math.floor(secs * m.multiplier);
             }
             flashButton(subsBtn); setBusy(subsBtn,true); await addTime(secs, meta); await updateCapStatus(); setBusy(subsBtn,false);
           });
@@ -1792,12 +1848,12 @@ export function renderOverlayConfigPage(options = {}) {
             const count = Math.max(1, num(document.getElementById('devGiftCount')?.value, 1));
             if (!window.DEV_RULES) return;
             let secs = Math.floor(count * (Number(window.DEV_RULES.gift_sub?.per_sub_seconds)||0));
-            const hype = await getHypeActive();
+            const m = await getTestMultiplier();
             const meta = { source: 'dev_custom_gifts', label: 'Custom Gift Subs', giftCount: count, requestedSeconds: secs };
-            if (hype) {
-              const mult = Number(window.DEV_RULES.hypeTrain?.multiplier)||1;
-              meta.hypeMultiplier = mult;
-              secs = Math.floor(secs * mult);
+            if (m.multiplier > 1) {
+              meta.hypeMultiplier = m.hypeMultiplier;
+              meta.bonusMultiplier = m.bonusMultiplier;
+              secs = Math.floor(secs * m.multiplier);
             }
             flashButton(giftsBtn); setBusy(giftsBtn,true); await addTime(secs, meta); await updateCapStatus(); setBusy(giftsBtn,false);
           });
@@ -1905,6 +1961,10 @@ export function renderOverlayConfigPage(options = {}) {
             if (rr && rr.hypeTrain) {
               document.getElementById('r_hype').value = rr.hypeTrain.multiplier ?? 2;
             }
+            if (rr && rr.bonusTime) {
+              if (document.getElementById('r_bonus')) document.getElementById('r_bonus').value = rr.bonusTime.multiplier ?? 2;
+              if (document.getElementById('r_bonus_stack')) document.getElementById('r_bonus_stack').checked = Boolean(rr.bonusTime.stackWithHype);
+            }
           } catch (e) {}
         }).catch(function(){});
 
@@ -1922,8 +1982,10 @@ export function renderOverlayConfigPage(options = {}) {
             gift_sub: { per_sub_seconds: Number((document.getElementById('r_gift_per')||{}).value||300) },
             charity: { per_usd: Number((document.getElementById('r_charity_per_usd')||{}).value||60) },
             follow: { enabled: Boolean((document.getElementById('r_follow_enabled')||{}).checked), add_seconds: Number((document.getElementById('r_follow_add')||{}).value||600) },
-            hypeTrain: { multiplier: Number(document.getElementById('r_hype').value||2) }
+            hypeTrain: { multiplier: Number(document.getElementById('r_hype').value||2) },
+            bonusTime: { multiplier: Number(document.getElementById('r_bonus')?.value||2), stackWithHype: Boolean(document.getElementById('r_bonus_stack')?.checked) }
           };
+          window.DEV_RULES = body;
           try { await fetch('/api/rules', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }); } catch(e) {}
         });
 
@@ -1936,6 +1998,54 @@ export function renderOverlayConfigPage(options = {}) {
             flashButton(clearLogBtn);
             try { await fetch('/api/events/log/clear', { method: 'POST' }); } catch (err) {}
             renderLog([]);
+          });
+        }
+
+        // Bonus time controls
+        const bonusToggle = document.getElementById('bonusToggle');
+        if (bonusToggle) {
+          // Initial load
+          getBonusState().then(function(s) { updateBonusUI(s.bonusActive, s.bonusStartEpochMs, s.bonusEndEpochMs); });
+          bonusToggle.addEventListener('click', async function(e) {
+            e.preventDefault();
+            flashButton(bonusToggle);
+            const cur = await getBonusState();
+            try {
+              const r = await fetch('/api/timer/bonus', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ active: !cur.bonusActive }) });
+              const j = await r.json();
+              updateBonusUI(j.bonusActive, j.bonusStartEpochMs, j.bonusEndEpochMs);
+            } catch(e) {}
+          });
+        }
+        const bonusScheduleSave = document.getElementById('bonusScheduleSave');
+        if (bonusScheduleSave) {
+          bonusScheduleSave.addEventListener('click', async function(e) {
+            e.preventDefault();
+            flashButton(bonusScheduleSave);
+            const startVal = document.getElementById('bonusStart')?.value || '';
+            const endVal = document.getElementById('bonusEnd')?.value || '';
+            const body = {};
+            if (startVal) body.startTime = new Date(startVal).toISOString();
+            if (endVal) body.endTime = new Date(endVal).toISOString();
+            try {
+              const r = await fetch('/api/timer/bonus', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+              const j = await r.json();
+              updateBonusUI(j.bonusActive, j.bonusStartEpochMs, j.bonusEndEpochMs);
+            } catch(e) {}
+          });
+        }
+        const bonusScheduleClear = document.getElementById('bonusScheduleClear');
+        if (bonusScheduleClear) {
+          bonusScheduleClear.addEventListener('click', async function(e) {
+            e.preventDefault();
+            flashButton(bonusScheduleClear);
+            try {
+              const r = await fetch('/api/timer/bonus', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ startTime: null, endTime: null }) });
+              const j = await r.json();
+              updateBonusUI(j.bonusActive, j.bonusStartEpochMs, j.bonusEndEpochMs);
+              if (document.getElementById('bonusStart')) document.getElementById('bonusStart').value = '';
+              if (document.getElementById('bonusEnd')) document.getElementById('bonusEnd').value = '';
+            } catch(e) {}
           });
         }
 

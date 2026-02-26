@@ -10,6 +10,7 @@ export function mountTimerRoutes(app, ctx) {
     getRemainingSeconds,
     addSeconds,
     setHype,
+    setBonusTime,
     pauseTimer,
     resumeTimer,
     getUserSettings,
@@ -349,6 +350,61 @@ export function mountTimerRoutes(app, ctx) {
       }
     }
     res.json({ remaining, hype: active });
+  });
+
+  app.get('/api/timer/bonus', (req, res) => {
+    const uid = resolveUid(req);
+    const u = state.users.get(String(uid));
+    res.json({
+      bonusActive: Boolean(u?.bonusActive),
+      bonusStartEpochMs: Number(u?.bonusStartEpochMs || 0),
+      bonusEndEpochMs: Number(u?.bonusEndEpochMs || 0),
+    });
+  });
+
+  app.post('/api/timer/bonus', async (req, res) => {
+    if (!req?.session?.isAdmin) return res.status(401).json({ error: 'Admin login required' });
+    const uid = resolveUid(req);
+    const body = req.body || {};
+    const opts = {};
+    if (typeof body.active === 'boolean') opts.active = body.active;
+    if (body.startTime) opts.startEpochMs = new Date(body.startTime).getTime() || 0;
+    else if (body.startTime === null || body.startTime === '') opts.startEpochMs = 0;
+    if (body.endTime) opts.endEpochMs = new Date(body.endTime).getTime() || 0;
+    else if (body.endTime === null || body.endTime === '') opts.endEpochMs = 0;
+    if (typeof setBonusTime === 'function') setBonusTime(uid, opts);
+    const u = state.users.get(String(uid));
+    const remaining = getRemainingSeconds(uid);
+    logger.info('timer_bonus_manual', {
+      requestId: req.requestId,
+      userId: uid,
+      active: u?.bonusActive,
+      startEpochMs: u?.bonusStartEpochMs,
+      endEpochMs: u?.bonusEndEpochMs,
+    });
+    markTimerMutation();
+    const payload = JSON.stringify({
+      userId: String(uid),
+      remaining,
+      hype: u?.hypeActive,
+      bonus: u?.bonusActive,
+      paused: u?.paused,
+    });
+    for (const client of Array.from(sseClients)) {
+      if (client.timerUserId && String(client.timerUserId) !== String(uid)) continue;
+      try {
+        client.res.write('event: timer_tick\n');
+        client.res.write(`data: ${payload}\n\n`);
+      } catch (e) {
+        sseClients.delete(client);
+      }
+    }
+    res.json({
+      bonusActive: Boolean(u?.bonusActive),
+      bonusStartEpochMs: Number(u?.bonusStartEpochMs || 0),
+      bonusEndEpochMs: Number(u?.bonusEndEpochMs || 0),
+      remaining,
+    });
   });
 
   // Admin-only: totals for configurator

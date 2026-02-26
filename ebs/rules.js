@@ -5,5 +5,6 @@ export const RULES = {
   gift_sub: { per_sub_seconds: 300 },                // each gift -> +5 min
   charity: { per_usd: 60 },                          // $1 -> +60s
   hypeTrain: { multiplier: 2.0 },                    // double during hype
+  bonusTime: { multiplier: 2.0, stackWithHype: false }, // manual bonus multiplier
   follow: { enabled: false, add_seconds: 600 }       // optional: follow -> +10 min
 };

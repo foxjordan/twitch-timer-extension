@@ -36,6 +36,12 @@ function mergeRules(base, patch = {}) {
   if (patch.hypeTrain) {
     next.hypeTrain = { multiplier: numberOr(next.hypeTrain.multiplier, patch.hypeTrain.multiplier, 1) };
   }
+  if (patch.bonusTime) {
+    next.bonusTime = {
+      multiplier: numberOr(next.bonusTime?.multiplier ?? 2, patch.bonusTime.multiplier, 0),
+      stackWithHype: (typeof patch.bonusTime.stackWithHype === 'boolean') ? patch.bonusTime.stackWithHype : (next.bonusTime?.stackWithHype ?? false),
+    };
+  }
   if (patch.follow) {
     next.follow = {
       enabled: (typeof patch.follow.enabled === 'boolean') ? patch.follow.enabled : (next.follow?.enabled ?? false),

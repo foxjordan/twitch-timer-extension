@@ -16,6 +16,8 @@ import {
   getRemainingSeconds,
   addSeconds,
   setHype,
+  setBonusTime,
+  checkBonusSchedule,
   pauseTimer,
   resumeTimer,
   setInitialSeconds,
@@ -336,6 +338,7 @@ mountTimerRoutes(app, {
   getRemainingSeconds,
   addSeconds,
   setHype,
+  setBonusTime,
   pauseTimer,
   resumeTimer,
   getUserSettings,
@@ -1001,10 +1004,23 @@ async function handleEventSub(notification, expectedUserId = null) {
   const baseSeconds = secondsFromEvent(notification, timerUid);
   let appliedSeconds = baseSeconds;
   let hypeMultiplier = 1;
-  if (baseSeconds > 0 && state.users.get(String(timerUid))?.hypeActive) {
+  let bonusMultiplier = 1;
+  const userState = state.users.get(String(timerUid));
+  if (baseSeconds > 0) {
     const R = getRules(timerUid);
-    hypeMultiplier = Number(R.hypeTrain.multiplier || 1);
-    appliedSeconds = Math.floor(baseSeconds * hypeMultiplier);
+    if (userState?.hypeActive) {
+      hypeMultiplier = Number(R.hypeTrain?.multiplier || 1);
+    }
+    if (userState?.bonusActive) {
+      bonusMultiplier = Number(R.bonusTime?.multiplier || 1);
+    }
+    let totalMultiplier;
+    if (R.bonusTime?.stackWithHype) {
+      totalMultiplier = hypeMultiplier * bonusMultiplier;
+    } else {
+      totalMultiplier = Math.max(hypeMultiplier, bonusMultiplier);
+    }
+    appliedSeconds = Math.floor(baseSeconds * totalMultiplier);
   }
 
   if (baseSeconds > 0) {
@@ -1017,6 +1033,7 @@ async function handleEventSub(notification, expectedUserId = null) {
       type: subType,
       baseSeconds,
       hypeMultiplier,
+      bonusMultiplier,
       appliedSeconds,
       actualSeconds: actual,
       bits: e.bits ?? e.total_bits_used ?? e.total_bits ?? undefined,
@@ -1130,6 +1147,11 @@ function startEventSubWS(broadcasterId, accessToken, onNotification, urlOverride
 
 // Server tick → broadcast remaining once per second per user/key
 setInterval(async () => {
+  // Check bonus time schedules for all users
+  for (const uid of state.users.keys()) {
+    checkBonusSchedule(uid);
+  }
+
   // Broadcast to Twitch Extension PubSub for ALL active broadcasters
   for (const [userId, connection] of broadcasterConnections) {
     try {
@@ -1157,6 +1179,7 @@ setInterval(async () => {
       const tid = client.timerUserId || "default";
       const rem = getRemainingSeconds(tid);
       const hyp = state.users.get(String(tid))?.hypeActive;
+      const bonus = state.users.get(String(tid))?.bonusActive;
       const paused = state.users.get(String(tid))?.paused;
       const cap = capReached(tid);
       let capMsg = null;
@@ -1176,6 +1199,7 @@ setInterval(async () => {
         userId: tid,
         remaining: rem,
         hype: hyp,
+        bonus,
         paused,
         capReached: cap,
         capMessage: capMsg,

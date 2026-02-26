@@ -18,6 +18,9 @@ function ensure(uid) {
     state.users.set(id, {
       timerExpiryEpochMs: 0,
       hypeActive: false,
+      bonusActive: false,
+      bonusStartEpochMs: 0,
+      bonusEndEpochMs: 0,
       paused: false,
       pauseRemaining: 0,
       initialSeconds: 0,
@@ -34,6 +37,9 @@ function snapshotUserState(userState) {
   return {
     timerExpiryEpochMs: Number(userState.timerExpiryEpochMs || 0),
     hypeActive: Boolean(userState.hypeActive),
+    bonusActive: Boolean(userState.bonusActive),
+    bonusStartEpochMs: Number(userState.bonusStartEpochMs || 0),
+    bonusEndEpochMs: Number(userState.bonusEndEpochMs || 0),
     paused: Boolean(userState.paused),
     pauseRemaining: Number(userState.pauseRemaining || 0),
     initialSeconds: Number(userState.initialSeconds || 0),
@@ -64,6 +70,9 @@ function parseUserState(val) {
   return {
     timerExpiryEpochMs: Number(val.timerExpiryEpochMs || 0),
     hypeActive: Boolean(val.hypeActive),
+    bonusActive: Boolean(val.bonusActive),
+    bonusStartEpochMs: Number(val.bonusStartEpochMs || 0),
+    bonusEndEpochMs: Number(val.bonusEndEpochMs || 0),
     paused: Boolean(val.paused),
     pauseRemaining: Number(val.pauseRemaining || 0),
     initialSeconds: Number(val.initialSeconds || 0),
@@ -108,6 +117,9 @@ export function clearTimer(uid = DEFAULT_USER_ID) {
   const s = ensure(uid);
   s.timerExpiryEpochMs = 0;
   s.hypeActive = false;
+  s.bonusActive = false;
+  s.bonusStartEpochMs = 0;
+  s.bonusEndEpochMs = 0;
   s.paused = false;
   s.pauseRemaining = 0;
   s.initialSeconds = 0;
@@ -164,6 +176,32 @@ export function setHype(uid = DEFAULT_USER_ID, active) {
   const s = ensure(uid);
   s.hypeActive = active;
   persistTimerState().catch(() => {});
+}
+
+export function setBonusTime(uid = DEFAULT_USER_ID, { active, startEpochMs, endEpochMs } = {}) {
+  const s = ensure(uid);
+  if (typeof active === 'boolean') s.bonusActive = active;
+  if (typeof startEpochMs === 'number') s.bonusStartEpochMs = Math.max(0, startEpochMs);
+  if (typeof endEpochMs === 'number') s.bonusEndEpochMs = Math.max(0, endEpochMs);
+  persistTimerState().catch(() => {});
+}
+
+export function checkBonusSchedule(uid = DEFAULT_USER_ID) {
+  const s = ensure(uid);
+  const now = Date.now();
+  let changed = false;
+  if (s.bonusStartEpochMs > 0 && !s.bonusActive && now >= s.bonusStartEpochMs) {
+    s.bonusActive = true;
+    s.bonusStartEpochMs = 0;
+    changed = true;
+  }
+  if (s.bonusEndEpochMs > 0 && s.bonusActive && now >= s.bonusEndEpochMs) {
+    s.bonusActive = false;
+    s.bonusEndEpochMs = 0;
+    changed = true;
+  }
+  if (changed) persistTimerState().catch(() => {});
+  return changed;
 }
 
 export function pauseTimer(uid = DEFAULT_USER_ID) {

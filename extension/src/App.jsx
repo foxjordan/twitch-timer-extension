@@ -4,29 +4,7 @@ import { setupAnalytics, logEvent } from "./firebase.js";
 
 const EBS_BASE = import.meta.env.VITE_EBS_BASE || "https://livestreamerhub.com";
 
-const TIER_COSTS = {
-  sound_10: "10",
-  sound_25: "25",
-  sound_50: "50",
-  sound_75: "75",
-  sound_100: "100",
-  sound_150: "150",
-  sound_200: "200",
-  sound_250: "250",
-  sound_300: "300",
-  sound_500: "500",
-  sound_1000: "1000",
-  sound_1250: "1250",
-  sound_1500: "1500",
-  sound_1750: "1750",
-  sound_2000: "2000",
-  sound_2500: "2500",
-  sound_3000: "3000",
-  sound_4000: "4000",
-  sound_5000: "5000",
-  sound_7500: "7500",
-  sound_10000: "10000",
-};
+import { TIER_COSTS } from "./tiers.js";
 
 function SpeakerIcon() {
   return (

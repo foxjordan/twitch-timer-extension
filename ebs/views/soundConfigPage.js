@@ -5,11 +5,16 @@ import {
 } from "./theme.js";
 import { GLOBAL_HEADER_STYLES, renderGlobalHeader } from "./globalHeader.js";
 import { renderFirebaseScript } from "./firebase.js";
+import { VALID_TIERS, TIER_LABELS, DEFAULT_TIER } from "../tiers.js";
 
 export function renderSoundConfigPage(options = {}) {
   const base = String(options.base || "");
   const adminName = String(options.adminName || "");
   const userKey = String(options.userKey || "");
+
+  const tierOptionsHtml = VALID_TIERS.map(
+    (sku) => `<option value="${sku}"${sku === DEFAULT_TIER ? " selected" : ""}>${TIER_LABELS[sku]}</option>`
+  ).join("\n              ");
   const showAdminLink = Boolean(options.showAdminLink);
 
   return `<!doctype html>
@@ -126,16 +131,7 @@ export function renderSoundConfigPage(options = {}) {
           </div>
           <div class="row2" style="margin-bottom:8px;">
             <select id="soundTier">
-              <option value="sound_10">10 Bits</option>
-              <option value="sound_25">25 Bits</option>
-              <option value="sound_50">50 Bits</option>
-              <option value="sound_75">75 Bits</option>
-              <option value="sound_100" selected>100 Bits</option>
-              <option value="sound_150">150 Bits</option>
-              <option value="sound_200">200 Bits</option>
-              <option value="sound_300">300 Bits</option>
-              <option value="sound_500">500 Bits</option>
-              <option value="sound_1000">1000 Bits</option>
+              ${tierOptionsHtml}
             </select>
             <label style="display:flex; align-items:center; gap:6px; font-size:13px;">
               Vol
@@ -158,16 +154,7 @@ export function renderSoundConfigPage(options = {}) {
           </div>
           <div class="row2" style="margin-bottom:8px;">
             <select id="clipTier">
-              <option value="sound_10">10 Bits</option>
-              <option value="sound_25">25 Bits</option>
-              <option value="sound_50">50 Bits</option>
-              <option value="sound_75">75 Bits</option>
-              <option value="sound_100" selected>100 Bits</option>
-              <option value="sound_150">150 Bits</option>
-              <option value="sound_200">200 Bits</option>
-              <option value="sound_300">300 Bits</option>
-              <option value="sound_500">500 Bits</option>
-              <option value="sound_1000">1000 Bits</option>
+              ${tierOptionsHtml}
             </select>
             <label style="display:flex; align-items:center; gap:6px; font-size:13px;">
               Vol
@@ -190,16 +177,7 @@ export function renderSoundConfigPage(options = {}) {
           </div>
           <div class="row2" style="margin-bottom:8px;">
             <select id="videoTier">
-              <option value="sound_10">10 Bits</option>
-              <option value="sound_25">25 Bits</option>
-              <option value="sound_50">50 Bits</option>
-              <option value="sound_75">75 Bits</option>
-              <option value="sound_100" selected>100 Bits</option>
-              <option value="sound_150">150 Bits</option>
-              <option value="sound_200">200 Bits</option>
-              <option value="sound_300">300 Bits</option>
-              <option value="sound_500">500 Bits</option>
-              <option value="sound_1000">1000 Bits</option>
+              ${tierOptionsHtml}
             </select>
             <label style="display:flex; align-items:center; gap:6px; font-size:13px;">
               Vol
@@ -238,11 +216,7 @@ export function renderSoundConfigPage(options = {}) {
         function setBusy(btn, busy) { if (!btn) return; btn.disabled = !!busy; }
         function flashButton(btn) { if (!btn) return; btn.classList.add('btn-click'); setTimeout(function() { btn.classList.remove('btn-click'); }, 160); }
 
-        var TIER_LABELS = {
-          sound_10:'10 Bits', sound_25:'25 Bits', sound_50:'50 Bits', sound_75:'75 Bits',
-          sound_100:'100 Bits', sound_150:'150 Bits', sound_200:'200 Bits',
-          sound_300:'300 Bits', sound_500:'500 Bits', sound_1000:'1000 Bits'
-        };
+        var TIER_LABELS = ${JSON.stringify(TIER_LABELS)};
 
         var soundListEl = document.getElementById('soundList');
         var soundCountEl = document.getElementById('soundCount');
@@ -877,7 +851,7 @@ export function renderSoundConfigPage(options = {}) {
               var fd = new FormData();
               fd.append('file', file);
               fd.append('name', (soundNameEl ? soundNameEl.value : '') || file.name.replace(/\\.[^.]+$/, ''));
-              fd.append('tier', soundTierEl ? soundTierEl.value : 'sound_100');
+              fd.append('tier', soundTierEl ? soundTierEl.value : '${DEFAULT_TIER}');
               fd.append('volume', soundUploadVolumeEl ? soundUploadVolumeEl.value : '80');
               var r = await fetch('/api/sounds', { method: 'POST', body: fd });
               if (!r.ok) {
@@ -921,7 +895,7 @@ export function renderSoundConfigPage(options = {}) {
                 body: JSON.stringify({
                   name: (clipNameEl ? clipNameEl.value : '') || 'Clip',
                   clipUrl: url,
-                  tier: clipTierEl ? clipTierEl.value : 'sound_100',
+                  tier: clipTierEl ? clipTierEl.value : '${DEFAULT_TIER}',
                   volume: clipVolumeEl ? Number(clipVolumeEl.value) : 80,
                 })
               });
@@ -964,7 +938,7 @@ export function renderSoundConfigPage(options = {}) {
               var fd = new FormData();
               fd.append('file', file);
               fd.append('name', (videoNameEl ? videoNameEl.value : '') || file.name.replace(/\\.[^.]+$/, ''));
-              fd.append('tier', videoTierEl ? videoTierEl.value : 'sound_100');
+              fd.append('tier', videoTierEl ? videoTierEl.value : '${DEFAULT_TIER}');
               fd.append('volume', videoVolumeEl ? videoVolumeEl.value : '80');
               var r = await fetch('/api/sounds/video', { method: 'POST', body: fd });
               if (!r.ok) {

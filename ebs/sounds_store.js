@@ -3,6 +3,7 @@ import { existsSync } from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
 import crypto from "crypto";
+import { VALID_TIERS, DEFAULT_TIER } from "./tiers.js";
 
 const DATA_DIR = process.env.DATA_DIR || process.cwd();
 export const SOUNDS_PATH = path.resolve(DATA_DIR, "overlay-sound-alerts.json");
@@ -58,28 +59,8 @@ export const MAX_FILE_SIZE = 1 * 1024 * 1024; // 1 MB
 export const MAX_VIDEO_FILE_SIZE = 10 * 1024 * 1024; // 10 MB
 export const MAX_SOUNDS_PER_USER = 20;
 
-export const VALID_TIERS = [
-  "sound_10",
-  "sound_25",
-  "sound_50",
-  "sound_75",
-  "sound_100",
-  "sound_150",
-  "sound_200",
-  "sound_300",
-  "sound_500",
-  "sound_1000",
-  "sound_1250",
-  "sound_1500",
-  "sound_1750",
-  "sound_2000",
-  "sound_2500",
-  "sound_3000",
-  "sound_4000",
-  "sound_5000",
-  "sound_7500",
-  "sound_10000",
-];
+// VALID_TIERS and DEFAULT_TIER are imported from ./tiers.js — the single source of truth
+export { VALID_TIERS, DEFAULT_TIER } from "./tiers.js";
 
 const DEFAULT_SOUND_SETTINGS = {
   enabled: true,
@@ -180,7 +161,7 @@ function normalizeSound(raw = {}) {
     imageFilename: sanitizeString(raw.imageFilename, ""),
     clipUrl: sanitizeString(raw.clipUrl, ""),
     clipSlug: sanitizeString(raw.clipSlug, ""),
-    tier: VALID_TIERS.includes(raw.tier) ? raw.tier : "sound_100",
+    tier: VALID_TIERS.includes(raw.tier) ? raw.tier : DEFAULT_TIER,
     enabled: typeof raw.enabled === "boolean" ? raw.enabled : true,
     volume: sanitizeNumber(raw.volume, 80, 0, 100),
     cooldownMs: sanitizeNumber(raw.cooldownMs, 5000, 0, 60000),
@@ -353,7 +334,7 @@ export async function seedDefaultSounds(uid) {
         originalFilename: def.file,
         mimeType: "audio/mpeg",
         sizeBytes: fileStat.size,
-        tier: "sound_100",
+        tier: DEFAULT_TIER,
         volume: 80,
         enabled: true,
       });

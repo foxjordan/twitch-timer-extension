@@ -4,29 +4,7 @@ import { setupAnalytics, logEvent } from "./firebase.js";
 
 const EBS_BASE = import.meta.env.VITE_EBS_BASE || "https://livestreamerhub.com";
 
-const TIER_LABELS = {
-  sound_10: "10 Bits",
-  sound_25: "25 Bits",
-  sound_50: "50 Bits",
-  sound_75: "75 Bits",
-  sound_100: "100 Bits",
-  sound_150: "150 Bits",
-  sound_200: "200 Bits",
-  sound_250: "250 Bits",
-  sound_300: "300 Bits",
-  sound_500: "500 Bits",
-  sound_1000: "1000 Bits",
-  sound_1250: "1250 Bits",
-  sound_1500: "1500 Bits",
-  sound_1750: "1750 Bits",
-  sound_2000: "2000 Bits",
-  sound_2500: "2500 Bits",
-  sound_3000: "3000 Bits",
-  sound_4000: "4000 Bits",
-  sound_5000: "5000 Bits",
-  sound_7500: "7500 Bits",
-  sound_10000: "10000 Bits",
-};
+import { TIER_LABELS, DEFAULT_TIER } from "./tiers.js";
 
 function ConfigApp() {
   const [auth, setAuth] = useState(null);
@@ -46,7 +24,7 @@ function ConfigApp() {
   const fileRef = useRef(null);
   const videoFileRef = useRef(null);
   const [newName, setNewName] = useState("");
-  const [newTier, setNewTier] = useState("sound_100");
+  const [newTier, setNewTier] = useState(DEFAULT_TIER);
   const [newVolume, setNewVolume] = useState(80);
   const [createTab, setCreateTab] = useState("sound");
   const [clipUrl, setClipUrl] = useState("");
@@ -130,7 +108,7 @@ function ConfigApp() {
       await fetchSounds(auth.token);
       logEvent("sound_uploaded", { tier: newTier });
       setNewName("");
-      setNewTier("sound_100");
+      setNewTier(DEFAULT_TIER);
       setNewVolume(80);
       if (fileRef.current) fileRef.current.value = "";
       flash("Sound uploaded");
@@ -166,7 +144,7 @@ function ConfigApp() {
       logEvent("clip_created", { tier: newTier });
       setNewName("");
       setClipUrl("");
-      setNewTier("sound_100");
+      setNewTier(DEFAULT_TIER);
       setNewVolume(80);
       flash("Clip alert created");
     } catch (e) {
@@ -204,7 +182,7 @@ function ConfigApp() {
       await fetchSounds(auth.token);
       logEvent("video_uploaded", { tier: newTier });
       setNewName("");
-      setNewTier("sound_100");
+      setNewTier(DEFAULT_TIER);
       setNewVolume(80);
       if (videoFileRef.current) videoFileRef.current.value = "";
       flash("Video uploaded");

@@ -16,6 +16,16 @@ const TIER_COSTS = {
   sound_300: "300",
   sound_500: "500",
   sound_1000: "1000",
+  sound_1250: "1250",
+  sound_1500: "1500",
+  sound_1750: "1750",
+  sound_2000: "2000",
+  sound_2500: "2500",
+  sound_3000: "3000",
+  sound_4000: "4000",
+  sound_5000: "5000",
+  sound_7500: "7500",
+  sound_10000: "10000",
 };
 
 function SpeakerIcon() {
@@ -90,7 +100,7 @@ function useImageUrl(soundId, hasImage, auth) {
     let blobUrl;
     fetch(
       `${EBS_BASE}/api/sounds/image/${soundId}?channelId=${auth.channelId}`,
-      { headers: { Authorization: `Bearer ${auth.token}` } }
+      { headers: { Authorization: `Bearer ${auth.token}` } },
     )
       .then((r) => (r.ok ? r.blob() : null))
       .then((blob) => {
@@ -108,7 +118,15 @@ function useImageUrl(soundId, hasImage, auth) {
   return url;
 }
 
-function SoundCard({ sound, auth, disabled, onBuy, onPreview, isPreviewPlaying, getCost }) {
+function SoundCard({
+  sound,
+  auth,
+  disabled,
+  onBuy,
+  onPreview,
+  isPreviewPlaying,
+  getCost,
+}) {
   const [hovered, setHovered] = useState(false);
   const imageUrl = useImageUrl(sound.id, sound.hasImage, auth);
 
@@ -123,11 +141,7 @@ function SoundCard({ sound, auth, disabled, onBuy, onPreview, isPreviewPlaying, 
         alignItems: "center",
         padding: "6px 4px",
         borderRadius: 10,
-        background: disabled
-          ? "#16161a"
-          : hovered
-            ? "#373741"
-            : "#2a2a32",
+        background: disabled ? "#16161a" : hovered ? "#373741" : "#2a2a32",
         border: "1px solid #303038",
         cursor: disabled ? "not-allowed" : "pointer",
         opacity: disabled ? 0.5 : 1,
@@ -149,7 +163,15 @@ function SoundCard({ sound, auth, disabled, onBuy, onPreview, isPreviewPlaying, 
           marginBottom: 4,
         }}
       >
-        <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
+        <div
+          style={{
+            position: "absolute",
+            inset: 0,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+        >
           {imageUrl ? (
             <img
               src={imageUrl}
@@ -299,7 +321,10 @@ function App() {
           }),
         })
           .then(() => {
-            logEvent("sound_redeemed", { sound_name: pending.name, tier: pending.tier });
+            logEvent("sound_redeemed", {
+              sound_name: pending.name,
+              tier: pending.tier,
+            });
             setCooldowns((prev) => ({
               ...prev,
               [pending.id]: Date.now() + (pending.cooldownMs || 5000),
@@ -330,7 +355,10 @@ function App() {
   function handleSoundClick(sound) {
     if (!bitsEnabled) return;
     pendingSoundRef.current = sound;
-    logEvent("sound_redeem_started", { sound_name: sound.name, tier: sound.tier });
+    logEvent("sound_redeem_started", {
+      sound_name: sound.name,
+      tier: sound.tier,
+    });
     window.Twitch.ext.bits.useBits(sound.tier);
   }
 

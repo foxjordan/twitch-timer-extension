@@ -16,6 +16,16 @@ const TIER_LABELS = {
   sound_300: "300 Bits",
   sound_500: "500 Bits",
   sound_1000: "1000 Bits",
+  sound_1250: "1250 Bits",
+  sound_1500: "1500 Bits",
+  sound_1750: "1750 Bits",
+  sound_2000: "2000 Bits",
+  sound_2500: "2500 Bits",
+  sound_3000: "3000 Bits",
+  sound_4000: "4000 Bits",
+  sound_5000: "5000 Bits",
+  sound_7500: "7500 Bits",
+  sound_10000: "10000 Bits",
 };
 
 function ConfigApp() {
@@ -171,7 +181,8 @@ function ConfigApp() {
     setError(null);
     const file = videoFileRef.current?.files?.[0];
     if (!file) return setError("Select a video file");
-    if (file.size > 10 * 1024 * 1024) return setError("Video must be under 10 MB");
+    if (file.size > 10 * 1024 * 1024)
+      return setError("Video must be under 10 MB");
 
     setUploading(true);
     try {
@@ -432,7 +443,11 @@ function ConfigApp() {
             <button
               type="submit"
               disabled={uploading}
-              style={{ ...styles.btn, marginTop: 8, opacity: uploading ? 0.6 : 1 }}
+              style={{
+                ...styles.btn,
+                marginTop: 8,
+                opacity: uploading ? 0.6 : 1,
+              }}
             >
               {uploading ? "Uploading..." : "Upload Sound"}
             </button>
@@ -443,7 +458,8 @@ function ConfigApp() {
         {createTab === "clip" && (
           <form onSubmit={handleClipCreate}>
             <div style={{ fontSize: 11, opacity: 0.5, marginBottom: 8 }}>
-              Paste a Twitch Clip URL. The clip will play in the OBS overlay when redeemed.
+              Paste a Twitch Clip URL. The clip will play in the OBS overlay
+              when redeemed.
             </div>
             <div style={{ marginBottom: 8 }}>
               <input
@@ -492,7 +508,11 @@ function ConfigApp() {
             <button
               type="submit"
               disabled={uploading}
-              style={{ ...styles.btn, marginTop: 8, opacity: uploading ? 0.6 : 1 }}
+              style={{
+                ...styles.btn,
+                marginTop: 8,
+                opacity: uploading ? 0.6 : 1,
+              }}
             >
               {uploading ? "Creating..." : "Add Clip"}
             </button>
@@ -551,7 +571,11 @@ function ConfigApp() {
             <button
               type="submit"
               disabled={uploading}
-              style={{ ...styles.btn, marginTop: 8, opacity: uploading ? 0.6 : 1 }}
+              style={{
+                ...styles.btn,
+                marginTop: 8,
+                opacity: uploading ? 0.6 : 1,
+              }}
             >
               {uploading ? "Uploading..." : "Upload Video"}
             </button>
@@ -621,7 +645,15 @@ function ConfigApp() {
   );
 }
 
-function SoundRow({ sound, tiers, auth, onToggle, onUpdate, onDelete, onRefresh }) {
+function SoundRow({
+  sound,
+  tiers,
+  auth,
+  onToggle,
+  onUpdate,
+  onDelete,
+  onRefresh,
+}) {
   const [editing, setEditing] = useState(false);
   const [name, setName] = useState(sound.name);
   const [tier, setTier] = useState(sound.tier);
@@ -676,8 +708,10 @@ function SoundRow({ sound, tiers, auth, onToggle, onUpdate, onDelete, onRefresh 
       });
       if (!res.ok) throw new Error("Upload failed");
       onRefresh();
-    } catch {}
-    finally { setImageUploading(false); }
+    } catch {
+    } finally {
+      setImageUploading(false);
+    }
   }
 
   async function handleImageDelete() {
@@ -712,19 +746,49 @@ function SoundRow({ sound, tiers, auth, onToggle, onUpdate, onDelete, onRefresh 
             style={{ width: "100%", height: "100%", objectFit: "cover" }}
           />
         ) : soundType === "clip" ? (
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ opacity: 0.3 }}>
+          <svg
+            width="20"
+            height="20"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            style={{ opacity: 0.3 }}
+          >
             <rect x="2" y="2" width="20" height="20" rx="2.18" ry="2.18" />
             <line x1="7" y1="2" x2="7" y2="22" />
             <line x1="17" y1="2" x2="17" y2="22" />
             <line x1="2" y1="12" x2="22" y2="12" />
           </svg>
         ) : soundType === "video" ? (
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ opacity: 0.3 }}>
+          <svg
+            width="20"
+            height="20"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            style={{ opacity: 0.3 }}
+          >
             <polygon points="23 7 16 12 23 17 23 7" />
             <rect x="1" y="5" width="15" height="14" rx="2" ry="2" />
           </svg>
         ) : (
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ opacity: 0.3 }}>
+          <svg
+            width="20"
+            height="20"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            style={{ opacity: 0.3 }}
+          >
             <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
             <path d="M15.54 8.46a5 5 0 0 1 0 7.07" />
           </svg>
@@ -826,17 +890,27 @@ function SoundRow({ sound, tiers, auth, onToggle, onUpdate, onDelete, onRefresh 
           </div>
         ) : (
           <>
-            <div style={{ fontWeight: 600, fontSize: 14, display: "flex", alignItems: "center", gap: 6 }}>
+            <div
+              style={{
+                fontWeight: 600,
+                fontSize: 14,
+                display: "flex",
+                alignItems: "center",
+                gap: 6,
+              }}
+            >
               {sound.name}
               {soundType !== "sound" && (
-                <span style={{
-                  fontSize: 10,
-                  padding: "1px 5px",
-                  borderRadius: 4,
-                  background: soundType === "clip" ? "#2d7d46" : "#2d5a7d",
-                  fontWeight: 500,
-                  textTransform: "uppercase",
-                }}>
+                <span
+                  style={{
+                    fontSize: 10,
+                    padding: "1px 5px",
+                    borderRadius: 4,
+                    background: soundType === "clip" ? "#2d7d46" : "#2d5a7d",
+                    fontWeight: 500,
+                    textTransform: "uppercase",
+                  }}
+                >
                   {soundType}
                 </span>
               )}

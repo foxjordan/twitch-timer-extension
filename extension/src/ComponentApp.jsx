@@ -16,6 +16,16 @@ const TIER_COSTS = {
   sound_300: "300",
   sound_500: "500",
   sound_1000: "1000",
+  sound_1250: "1250",
+  sound_1500: "1500",
+  sound_1750: "1750",
+  sound_2000: "2000",
+  sound_2500: "2500",
+  sound_3000: "3000",
+  sound_4000: "4000",
+  sound_5000: "5000",
+  sound_7500: "7500",
+  sound_10000: "10000",
 };
 
 function SpeakerIcon() {
@@ -90,7 +100,7 @@ function useImageUrl(soundId, hasImage, auth) {
     let blobUrl;
     fetch(
       `${EBS_BASE}/api/sounds/image/${soundId}?channelId=${auth.channelId}`,
-      { headers: { Authorization: `Bearer ${auth.token}` } }
+      { headers: { Authorization: `Bearer ${auth.token}` } },
     )
       .then((r) => (r.ok ? r.blob() : null))
       .then((blob) => {
@@ -110,7 +120,16 @@ function useImageUrl(soundId, hasImage, auth) {
 
 function ChevronUp() {
   return (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+    <svg
+      width="18"
+      height="18"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
       <path d="M18 15l-6-6-6 6" />
     </svg>
   );
@@ -118,13 +137,30 @@ function ChevronUp() {
 
 function ChevronDown() {
   return (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+    <svg
+      width="18"
+      height="18"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
       <path d="M6 9l6 6 6-6" />
     </svg>
   );
 }
 
-function SoundCard({ sound, auth, disabled, onBuy, onPreview, isPreviewPlaying, getCost }) {
+function SoundCard({
+  sound,
+  auth,
+  disabled,
+  onBuy,
+  onPreview,
+  isPreviewPlaying,
+  getCost,
+}) {
   const [hovered, setHovered] = useState(false);
   const imageUrl = useImageUrl(sound.id, sound.hasImage, auth);
 
@@ -165,7 +201,15 @@ function SoundCard({ sound, auth, disabled, onBuy, onPreview, isPreviewPlaying, 
           marginBottom: 4,
         }}
       >
-        <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
+        <div
+          style={{
+            position: "absolute",
+            inset: 0,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+        >
           {imageUrl ? (
             <img
               src={imageUrl}
@@ -331,7 +375,10 @@ function ComponentApp() {
           }),
         })
           .then(() => {
-            logEvent("sound_redeemed", { sound_name: pending.name, tier: pending.tier });
+            logEvent("sound_redeemed", {
+              sound_name: pending.name,
+              tier: pending.tier,
+            });
             setCooldowns((prev) => ({
               ...prev,
               [pending.id]: Date.now() + (pending.cooldownMs || 5000),
@@ -362,7 +409,10 @@ function ComponentApp() {
   function handleSoundClick(sound) {
     if (!bitsEnabled) return;
     pendingSoundRef.current = sound;
-    logEvent("sound_redeem_started", { sound_name: sound.name, tier: sound.tier });
+    logEvent("sound_redeem_started", {
+      sound_name: sound.name,
+      tier: sound.tier,
+    });
     window.Twitch.ext.bits.useBits(sound.tier);
   }
 
@@ -394,7 +444,7 @@ function ComponentApp() {
 
     fetch(
       `${EBS_BASE}/api/sounds/preview/${sound.id}?channelId=${currentAuth.channelId}`,
-      { headers: { Authorization: `Bearer ${currentAuth.token}` } }
+      { headers: { Authorization: `Bearer ${currentAuth.token}` } },
     )
       .then((r) => {
         if (!r.ok) throw new Error("fetch failed");
@@ -500,7 +550,9 @@ function ComponentApp() {
       )}
 
       {!bitsEnabled && (
-        <div style={{ opacity: 0.5, padding: "0 10px 6px", textAlign: "center" }}>
+        <div
+          style={{ opacity: 0.5, padding: "0 10px 6px", textAlign: "center" }}
+        >
           Bits are not available on this channel.
         </div>
       )}
@@ -523,7 +575,8 @@ function ComponentApp() {
         <div
           style={{
             display: "grid",
-            gridTemplateColumns: "repeat(auto-fill, minmax(min(80px, 30%), 1fr))",
+            gridTemplateColumns:
+              "repeat(auto-fill, minmax(min(80px, 30%), 1fr))",
             gap: "clamp(4px, 1.5vw, 8px)",
           }}
         >
@@ -546,9 +599,11 @@ function ComponentApp() {
           })}
         </div>
         {/* Sentinel to trigger initial scroll check */}
-        <div ref={(el) => {
-          if (el) setTimeout(checkScroll, 100);
-        }} />
+        <div
+          ref={(el) => {
+            if (el) setTimeout(checkScroll, 100);
+          }}
+        />
       </div>
 
       <style>{`::-webkit-scrollbar { display: none; }`}</style>

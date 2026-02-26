@@ -69,6 +69,16 @@ export const VALID_TIERS = [
   "sound_300",
   "sound_500",
   "sound_1000",
+  "sound_1250",
+  "sound_1500",
+  "sound_1750",
+  "sound_2000",
+  "sound_2500",
+  "sound_3000",
+  "sound_4000",
+  "sound_5000",
+  "sound_7500",
+  "sound_10000",
 ];
 
 const DEFAULT_SOUND_SETTINGS = {

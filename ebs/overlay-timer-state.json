@@ -1,24 +1,32 @@
 {
   "users": {
     "74034487": {
-      "timerExpiryEpochMs": 0,
+      "timerExpiryEpochMs": 1772223330199,
       "hypeActive": false,
+      "bonusActive": false,
+      "bonusStartEpochMs": 0,
+      "bonusEndEpochMs": 0,
       "paused": false,
       "pauseRemaining": 0,
-      "initialSeconds": 0,
-      "additionsTotal": 0,
+      "initialSeconds": 14400,
+      "additionsTotal": 2100,
       "maxTotalSeconds": 0,
-      "bitsCarry": 0
+      "bitsCarry": 0,
+      "capForcedOn": false
     },
     "default": {
       "timerExpiryEpochMs": 1763458173055,
       "hypeActive": false,
+      "bonusActive": false,
+      "bonusStartEpochMs": 0,
+      "bonusEndEpochMs": 0,
       "paused": false,
       "pauseRemaining": 0,
       "initialSeconds": 14400,
       "additionsTotal": 0,
       "maxTotalSeconds": 0,
-      "bitsCarry": 0
+      "bitsCarry": 0,
+      "capForcedOn": false
     }
   }
 }

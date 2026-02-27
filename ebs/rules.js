@@ -6,5 +6,6 @@ export const RULES = {
   charity: { per_usd: 60 },                          // $1 -> +60s
   hypeTrain: { multiplier: 2.0 },                    // double during hype
   bonusTime: { multiplier: 2.0, stackWithHype: false }, // manual bonus multiplier
-  follow: { enabled: false, add_seconds: 600 }       // optional: follow -> +10 min
+  follow: { enabled: false, add_seconds: 600 },       // optional: follow -> +10 min
+  thirdPartyTip: { per_unit: 60, min_amount: 1 }      // 1.00 donated -> +60s, min 1.00 to trigger
 };

@@ -244,6 +244,11 @@ export function renderSoundConfigPage(options = {}) {
               <span id="clipVolumeVal" style="font-size:12px; opacity:0.7;">80%</span>
             </label>
           </div>
+          <div style="margin-bottom:8px;">
+            <label style="display:flex; align-items:center; gap:6px; font-size:13px;">
+              <input type="checkbox" id="clipAudioOnly" /> Audio only (smaller file, no video)
+            </label>
+          </div>
           <button type="submit" id="clipUploadBtn">Add Clip</button>
           <span id="clipUploadHint" class="hint" style="margin-left:8px;"></span>
         </form>
@@ -979,11 +984,12 @@ export function renderSoundConfigPage(options = {}) {
             var clipVolumeEl = document.getElementById('clipVolume');
             var clipUploadBtn = document.getElementById('clipUploadBtn');
             var clipUploadHintEl = document.getElementById('clipUploadHint');
+            var clipAudioOnlyEl = document.getElementById('clipAudioOnly');
             var url = clipUrlEl ? clipUrlEl.value.trim() : '';
             if (!url) { if (clipUploadHintEl) clipUploadHintEl.textContent = 'Enter a Twitch Clip URL'; return; }
             flashButton(clipUploadBtn);
             setBusy(clipUploadBtn, true);
-            if (clipUploadHintEl) clipUploadHintEl.textContent = 'Creating…';
+            if (clipUploadHintEl) clipUploadHintEl.textContent = clipAudioOnlyEl && clipAudioOnlyEl.checked ? 'Extracting audio…' : 'Creating…';
             try {
               var r = await fetch('/api/sounds/clip', {
                 method: 'POST',
@@ -993,6 +999,7 @@ export function renderSoundConfigPage(options = {}) {
                   clipUrl: url,
                   tier: clipTierEl ? clipTierEl.value : '${DEFAULT_TIER}',
                   volume: clipVolumeEl ? Number(clipVolumeEl.value) : 80,
+                  audioOnly: Boolean(clipAudioOnlyEl && clipAudioOnlyEl.checked),
                 })
               });
               if (!r.ok) {

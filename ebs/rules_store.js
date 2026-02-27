@@ -48,6 +48,12 @@ function mergeRules(base, patch = {}) {
       add_seconds: numberOr(next.follow?.add_seconds ?? 600, patch.follow.add_seconds)
     };
   }
+  if (patch.thirdPartyTip) {
+    next.thirdPartyTip = {
+      per_unit: numberOr(next.thirdPartyTip?.per_unit ?? 60, patch.thirdPartyTip.per_unit, 0),
+      min_amount: numberOr(next.thirdPartyTip?.min_amount ?? 1, patch.thirdPartyTip.min_amount, 0)
+    };
+  }
   return next;
 }
 

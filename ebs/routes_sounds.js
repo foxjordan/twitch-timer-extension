@@ -41,6 +41,29 @@ async function compressVideo(filePath) {
   }
 }
 
+/**
+ * Extract audio from a video file using ffmpeg.
+ * Returns the output file path and size in bytes.
+ */
+async function extractAudio(videoPath, audioPath) {
+  try {
+    await execFileAsync("ffmpeg", [
+      "-i", videoPath,
+      "-vn",
+      "-c:a", "aac", "-b:a", "128k",
+      "-y", audioPath,
+    ], { timeout: 120000 });
+    const audioStat = await fsStat(audioPath);
+    if (audioStat.size === 0) throw new Error("ffmpeg produced empty audio file");
+    // Remove the original video file
+    try { await fsUnlink(videoPath); } catch {}
+    return audioStat.size;
+  } catch (err) {
+    try { await fsUnlink(audioPath); } catch {}
+    throw err;
+  }
+}
+
 import { getBaseUrl } from "./base_url.js";
 import { getOrCreateUserKey } from "./keys.js";
 import { fetchClipInfo, downloadClipVideo } from "./twitch_api.js";
@@ -249,7 +272,7 @@ export function mountSoundRoutes(app, deps = {}) {
       return res.status(403).json({ error: "Video & clip alerts require a Pro plan" });
     }
 
-    const { name, clipUrl, tier, volume, cooldownMs } = req.body || {};
+    const { name, clipUrl, tier, volume, cooldownMs, audioOnly } = req.body || {};
     if (!clipUrl) {
       return res.status(400).json({ error: "clipUrl is required" });
     }
@@ -278,10 +301,10 @@ export function mountSoundRoutes(app, deps = {}) {
       }
 
       // Download the clip video file
-      const filename = `${soundId}.mp4`;
+      const videoFilename = `${soundId}.mp4`;
       await ensureSoundDir(uid);
-      const destPath = path.resolve(SOUNDS_FILE_DIR, String(uid), filename);
-      const dlResult = await downloadClipVideo(clipInfo.video_url, destPath);
+      const videoDestPath = path.resolve(SOUNDS_FILE_DIR, String(uid), videoFilename);
+      const dlResult = await downloadClipVideo(clipInfo.video_url, videoDestPath);
       if (!dlResult.ok) {
         return res.status(400).json({
           error: "Failed to download clip video. The clip may be unavailable or region-restricted.",
@@ -296,24 +319,53 @@ export function mountSoundRoutes(app, deps = {}) {
 
       let sizeBytes = 0;
       try {
-        const fileStat = await fsStat(destPath);
+        const fileStat = await fsStat(videoDestPath);
         sizeBytes = fileStat.size;
       } catch {}
 
-      // Compress the downloaded clip
-      try {
-        const originalSize = sizeBytes;
-        sizeBytes = await compressVideo(destPath);
-        logger.info("clip_compressed", { userId: uid, soundId, originalSize, compressedSize: sizeBytes });
-      } catch (err) {
-        logger.warn("clip_compress_failed", { userId: uid, soundId, message: err?.message });
+      let finalFilename;
+      let finalMimeType;
+      let finalType;
+
+      if (audioOnly) {
+        // Extract audio only from the downloaded clip
+        finalFilename = `${soundId}.m4a`;
+        finalMimeType = "audio/mp4";
+        finalType = "sound";
+        const audioDestPath = path.resolve(SOUNDS_FILE_DIR, String(uid), finalFilename);
+        try {
+          const originalSize = sizeBytes;
+          sizeBytes = await extractAudio(videoDestPath, audioDestPath);
+          logger.info("clip_audio_extracted", { userId: uid, soundId, originalSize, audioSize: sizeBytes });
+        } catch (err) {
+          // Clean up both files on failure
+          try { await fsUnlink(videoDestPath); } catch {}
+          try { await fsUnlink(audioDestPath); } catch {}
+          logger.error("clip_audio_extract_failed", { userId: uid, soundId, message: err?.message });
+          return res.status(500).json({ error: "Failed to extract audio from clip" });
+        }
+      } else {
+        // Compress the downloaded clip (existing behavior)
+        finalFilename = videoFilename;
+        finalMimeType = "video/mp4";
+        finalType = "clip";
+        try {
+          const originalSize = sizeBytes;
+          sizeBytes = await compressVideo(videoDestPath);
+          logger.info("clip_compressed", { userId: uid, soundId, originalSize, compressedSize: sizeBytes });
+        } catch (err) {
+          logger.warn("clip_compress_failed", { userId: uid, soundId, message: err?.message });
+        }
       }
 
-      // Sanity check: file should be at least a few KB for a real video
+      // Sanity check: file should be at least a few KB
+      const finalPath = path.resolve(SOUNDS_FILE_DIR, String(uid), finalFilename);
       if (sizeBytes < 1024) {
-        try { await fsUnlink(destPath); } catch {}
+        try { await fsUnlink(finalPath); } catch {}
         return res.status(400).json({
-          error: "Downloaded file is too small to be a valid video. The clip URL may have changed.",
+          error: audioOnly
+            ? "Extracted audio is too small. The clip may not contain an audio track."
+            : "Downloaded file is too small to be a valid video. The clip URL may have changed.",
           debug: {
             thumbnail_url: clipInfo.thumbnail_url,
             derived_video_url: clipInfo.video_url,
@@ -323,7 +375,7 @@ export function mountSoundRoutes(app, deps = {}) {
         });
       }
 
-      logger.info("clip_video_downloaded", { userId: uid, soundId, clipSlug, sizeBytes });
+      logger.info("clip_processed", { userId: uid, soundId, clipSlug, sizeBytes, audioOnly: !!audioOnly });
 
       // Download clip thumbnail as the card image
       let imageFilename = "";
@@ -346,10 +398,10 @@ export function mountSoundRoutes(app, deps = {}) {
 
       const result = createSound(uid, {
         id: soundId,
-        type: "clip",
+        type: finalType,
         name: name || clipInfo.title || `Clip ${clipSlug.slice(0, 20)}`,
-        filename,
-        mimeType: "video/mp4",
+        filename: finalFilename,
+        mimeType: finalMimeType,
         sizeBytes,
         imageFilename,
         clipUrl: String(clipUrl),

@@ -21,9 +21,17 @@
     "hypeTrain": {
       "multiplier": 2
     },
+    "bonusTime": {
+      "multiplier": 2,
+      "stackWithHype": false
+    },
     "follow": {
       "enabled": false,
       "add_seconds": 600
+    },
+    "thirdPartyTip": {
+      "per_unit": 60,
+      "min_amount": 1
     }
   }
 }

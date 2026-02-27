@@ -212,6 +212,9 @@ export function renderOverlayConfigPage(options = {}) {
               <span style="color:var(--section-border);">|</span>
               <input id="devBitsInput" type="number" min="0" step="1" placeholder="Bits" style="width:80px" />
               <button class="secondary" id="devApplyBits" title="Apply custom bits based on rules">Apply Bits</button>
+              <span style="color:var(--section-border);">|</span>
+              <input id="devTipInput" type="number" min="0" step="0.01" placeholder="Amount" style="width:80px" />
+              <button class="secondary" id="devApplyTip" title="Apply 3rd party tip/gift based on rules">Apply Tip</button>
             </div>
 
             <div style="margin-top:12px; padding-top:12px; border-top:1px solid var(--section-border,#303038);">
@@ -411,6 +414,8 @@ export function renderOverlayConfigPage(options = {}) {
                 <div class="control"><label>Resub base (sec)</label><input id="r_resub_base" type="number" min="0" step="1" value="300"></div>
                 <div class="control"><label>Gift sub per-sub (sec)</label><input id="r_gift_per" type="number" min="0" step="1" value="300"></div>
                 <div class="control"><label>Charity per $1 (sec)</label><input id="r_charity_per_usd" type="number" min="0" step="1" value="60"></div>
+                <div class="control"><label>3rd Party Tip/Gift add (sec)</label><input id="r_tip_per_unit" type="number" min="0" step="1" value="60"></div>
+                <div class="control"><label>Min. 3rd party tip to trigger</label><input id="r_tip_min" type="number" min="0" step="0.01" value="1"></div>
                 <div class="control"><label>Follows add (sec)</label>
                   <div style="display:flex; gap:8px; align-items:center;">
                     <input id="r_follow_add" type="number" min="0" step="1" value="600" style="max-width:140px" />
@@ -968,6 +973,25 @@ export function renderOverlayConfigPage(options = {}) {
             }
             flashButton(bitsBtn); setBusy(bitsBtn,true); await addTime(secs, meta); await updateCapStatus(); setBusy(bitsBtn,false);
           });
+          // Custom 3rd party tip
+          const tipBtn = document.getElementById('devApplyTip');
+          if (tipBtn) tipBtn.addEventListener('click', async function(e){
+            e.preventDefault();
+            const amount = parseFloat(document.getElementById('devTipInput')?.value || '0');
+            if (!window.DEV_RULES || amount <= 0) return;
+            const tipRules = window.DEV_RULES.thirdPartyTip || {};
+            const minAmount = Number(tipRules.min_amount || 1);
+            if (amount < minAmount) return;
+            let secs = Math.floor(amount * (Number(tipRules.per_unit) || 60));
+            const meta = { source: 'dev_custom_tip', label: '3rd Party Tip', amount: amount, requestedSeconds: secs };
+            const m = await getTestMultiplier();
+            if (m.multiplier > 1) {
+              meta.hypeMultiplier = m.hypeMultiplier;
+              meta.bonusMultiplier = m.bonusMultiplier;
+              secs = Math.floor(secs * m.multiplier);
+            }
+            flashButton(tipBtn); setBusy(tipBtn,true); await addTime(secs, meta); await updateCapStatus(); setBusy(tipBtn,false);
+          });
           // Custom subs
           const subsBtn = document.getElementById('devApplySubs');
           if (subsBtn) subsBtn.addEventListener('click', async function(e){
@@ -1105,6 +1129,10 @@ export function renderOverlayConfigPage(options = {}) {
               if (document.getElementById('r_follow_add')) document.getElementById('r_follow_add').value = add;
               if (document.getElementById('r_follow_enabled')) document.getElementById('r_follow_enabled').checked = enabled;
             }
+            if (rr && rr.thirdPartyTip) {
+              if (document.getElementById('r_tip_per_unit')) document.getElementById('r_tip_per_unit').value = rr.thirdPartyTip.per_unit ?? 60;
+              if (document.getElementById('r_tip_min')) document.getElementById('r_tip_min').value = rr.thirdPartyTip.min_amount ?? 1;
+            }
             if (rr && rr.hypeTrain) {
               document.getElementById('r_hype').value = rr.hypeTrain.multiplier ?? 2;
             }
@@ -1128,6 +1156,7 @@ export function renderOverlayConfigPage(options = {}) {
             resub: { base_seconds: Number((document.getElementById('r_resub_base')||{}).value||300) },
             gift_sub: { per_sub_seconds: Number((document.getElementById('r_gift_per')||{}).value||300) },
             charity: { per_usd: Number((document.getElementById('r_charity_per_usd')||{}).value||60) },
+            thirdPartyTip: { per_unit: Number((document.getElementById('r_tip_per_unit')||{}).value||60), min_amount: Number((document.getElementById('r_tip_min')||{}).value||1) },
             follow: { enabled: Boolean((document.getElementById('r_follow_enabled')||{}).checked), add_seconds: Number((document.getElementById('r_follow_add')||{}).value||600) },
             hypeTrain: { multiplier: Number(document.getElementById('r_hype').value||2) },
             bonusTime: { multiplier: Number(document.getElementById('r_bonus')?.value||2), stackWithHype: Boolean(document.getElementById('r_bonus_stack')?.checked) }

@@ -258,7 +258,11 @@ export function renderUtilitiesPage(options = {}) {
             diceResult.innerHTML = rolls
               .map(function(val, idx) { return '<div>Roll ' + (idx + 1) + ': ' + val + '</div>'; })
               .join('');
-            diceSum.textContent = 'Total: ' + total;
+            const avg = (total / rolls.length).toFixed(1).replace(/\.0$/, '');
+            const sorted = rolls.slice().sort((a, b) => a - b);
+            const mid = Math.floor(sorted.length / 2);
+            const median = sorted.length % 2 !== 0 ? sorted[mid] : ((sorted[mid - 1] + sorted[mid]) / 2).toFixed(1).replace(/\.0$/, '');
+            diceSum.textContent = 'Total: ' + total + '  \u00B7  Avg: ' + avg + '  \u00B7  Median: ' + median;
           });
         });
 

@@ -30,6 +30,7 @@ export function mountAdminRoutes(app, ctx) {
     DEFAULT_STYLE,
     observability,
     onUserBanned,
+    getUserProfile,
   } = ctx;
 
   app.get("/admin", (req, res) => {
@@ -93,10 +94,11 @@ export function mountAdminRoutes(app, ctx) {
         hasCustomStyle = style !== DEFAULT_STYLE;
       } catch {}
 
+      const profile = getUserProfile ? getUserProfile(uid) : null;
       return {
         userId: uid,
-        login: conn?.broadcasterLogin || null,
-        displayName: conn?.broadcasterLogin || null,
+        login: conn?.broadcasterLogin || profile?.login || null,
+        displayName: conn?.broadcasterLogin || profile?.displayName || profile?.login || null,
         connected: conn?.ws?.readyState === 1,
         lastEventAt: conn?.lastEventAt || null,
         remaining: remaining > 0 ? remaining : null,

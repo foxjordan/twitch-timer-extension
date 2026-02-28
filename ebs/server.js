@@ -43,6 +43,7 @@ import {
   getUserIdForKey,
   getAllUserIds,
 } from "./keys.js";
+import { loadUserProfiles, getUserProfile, setUserProfile } from "./user_profiles.js";
 import { mountTimerRoutes } from "./routes_timer.js";
 import { mountAuthRoutes } from "./routes_auth.js";
 import { mountOverlayApiRoutes } from "./routes_overlay_api.js";
@@ -218,6 +219,7 @@ setLoggerContext({
 
 // Load keys + styles at startup
 loadOverlayKeys().catch(() => {});
+loadUserProfiles().catch(() => {});
 loadStyles().catch(() => {});
 loadRules().catch(() => {});
 loadTimerState().catch(() => {});
@@ -622,6 +624,9 @@ mountAuthRoutes(app, {
 
       logger.info("user_login", { userId, userLogin });
 
+      // Persist display name so admin dashboard shows it even when offline
+      setUserProfile(userId, userLogin, user.display_name || userLogin);
+
       // Add or update this user's connection info
       let connection = broadcasterConnections.get(userId);
       if (!connection) {
@@ -840,6 +845,7 @@ mountAdminRoutes(app, {
   getSavedStyle,
   DEFAULT_STYLE,
   observability,
+  getUserProfile,
   onUserBanned: (uid) => {
     // Disconnect their EventSub WebSocket
     closeEventSubForUser(uid);

@@ -17,6 +17,7 @@ export function renderAdminDashboardPage(options = {}) {
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Admin Dashboard – Livestreamer Hub</title>
     <link rel="icon" type="image/png" href="/assets/convertico-coin_24x24.png">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/driver.js@1.3.1/dist/driver.css"/>
     ${renderThemeBootstrapScript()}
     ${renderFirebaseScript()}
     <style>
@@ -57,6 +58,8 @@ export function renderAdminDashboardPage(options = {}) {
       .health-label { color: var(--text-muted); font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 2px; }
       .health-value { font-weight: 600; }
       .health-error { color: #ef4444; }
+      .tour-btn { position: fixed; bottom: 20px; right: 20px; background: #9146ff; color: #fff; border: none; padding: 8px 16px; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; z-index: 10; opacity: 0.85; transition: opacity 0.15s; }
+      .tour-btn:hover { opacity: 1; }
       ${THEME_TOGGLE_STYLES}
       ${GLOBAL_HEADER_STYLES}
     </style>
@@ -402,6 +405,54 @@ export function renderAdminDashboardPage(options = {}) {
 
         refresh();
         setInterval(refresh, refreshInterval);
+      })();
+    </script>
+    <button class="tour-btn" id="tourBtn" title="Show guided tour">Take A Tour</button>
+    <script src="https://cdn.jsdelivr.net/npm/driver.js@1.3.1/dist/driver.js.iife.js"></script>
+    <script>
+      (function() {
+        var TOUR_KEY = 'admin_tour_seen';
+        var tourSteps = [
+          {
+            element: '.overview-grid',
+            popover: {
+              title: 'Overview Stats',
+              description: 'Quick glance at your service: registered broadcasters, EventSub connections, active overlays, and total SSE connections served.',
+              side: 'bottom', align: 'center'
+            }
+          },
+          {
+            element: '#serverHealth',
+            popover: {
+              title: 'Server Health',
+              description: 'Live server metrics — uptime, memory usage, EventSub status, and any recent errors.',
+              side: 'bottom', align: 'center'
+            }
+          },
+          {
+            element: '#tableContainer',
+            popover: {
+              title: 'Broadcasters Table',
+              description: 'Every registered broadcaster, their connection status, timer state, enabled features, and moderation actions.',
+              side: 'top', align: 'center'
+            }
+          }
+        ];
+
+        function startTour() {
+          var driverObj = window.driver.js.driver({
+            showProgress: true,
+            progressText: '{{current}} of {{total}}',
+            allowClose: true,
+            steps: tourSteps,
+            onDestroyed: function() {
+              localStorage.setItem(TOUR_KEY, 'true');
+            }
+          });
+          driverObj.drive();
+        }
+
+        document.getElementById('tourBtn').addEventListener('click', startTour);
       })();
     </script>
   </body>

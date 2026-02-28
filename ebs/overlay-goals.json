@@ -1,17 +1,17 @@
 {
   "74034487": {
-    "8a2633a0-7acd-48b2-8bf3-7f267b274a1a": {
-      "id": "8a2633a0-7acd-48b2-8bf3-7f267b274a1a",
-      "type": "sub_goal",
-      "title": "New Sub Goal",
+    "f530a385-0067-49b2-ad80-a8541eeea4ba": {
+      "id": "f530a385-0067-49b2-ad80-a8541eeea4ba",
+      "type": "custom",
+      "title": "New Goal",
       "description": "",
-      "unitLabel": "subs",
-      "targetValue": 25,
+      "unitLabel": "points",
+      "targetValue": 100,
       "currentValue": 0,
-      "createdAt": "2025-11-17T05:53:12.151Z",
-      "updatedAt": "2025-11-17T05:53:12.151Z",
+      "createdAt": "2026-02-28T15:33:23.695Z",
+      "updatedAt": "2026-02-28T15:33:23.695Z",
       "startAt": null,
-      "endAt": "2025-11-24T05:53:12.090Z",
+      "endAt": null,
       "archived": false,
       "style": {
         "orientation": "horizontal",
@@ -52,17 +52,21 @@
           "bits": "#10B981",
           "tips": "#FACC15",
           "charity": "#22D3EE",
+          "follows": "#3B82F6",
           "manual": "#38BDF8",
           "other": "#94A3B8"
         }
       },
       "rules": {
-        "autoTrackSubs": false,
-        "autoTrackResubs": false,
-        "autoTrackGifts": false,
+        "autoTrackSubs": true,
+        "autoTrackResubs": true,
+        "autoTrackGifts": true,
         "autoTrackBits": false,
         "autoTrackTips": false,
         "autoTrackCharity": false,
+        "autoTrackFollows": false,
+        "followMode": "new",
+        "followWeight": 1,
         "preferSubPoints": true,
         "tierWeights": {
           "1000": 1,
@@ -90,14 +94,16 @@
         "bits": 0,
         "tips": 0,
         "charity": 0,
+        "follows": 0,
         "manual": 0,
         "other": 0
       },
       "manualHistory": [],
-      "overlaySlug": "8a2633a0",
+      "overlaySlug": "f530a385",
       "tags": [],
-      "subBaseline": 0,
-      "lastSubCount": 0
+      "followBaseline": null,
+      "subBaseline": null,
+      "lastSubCount": null
     }
   }
 }

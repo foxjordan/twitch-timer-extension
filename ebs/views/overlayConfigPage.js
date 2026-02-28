@@ -58,6 +58,7 @@ export function renderOverlayConfigPage(options = {}) {
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Countdown Timer – Livestreamer Hub</title>
     <link rel="icon" type="image/png" href="/assets/convertico-coin_24x24.png">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/driver.js@1.3.1/dist/driver.css"/>
     <script id="Cookiebot" src="https://consent.cookiebot.com/uc.js" data-cbid="6770198d-2c1f-46f8-af4b-694edc70484c" type="text/javascript"></script>
     ${renderThemeBootstrapScript()}
     ${renderFirebaseScript()}
@@ -129,6 +130,8 @@ export function renderOverlayConfigPage(options = {}) {
       .global-footer { margin: 24px 16px 24px; padding: 12px 0; border-top: 1px solid var(--surface-border); text-align: center; font-size: 13px; color: var(--text-muted); }
       .global-footer a { color: var(--text-muted); text-decoration: none; margin: 0 10px; }
       .global-footer a:hover { color: var(--accent-color); }
+      .tour-btn { position: fixed; bottom: 20px; right: 20px; background: #9146ff; color: #fff; border: none; padding: 8px 16px; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; z-index: 100; opacity: 0.85; transition: opacity 0.15s; }
+      .tour-btn:hover { opacity: 1; }
       ${THEME_TOGGLE_STYLES}
       ${GLOBAL_HEADER_STYLES}
     </style>
@@ -1232,6 +1235,114 @@ export function renderOverlayConfigPage(options = {}) {
       bind();
       refresh();
       saveStyle();
+    </script>
+    <button class="tour-btn" id="tourBtn" title="Show guided tour">Take A Tour</button>
+    <script src="https://cdn.jsdelivr.net/npm/driver.js@1.3.1/dist/driver.js.iife.js"></script>
+    <script>
+      (function() {
+        var tourSteps = [
+          {
+            element: '.source-bar',
+            popover: {
+              title: 'Browser Source URL',
+              description: 'Copy this URL and paste it into OBS as a Browser Source. That\\'s how the countdown appears on your stream.',
+              side: 'bottom', align: 'center'
+            }
+          },
+          {
+            element: '.hero-preview',
+            popover: {
+              title: 'Live Preview',
+              description: 'This is a real-time preview of your countdown overlay. Any changes you make to the timer or styles will be reflected here instantly.',
+              side: 'bottom', align: 'center'
+            }
+          },
+          {
+            element: '.timer-top',
+            popover: {
+              title: 'Starting & Maximum Time',
+              description: 'Set the initial countdown duration on the left. On the right, set a maximum cap — the timer can never exceed this, no matter how much time viewers add.',
+              side: 'bottom', align: 'center'
+            }
+          },
+          {
+            element: '.timer-actions',
+            popover: {
+              title: 'Timer Actions',
+              description: 'Start, Pause, Resume, End, or Restart your countdown. "Save Default" stores the current Starting Time so it\\'s remembered next time you start.',
+              side: 'bottom', align: 'center'
+            }
+          },
+          {
+            element: '.timer-addons',
+            popover: {
+              title: 'Quick Add & Testing',
+              description: 'Quickly add time with the preset buttons, enter a custom amount in seconds, or simulate Bits/Tips to test how your rules add time.',
+              side: 'bottom', align: 'center'
+            }
+          },
+          {
+            element: '#bonusToggle',
+            popover: {
+              title: 'Bonus Time',
+              description: 'When active, all time additions are multiplied by a bonus factor (configured in Rules). You can toggle it manually or schedule it for a specific window.',
+              side: 'bottom', align: 'start'
+            }
+          },
+          {
+            element: '#showCapMessage',
+            popover: {
+              title: 'Max Time Reached Message',
+              description: 'When the timer hits the maximum cap, you can display a custom message on the overlay — useful for letting viewers know the goal has been reached.',
+              side: 'top', align: 'start'
+            }
+          },
+          {
+            element: '[data-section="style"]',
+            popover: {
+              title: 'Countdown Styles',
+              description: 'Customize the look of your overlay — font, colors, size, text shadow, outline, alignment, and threshold colors that change as time runs low.',
+              side: 'right', align: 'start'
+            }
+          },
+          {
+            element: '[data-section="rules"]',
+            popover: {
+              title: 'Rules',
+              description: 'Define how viewer events add time: Bits, subs (per tier), gift subs, charity donations, tips, and follows. Set the Hype Train and Bonus Time multipliers here too.',
+              side: 'left', align: 'start'
+            }
+          },
+          {
+            element: '[data-section="events"]',
+            popover: {
+              title: 'Event Log',
+              description: 'A live feed of every event that modifies your timer — subs, bits, gifts, and more. Helpful for verifying your rules are working correctly.',
+              side: 'left', align: 'start'
+            }
+          },
+          {
+            element: '[data-section="testing"]',
+            popover: {
+              title: 'Debug & Testing',
+              description: 'Simulate subscriptions, gift subs, and hype trains to test your setup without real events. Also shows your overlay key for the browser source.',
+              side: 'left', align: 'start'
+            }
+          }
+        ];
+
+        function startTour() {
+          var driverObj = window.driver.js.driver({
+            showProgress: true,
+            progressText: '{{current}} of {{total}}',
+            allowClose: true,
+            steps: tourSteps
+          });
+          driverObj.drive();
+        }
+
+        document.getElementById('tourBtn').addEventListener('click', startTour);
+      })();
     </script>
   </body>
 </html>`;

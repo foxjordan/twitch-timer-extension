@@ -15,7 +15,8 @@
       "Bash(fly ssh console:*)",
       "Bash(zip -r ../dist.zip . -x '.*' '__MACOSX/*')",
       "Bash(zip -r ../dist.zip . -x \".*\")",
-      "Bash(zip -r ../dist.zip .)"
+      "Bash(zip -r ../dist.zip .)",
+      "WebFetch(domain:driverjs.com)"
     ]
   }
 }

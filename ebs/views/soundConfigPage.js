@@ -13,7 +13,8 @@ export function renderSoundConfigPage(options = {}) {
   const userKey = String(options.userKey || "");
 
   const tierOptionsHtml = VALID_TIERS.map(
-    (sku) => `<option value="${sku}"${sku === DEFAULT_TIER ? " selected" : ""}>${TIER_LABELS[sku]}</option>`
+    (sku) =>
+      `<option value="${sku}"${sku === DEFAULT_TIER ? " selected" : ""}>${TIER_LABELS[sku]}</option>`,
   ).join("\n              ");
   const showAdminLink = Boolean(options.showAdminLink);
 
@@ -24,6 +25,7 @@ export function renderSoundConfigPage(options = {}) {
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Sound Alerts – Livestreamer Hub</title>
     <link rel="icon" type="image/png" href="/assets/convertico-coin_24x24.png">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/driver.js@1.3.1/dist/driver.css"/>
     ${renderThemeBootstrapScript()}
     ${renderFirebaseScript()}
     <style>
@@ -59,6 +61,8 @@ export function renderSoundConfigPage(options = {}) {
       .type-badge { display:inline-block; padding:1px 6px; border-radius:4px; font-size:10px; font-weight:600; text-transform:uppercase; letter-spacing:0.04em; margin-left:6px; }
       .type-badge.clip { background:rgba(145,70,255,0.15); color:#bf94ff; }
       .type-badge.video { background:rgba(0,180,120,0.15); color:#00c882; }
+      .tour-btn { position: fixed; bottom: 20px; right: 20px; background: #9146ff; color: #fff; border: none; padding: 8px 16px; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; z-index: 100; opacity: 0.85; transition: opacity 0.15s; }
+      .tour-btn:hover { opacity: 1; }
       ${THEME_TOGGLE_STYLES}
       ${GLOBAL_HEADER_STYLES}
 
@@ -152,7 +156,7 @@ export function renderSoundConfigPage(options = {}) {
           <button id="copySoundUrl" style="padding:5px 12px; font-size:12px; white-space:nowrap;">Copy URL</button>
           <code id="soundOverlayUrl" style="flex:1; min-width:0; font-size:12px; word-break:break-all; opacity:0.8;"></code>
         </div>
-        <div class="hint" style="margin-top:4px;">Add as a Browser Source in OBS (width: 800, height: 200)</div>
+        <div class="hint" style="margin-top:4px;">Add as a Browser Source</div>
       </div>
 
       <!-- Settings (collapsible, collapsed by default) -->
@@ -1072,6 +1076,70 @@ export function renderSoundConfigPage(options = {}) {
 
         // Initial load
         fetchSoundsAdmin();
+      })();
+    </script>
+    <button class="tour-btn" id="tourBtn" title="Show guided tour">Take A Tour</button>
+    <script src="https://cdn.jsdelivr.net/npm/driver.js@1.3.1/dist/driver.js.iife.js"></script>
+    <script>
+      (function() {
+        var TOUR_KEY = 'sounds_tour_seen';
+        var tourSteps = [
+          {
+            element: '#copySoundUrl',
+            popover: {
+              title: 'Browser Source URL',
+              description: 'Copy this URL and add it as a Browser Source in OBS. This is how sound alerts appear on your stream.',
+              side: 'bottom', align: 'start'
+            }
+          },
+          {
+            element: '#settingsCard',
+            popover: {
+              title: 'Settings',
+              description: 'Toggle alerts on/off, set a cooldown between triggers, adjust global volume, and limit the queue size.',
+              side: 'bottom', align: 'center'
+            }
+          },
+          {
+            element: '#createAlertCard',
+            popover: {
+              title: 'Create Alert',
+              description: 'Upload a sound, paste a Twitch clip URL, or upload a video. Each alert gets its own Bits tier and volume.',
+              side: 'bottom', align: 'center'
+            }
+          },
+          {
+            element: '#soundList',
+            popover: {
+              title: 'Your Alerts',
+              description: 'All your alerts appear here. You can preview, edit, reorder, or delete them.',
+              side: 'top', align: 'center'
+            }
+          },
+          {
+            element: '.ext-promo',
+            popover: {
+              title: 'Twitch Extension',
+              description: 'Install the companion extension so viewers can browse and trigger alerts directly from your channel page.',
+              side: 'left', align: 'center'
+            }
+          }
+        ];
+
+        function startTour() {
+          var driverObj = window.driver.js.driver({
+            showProgress: true,
+            progressText: '{{current}} of {{total}}',
+            allowClose: true,
+            steps: tourSteps,
+            onDestroyed: function() {
+              localStorage.setItem(TOUR_KEY, 'true');
+            }
+          });
+          driverObj.drive();
+        }
+
+        document.getElementById('tourBtn').addEventListener('click', startTour);
       })();
     </script>
   </body>

@@ -23,6 +23,7 @@ export function renderGoalsConfigPage(options = {}) {
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Goals – Livestreamer Hub</title>
     <link rel="icon" type="image/png" href="/assets/convertico-coin_24x24.png">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/driver.js@1.3.1/dist/driver.css"/>
     ${renderThemeBootstrapScript()}
     ${renderFirebaseScript()}
     <style>
@@ -71,7 +72,8 @@ export function renderGoalsConfigPage(options = {}) {
       .goal-preview-card .goal-preview-legend { display: flex; flex-wrap: wrap; gap: 6px 12px; font-size: 11px; color: var(--text-muted); margin-top: 8px; }
       .goal-card-section { border: 1px solid var(--section-border); border-radius: 10px; margin-top: 8px; background: var(--section-bg); }
       .goal-card-section:first-of-type { margin-top: 0; }
-      .goal-section-toggle { width: 100%; display: flex; justify-content: space-between; align-items: center; padding: 10px 12px; background: transparent; border: 0; color: inherit; font-weight: 600; cursor: pointer; border-radius: 10px; }
+      .goal-section-header { display: flex; align-items: center; padding-right: 8px; }
+      .goal-section-toggle { flex: 1; display: flex; justify-content: space-between; align-items: center; padding: 10px 12px; background: transparent; border: 0; color: inherit; font-weight: 600; cursor: pointer; border-radius: 10px; }
       .goal-section-toggle span:last-child { font-size: 12px; color: var(--text-muted); }
       .goal-section-body { padding: 0 12px 12px; }
       .goal-card-section.collapsed .goal-section-body { display: none; }
@@ -88,6 +90,9 @@ export function renderGoalsConfigPage(options = {}) {
       .goal-pill { padding: 2px 8px; border-radius: 999px; background: var(--pill-bg); border: 1px solid var(--pill-border); font-size: 12px; letter-spacing: 0.05em; text-transform: uppercase; color: var(--text-muted); }
       .hint { font-size: 12px; color: var(--text-muted); }
 
+      .section-help-btn { background: none; border: 1px solid var(--input-border); color: var(--text-muted); width: 22px; height: 22px; border-radius: 50%; font-size: 12px; font-weight: 700; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; padding: 0; flex-shrink: 0; transition: color 0.15s, border-color 0.15s; }
+      .section-help-btn:hover { color: #9146ff; border-color: #9146ff; }
+      .goal-toolbar { align-items: center; }
       ${GLOBAL_HEADER_STYLES}
       ${THEME_TOGGLE_STYLES}
 
@@ -129,6 +134,7 @@ export function renderGoalsConfigPage(options = {}) {
         <button id="createGoal">New goal</button>
         <button class="secondary" id="createSubGoal">New sub goal</button>
         <button class="secondary" id="refreshGoals">Refresh</button>
+        <button class="section-help-btn" data-help="toolbar" title="What are goals?">?</button>
       </div>
       <div id="goalList" class="goal-list">
         <div class="goal-empty">Loading goals\u2026</div>
@@ -400,10 +406,13 @@ export function renderGoalsConfigPage(options = {}) {
         const rulesSection = isSubGoal
           ? ''
           : '<div class="goal-card-section" data-goal-section="rules">' +
-               '<button type="button" class="goal-section-toggle" data-goal-section-toggle="rules">' +
-                 '<span>Rules &amp; contributions</span>' +
-                 '<span>\u25BE</span>' +
-               '</button>' +
+               '<div class="goal-section-header">' +
+                 '<button type="button" class="goal-section-toggle" data-goal-section-toggle="rules">' +
+                   '<span>Rules &amp; contributions</span>' +
+                   '<span>\u25BE</span>' +
+                 '</button>' +
+                 '<button class="section-help-btn" data-help="rules" title="What is this section?">?</button>' +
+               '</div>' +
                '<div class="goal-section-body">' +
                  '<div class="goal-grid">' +
                    '<div class="goal-field"><label><input type="checkbox" data-field="rules.autoTrackSubs" ' + boolAttr(rules.autoTrackSubs !== false) + ' /> Auto-count new subs</label></div>' +
@@ -476,10 +485,13 @@ export function renderGoalsConfigPage(options = {}) {
         const manualSection = isSubGoal
           ? ''
           : '<div class="goal-card-section goal-manual" data-goal-section="manual">' +
-               '<button type="button" class="goal-section-toggle" data-goal-section-toggle="manual">' +
-                 '<span>Manual adjustments</span>' +
-                 '<span>\u25BE</span>' +
-               '</button>' +
+               '<div class="goal-section-header">' +
+                 '<button type="button" class="goal-section-toggle" data-goal-section-toggle="manual">' +
+                   '<span>Manual adjustments</span>' +
+                   '<span>\u25BE</span>' +
+                 '</button>' +
+                 '<button class="section-help-btn" data-help="manual" title="What is this section?">?</button>' +
+               '</div>' +
                '<div class="goal-section-body">' +
                  '<div class="goal-manual-row">' +
                    '<select data-manual-field="type">' +
@@ -522,10 +534,13 @@ export function renderGoalsConfigPage(options = {}) {
             '</div>' +
           '</div>' +
           '<div class="goal-card-section" data-goal-section="basics">' +
-            '<button type="button" class="goal-section-toggle" data-goal-section-toggle="basics">' +
-              '<span>Basics</span>' +
-              '<span>\u25BE</span>' +
-            '</button>' +
+            '<div class="goal-section-header">' +
+              '<button type="button" class="goal-section-toggle" data-goal-section-toggle="basics">' +
+                '<span>Basics</span>' +
+                '<span>\u25BE</span>' +
+              '</button>' +
+              '<button class="section-help-btn" data-help="basics" title="What is this section?">?</button>' +
+            '</div>' +
             '<div class="goal-section-body">' +
               '<div class="goal-grid">' +
                 '<div class="goal-field">' +
@@ -570,10 +585,13 @@ export function renderGoalsConfigPage(options = {}) {
             '</div>' +
           '</div>' +
           '<div class="goal-card-section" data-goal-section="appearance">' +
-            '<button type="button" class="goal-section-toggle" data-goal-section-toggle="appearance">' +
-              '<span>Appearance</span>' +
-              '<span>\u25BE</span>' +
-            '</button>' +
+            '<div class="goal-section-header">' +
+              '<button type="button" class="goal-section-toggle" data-goal-section-toggle="appearance">' +
+                '<span>Appearance</span>' +
+                '<span>\u25BE</span>' +
+              '</button>' +
+              '<button class="section-help-btn" data-help="appearance" title="What is this section?">?</button>' +
+            '</div>' +
             '<div class="goal-section-body">' +
               '<div class="goal-grid">' +
                 '<div class="goal-field">' +
@@ -982,6 +1000,64 @@ export function renderGoalsConfigPage(options = {}) {
 
       // Initial load
       fetchGoalsAdmin();
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/driver.js@1.3.1/dist/driver.js.iife.js"></script>
+    <script>
+      (function() {
+        var helpText = {
+          toolbar: {
+            title: 'Goal Tracking Bars',
+            description: 'Create persistent goal bars for subs, bits, or mixed fundraisers. Click "New goal" for a standalone bar, or "New sub goal" to create one that feeds into a parent goal. Each goal gets its own Browser Source URL for OBS.'
+          },
+          basics: {
+            title: 'Basics',
+            description: 'Set the goal\\'s title, target value, unit label (e.g. "subs"), time range, and overlay slug. The overlay slug is used in the Browser Source URL — copy it and add it to OBS to show the bar on stream.'
+          },
+          appearance: {
+            title: 'Appearance',
+            description: 'Customize the bar\\'s layout (horizontal or vertical), dimensions, colors for the fill/empty track, labels, and per-tier segment colors. Toggle what\\'s shown on the overlay and add custom CSS for advanced styling.'
+          },
+          rules: {
+            title: 'Rules & Contributions',
+            description: 'Toggle which Twitch events auto-count toward the goal — subs (per tier), resubs, gift subs, bits, tips, charity, and follows. Set conversion weights like "100 bits = 1 unit" or "Tier 2 = 2 units".'
+          },
+          manual: {
+            title: 'Manual Adjustments',
+            description: 'Add or subtract progress by hand. Pick a contribution type, enter an amount, and optionally add a note. Useful for off-platform donations, corrections, or testing.'
+          }
+        };
+
+        document.addEventListener('click', function(e) {
+          var btn = e.target.closest('[data-help]');
+          if (!btn) return;
+          e.preventDefault();
+          e.stopPropagation();
+          var key = btn.getAttribute('data-help');
+          var info = helpText[key];
+          if (!info) return;
+
+          var section = btn.closest('.goal-card-section');
+          var driverObj = window.driver.js.driver({ allowClose: true });
+          if (section) {
+            driverObj.highlight({
+              element: section,
+              popover: { title: info.title, description: info.description, side: 'left', align: 'start' }
+            });
+          } else {
+            var toolbar = btn.closest('.goal-toolbar');
+            if (toolbar) {
+              driverObj.highlight({
+                element: toolbar,
+                popover: { title: info.title, description: info.description, side: 'bottom', align: 'start' }
+              });
+            } else {
+              driverObj.highlight({
+                popover: { title: info.title, description: info.description }
+              });
+            }
+          }
+        });
+      })();
     </script>
   </body>
 </html>`;

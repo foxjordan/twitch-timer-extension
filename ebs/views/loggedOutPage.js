@@ -30,7 +30,8 @@ export function renderLoggedOutPage(options = {}) {
       ${THEME_CSS_VARS}
       body { margin: 0; font-family: Inter, system-ui, Arial, sans-serif; background: var(--page-bg); color: var(--text-color); min-height: 100vh; display:flex; flex-direction:column; }
       .content { flex: 1; display: flex; align-items: center; justify-content: center; padding: 24px; position: relative; }
-      .box { background: var(--surface-color); border: 1px solid var(--surface-border); border-radius: 12px; padding: 24px; max-width: 520px; width: min(520px, 100%); box-shadow: 0 20px 50px var(--goal-card-shadow); }
+      .box { background: var(--surface-color); border: 1px solid var(--surface-border); border-radius: 12px; padding: 24px; max-width: 520px; width: min(520px, 100%); box-shadow: 0 20px 50px var(--goal-card-shadow); text-align: center; }
+      .box .logo { height: 72px; width: auto; margin-bottom: 16px; }
       .box h2 { margin: 0 0 8px; }
       .box p { margin: 0 0 16px; color: var(--text-muted); }
       .box small { color: var(--text-muted); display: block; margin-top: 10px; }
@@ -46,6 +47,7 @@ export function renderLoggedOutPage(options = {}) {
     ${renderGlobalHeader({ base, active: "home", includeThemeToggle: true })}
     <div class="content">
       <div class="box">
+        <img class="logo" src="/assets/livestreamerhub_logo.png" alt="Livestreamer Hub" />
         <h2>You are logged out</h2>
         <p>To sign in again, click the button below.</p>
         <a href="${base}/auth/login?next=${encodedNext}"><button>Sign in with Twitch</button></a>

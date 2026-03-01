@@ -7,7 +7,7 @@ export const GLOBAL_HEADER_STYLES = `
         z-index: 100;
         display: flex;
         align-items: center;
-        padding: 14px 24px;
+        padding: 4px 24px;
         background: var(--header-bg);
         border-bottom: 1px solid var(--header-border);
         backdrop-filter: blur(12px);
@@ -28,12 +28,20 @@ export const GLOBAL_HEADER_STYLES = `
         min-width: 0;
       }
       .global-header .brand-link {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
         font-weight: 800;
         font-size: 17px;
         letter-spacing: -0.01em;
         color: var(--text-color);
         text-decoration: none;
         transition: color .15s ease;
+      }
+      .global-header .brand-logo {
+        height: 84px;
+        width: auto;
+        flex-shrink: 0;
       }
       .global-header .brand-link:hover {
         color: var(--accent-color);
@@ -109,7 +117,7 @@ export const GLOBAL_HEADER_STYLES = `
       }
       .global-header .menu-toggle svg { display: block; }
 
-      @media (max-width: 768px) {
+      @media (max-width: 1024px) {
         .global-header {
           flex-wrap: wrap;
           padding: 12px 16px;
@@ -205,7 +213,7 @@ export function renderGlobalHeader(options = {}) {
   const actions = [];
   if (includeThemeToggle) actions.push(renderThemeToggle({ label: "" }));
   if (adminName)
-    actions.push(`<span class="user-label">Logged in as ${adminName}</span>`);
+    actions.push(`<span class="user-label">Hi, ${adminName}!</span>`);
   if (showFeedback)
     actions.push(
       `<a href="${feedbackUrl}" target="_blank" rel="noopener noreferrer"><button class="secondary">Feedback</button></a>`,
@@ -215,7 +223,7 @@ export function renderGlobalHeader(options = {}) {
   return `
     <header class="global-header" id="globalHeader">
       <div class="header-top">
-        <a class="brand-link" href="${homeHref}">Livestreamer Hub</a>
+        <a class="brand-link" href="${homeHref}"><img class="brand-logo" src="/assets/livestreamerhub_logo.png" alt="Livestreamer Hub" /></a>
         <button class="menu-toggle" id="menuToggle" aria-label="Toggle menu" aria-expanded="false">
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="4" y1="6" x2="20" y2="6"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="18" x2="20" y2="18"/></svg>
         </button>

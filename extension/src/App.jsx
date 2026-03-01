@@ -6,26 +6,6 @@ const EBS_BASE = import.meta.env.VITE_EBS_BASE || "https://livestreamerhub.com";
 
 import { TIER_COSTS } from "./tiers.js";
 
-function SpeakerIcon() {
-  return (
-    <svg
-      width="100%"
-      height="100%"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      style={{ opacity: 0.4, padding: "22%" }}
-    >
-      <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
-      <path d="M15.54 8.46a5 5 0 0 1 0 7.07" />
-      <path d="M19.07 4.93a10 10 0 0 1 0 14.14" />
-    </svg>
-  );
-}
-
 function ClipIcon() {
   return (
     <svg
@@ -161,7 +141,11 @@ function SoundCard({
           ) : (sound.type || "sound") === "video" ? (
             <VideoIcon />
           ) : (
-            <SpeakerIcon />
+            <img
+              src="/megaphone.png"
+              alt=""
+              style={{ width: "60%", height: "60%", objectFit: "contain", opacity: 0.6 }}
+            />
           )}
         </div>
         {/* Preview overlay on hover (sound/video types only) */}
@@ -473,7 +457,8 @@ function App() {
           boxShadow: "0 0 0 1px #303038 inset",
         }}
       >
-        <div style={{ fontSize: 15, opacity: 0.85, marginBottom: 8 }}>
+        <div style={{ fontSize: 15, opacity: 0.85, marginBottom: 8, display: "flex", alignItems: "center", gap: 6 }}>
+          <img src="/alert_wave.png" alt="" style={{ height: 20, width: 20 }} />
           Sound Alerts
         </div>
 

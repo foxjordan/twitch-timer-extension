@@ -1,4 +1,5 @@
 import { logger } from "./logger.js";
+import { isPro } from "./subscription_store.js";
 import jwt from "jsonwebtoken";
 import multer from "multer";
 import { rename, stat as fsStat, unlink as fsUnlink } from "fs/promises";
@@ -268,7 +269,7 @@ export function mountSoundRoutes(app, deps = {}) {
     if (!uid) return;
 
     const settings = getSoundSettings(uid);
-    if (!settings.videoClipsEnabled) {
+    if (!settings.videoClipsEnabled && !isPro(uid)) {
       return res.status(403).json({ error: "Video & clip alerts require a Pro plan" });
     }
 
@@ -506,7 +507,7 @@ export function mountSoundRoutes(app, deps = {}) {
     if (!uid) return;
 
     const videoSettings = getSoundSettings(uid);
-    if (!videoSettings.videoClipsEnabled) {
+    if (!videoSettings.videoClipsEnabled && !isPro(uid)) {
       if (req.file) try { await fsUnlink(req.file.path); } catch {}
       return res.status(403).json({ error: "Video & clip alerts require a Pro plan" });
     }
@@ -658,7 +659,12 @@ export function mountSoundRoutes(app, deps = {}) {
   app.get("/api/sounds/settings", (req, res) => {
     const uid = requireBroadcaster(req, res);
     if (!uid) return;
-    res.json({ settings: getSoundSettings(uid) });
+    const settings = getSoundSettings(uid);
+    // Reflect Pro subscription status so UI shows clip/video tabs
+    if (isPro(uid)) {
+      settings.videoClipsEnabled = true;
+    }
+    res.json({ settings });
   });
 
   // Update sound alert settings

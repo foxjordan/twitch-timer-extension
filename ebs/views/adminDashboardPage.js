@@ -286,6 +286,7 @@ export function renderAdminDashboardPage(options = {}) {
             }
             addPill('Sounds: ' + (u.soundCount || 0), u.soundsEnabled);
             addPill('Video/Clips', u.videoClipsEnabled);
+            addPill(u.isPro ? 'Pro' : (u.subscriptionStatus || 'Free'), u.isPro);
             addPill('Goals: ' + (u.goalCount || 0), u.goalCount > 0);
             addPill('Style', u.hasCustomStyle);
             tdFeatures.appendChild(pillsDiv);
@@ -324,6 +325,14 @@ export function renderAdminDashboardPage(options = {}) {
             vcBtn.style.marginLeft = '4px';
             vcBtn.addEventListener('click', function() { toggleVideoClips(u.userId, !u.videoClipsEnabled); });
             tdActions.appendChild(vcBtn);
+            if (u.stripeCustomerId) {
+              var stripeLink = document.createElement('a');
+              stripeLink.href = 'https://dashboard.stripe.com/customers/' + u.stripeCustomerId;
+              stripeLink.target = '_blank';
+              stripeLink.textContent = 'Stripe';
+              stripeLink.style.cssText = 'font-size:11px; color:#9146ff; margin-left:6px;';
+              tdActions.appendChild(stripeLink);
+            }
             tr.appendChild(tdActions);
 
             tbody.appendChild(tr);

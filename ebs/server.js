@@ -69,10 +69,14 @@ import { mountSoundRoutes } from "./routes_sounds.js";
 import { mountAdminRoutes } from "./routes_admin.js";
 import { loadSoundAlerts, listSounds, getSoundSettings, setSoundSettings } from "./sounds_store.js";
 import { loadBans, isBanned } from "./bans.js";
+import { loadSubscriptions } from "./subscription_store.js";
+import { mountStripeWebhookRoute, mountStripeRoutes } from "./routes_stripe.js";
 
 const app = express();
 // honor X-Forwarded-* so req.protocol resolves to https behind Fly
 app.set("trust proxy", 1);
+// Stripe webhook needs raw body — must be before express.json()
+mountStripeWebhookRoute(app);
 app.use(express.json());
 app.use(
   requestLogger({
@@ -226,6 +230,7 @@ loadTimerState().catch(() => {});
 loadGoals().catch(() => {});
 loadSoundAlerts().catch(() => {});
 loadBans().catch(() => {});
+loadSubscriptions().catch(() => {});
 
 // ===== Per-user settings (persisted) =====
 const DATA_DIR = process.env.DATA_DIR || process.cwd();
@@ -859,6 +864,8 @@ mountAdminRoutes(app, {
     logger.info("user_banned_disconnected", { userId: uid });
   },
 });
+
+mountStripeRoutes(app);
 
 // ---- EventSub integration ----
 function secondsFromEvent(notification, uid = "default") {

@@ -5,6 +5,7 @@ import { renderLoggedOutPage } from './views/loggedOutPage.js';
 import { logger } from './logger.js';
 import { storeUserAccessToken } from './twitch_tokens.js';
 import { getBaseUrl } from './base_url.js';
+import { syncSubscriptionFromStripe } from './routes_stripe.js';
 
 /**
  * Build a signed OAuth state value that encodes the origin so the callback
@@ -156,6 +157,8 @@ export function mountAuthRoutes(app, opts = {}) {
       try { storeUserAccessToken(user.id, accessToken, expiresIn); } catch {}
       // notify host (server) of admin login for dynamic broadcaster/eventsub wiring
       try { if (opts && typeof opts.onAdminLogin === 'function') opts.onAdminLogin({ user, accessToken }); } catch {}
+      // Sync Stripe subscription state on login (fire-and-forget)
+      syncSubscriptionFromStripe(user.id).catch(() => {});
       const next = req.query.next || '/overlay/config';
       res.redirect(String(next).startsWith('/') ? next : '/overlay/config');
     } catch (e) {

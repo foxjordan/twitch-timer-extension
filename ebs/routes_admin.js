@@ -1,5 +1,6 @@
 import { renderAdminDashboardPage } from "./views/adminDashboardPage.js";
 import { getBan, banUser, unbanUser } from "./bans.js";
+import { getSubscription, isPro } from "./subscription_store.js";
 
 const SUPER_ADMIN_IDS = (process.env.SUPER_ADMIN_IDS || "")
   .split(",")
@@ -94,6 +95,9 @@ export function mountAdminRoutes(app, ctx) {
         hasCustomStyle = style !== DEFAULT_STYLE;
       } catch {}
 
+      // Subscription
+      const subscription = getSubscription(uid);
+
       const profile = getUserProfile ? getUserProfile(uid) : null;
       return {
         userId: uid,
@@ -116,6 +120,9 @@ export function mountAdminRoutes(app, ctx) {
         banned: !!ban,
         bannedAt: ban?.bannedAt || null,
         banReason: ban?.reason || null,
+        subscriptionStatus: subscription?.status || null,
+        stripeCustomerId: subscription?.stripeCustomerId || null,
+        isPro: isPro(uid),
       };
     });
 

@@ -31,25 +31,6 @@ function ClipIcon() {
   );
 }
 
-function VideoIcon() {
-  return (
-    <svg
-      width="100%"
-      height="100%"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      style={{ opacity: 0.4, padding: "22%" }}
-    >
-      <polygon points="23 7 16 12 23 17 23 7" />
-      <rect x="1" y="5" width="15" height="14" rx="2" ry="2" />
-    </svg>
-  );
-}
-
 function useImageUrl(soundId, hasImage, auth) {
   const [url, setUrl] = useState(null);
   useEffect(() => {
@@ -177,10 +158,14 @@ function SoundCard({
           ) : (sound.type || "sound") === "clip" ? (
             <ClipIcon />
           ) : (sound.type || "sound") === "video" ? (
-            <VideoIcon />
+            <img
+              src="./camera_icon.png"
+              alt=""
+              style={{ width: "60%", height: "60%", objectFit: "contain", opacity: 0.6 }}
+            />
           ) : (
             <img
-              src="/megaphone.png"
+              src="./megaphone.png"
               alt=""
               style={{ width: "60%", height: "60%", objectFit: "contain", opacity: 0.6 }}
             />
@@ -439,7 +424,7 @@ function ComponentApp() {
     return (
       <div style={containerStyle}>
         <div style={headerStyle}>
-          <span style={{ display: "flex", alignItems: "center", gap: 6 }}><img src="/alert_wave.png" alt="" style={{ height: 18, width: 18 }} />Sound Alerts</span>
+          <span style={{ display: "flex", alignItems: "center", gap: 6 }}><img src="./alert_wave.png" alt="" style={{ height: 18, width: 18 }} />Sound Alerts</span>
         </div>
         <div style={{ padding: 12, textAlign: "center", opacity: 0.5 }}>
           Loading...
@@ -453,7 +438,7 @@ function ComponentApp() {
     return (
       <div style={containerStyle}>
         <div style={headerStyle}>
-          <span style={{ display: "flex", alignItems: "center", gap: 6 }}><img src="/alert_wave.png" alt="" style={{ height: 18, width: 18 }} />Sound Alerts</span>
+          <span style={{ display: "flex", alignItems: "center", gap: 6 }}><img src="./alert_wave.png" alt="" style={{ height: 18, width: 18 }} />Sound Alerts</span>
         </div>
         <div style={{ padding: 12, textAlign: "center", opacity: 0.5 }}>
           No sound alerts available
@@ -466,7 +451,7 @@ function ComponentApp() {
     <div style={containerStyle}>
       {/* Header with scroll buttons */}
       <div style={headerStyle}>
-        <span>Sound Alerts</span>
+        <span style={{ display: "flex", alignItems: "center", gap: 6 }}><img src="./alert_wave.png" alt="" style={{ height: 18, width: 18 }} />Sound Alerts</span>
         <div style={{ display: "flex", gap: 2 }}>
           <button
             onClick={() => scrollBy(-150)}

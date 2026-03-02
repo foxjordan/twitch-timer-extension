@@ -451,24 +451,16 @@ export function renderSoundConfigPage(options = {}) {
               img.onerror = function() { this.style.display = 'none'; };
               thumb.appendChild(img);
             } else {
-              var svgNs = 'http://www.w3.org/2000/svg';
-              var svg = document.createElementNS(svgNs, 'svg');
-              svg.setAttribute('width', '20');
-              svg.setAttribute('height', '20');
-              svg.setAttribute('viewBox', '0 0 24 24');
-              svg.setAttribute('fill', 'none');
-              svg.setAttribute('stroke', 'currentColor');
-              svg.setAttribute('stroke-width', '2');
-              svg.setAttribute('stroke-linecap', 'round');
-              svg.setAttribute('stroke-linejoin', 'round');
-              svg.style.opacity = '0.3';
-              var poly = document.createElementNS(svgNs, 'polygon');
-              poly.setAttribute('points', '11 5 6 9 2 9 2 15 6 15 11 19 11 5');
-              var path = document.createElementNS(svgNs, 'path');
-              path.setAttribute('d', 'M15.54 8.46a5 5 0 0 1 0 7.07');
-              svg.appendChild(poly);
-              svg.appendChild(path);
-              thumb.appendChild(svg);
+              var defaultImg = document.createElement('img');
+              defaultImg.alt = '';
+              defaultImg.style.cssText = 'width:60%; height:60%; object-fit:contain; opacity:0.5;';
+              var sType = s.type || 'sound';
+              if (sType === 'video') {
+                defaultImg.src = '/assets/icons/camera_icon.png';
+              } else {
+                defaultImg.src = '/assets/icons/megaphone.png';
+              }
+              thumb.appendChild(defaultImg);
             }
             card.appendChild(thumb);
 

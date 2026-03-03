@@ -17,11 +17,12 @@ export function renderLoggedOutPage(options = {}) {
   const gdprUrl = `${base}/gdpr`;
 
   return `<!doctype html>
-<html>
+<html lang="en">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Logged out</title>
+    <meta name="robots" content="noindex, nofollow" />
+    <title>Logged Out – Livestreamer Hub</title>
     <link rel="icon" type="image/png" href="/assets/convertico-coin_24x24.png">
     <script id="Cookiebot" src="https://consent.cookiebot.com/uc.js" data-cbid="6770198d-2c1f-46f8-af4b-694edc70484c" type="text/javascript"></script>
     ${renderThemeBootstrapScript()}
@@ -32,7 +33,7 @@ export function renderLoggedOutPage(options = {}) {
       .content { flex: 1; display: flex; align-items: center; justify-content: center; padding: 24px; position: relative; }
       .box { background: var(--surface-color); border: 1px solid var(--surface-border); border-radius: 12px; padding: 24px; max-width: 520px; width: min(520px, 100%); box-shadow: 0 20px 50px var(--goal-card-shadow); text-align: center; }
       .box .logo { height: 72px; width: auto; margin-bottom: 16px; }
-      .box h2 { margin: 0 0 8px; }
+      .box h1 { margin: 0 0 8px; font-size: 1.25em; }
       .box p { margin: 0 0 16px; color: var(--text-muted); }
       .box small { color: var(--text-muted); display: block; margin-top: 10px; }
       button { background: var(--accent-color); color: #ffffff; border: 0; padding: 10px 14px; border-radius: 8px; cursor: pointer; font-size: 15px; }
@@ -48,7 +49,7 @@ export function renderLoggedOutPage(options = {}) {
     <div class="content">
       <div class="box">
         <img class="logo" src="/assets/livestreamerhub_logo.png" alt="Livestreamer Hub" />
-        <h2>You are logged out</h2>
+        <h1>You are logged out</h1>
         <p>To sign in again, click the button below.</p>
         <a href="${base}/auth/login?next=${encodedNext}"><button>Sign in with Twitch</button></a>
         <small>Note: you may still be signed into Twitch in this browser, which can auto-complete sign-in.</small>

@@ -19,10 +19,11 @@ export function renderSoundConfigPage(options = {}) {
   const showAdminLink = Boolean(options.showAdminLink);
 
   return `<!doctype html>
-<html>
+<html lang="en">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex, nofollow" />
     <title>Sound Alerts – Livestreamer Hub</title>
     <link rel="icon" type="image/png" href="/assets/convertico-coin_24x24.png">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/driver.js@1.3.1/dist/driver.css"/>

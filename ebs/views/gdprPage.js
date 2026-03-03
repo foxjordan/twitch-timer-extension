@@ -18,11 +18,17 @@ export function renderGdprPage(options = {}) {
   const homeUrl = base ? `${base}/` : "/";
 
   return `<!doctype html>
-<html>
+<html lang="en">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>GDPR Disclosure – Livestreamer Hub</title>
+    <meta name="description" content="GDPR and UK GDPR disclosure for Livestreamer Hub — data processing, your rights, and how to contact us." />
+    <link rel="canonical" href="https://livestreamerhub.com/gdpr" />
+    <meta property="og:title" content="GDPR Disclosure – Livestreamer Hub" />
+    <meta property="og:description" content="GDPR and UK GDPR disclosure for Livestreamer Hub — data processing, your rights, and how to contact us." />
+    <meta property="og:url" content="https://livestreamerhub.com/gdpr" />
+    <meta property="og:type" content="website" />
     <link rel="icon" type="image/png" href="/assets/convertico-coin_24x24.png">
     <script id="Cookiebot" src="https://consent.cookiebot.com/uc.js" data-cbid="6770198d-2c1f-46f8-af4b-694edc70484c" type="text/javascript"></script>
     ${renderThemeBootstrapScript()}

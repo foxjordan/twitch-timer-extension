@@ -871,9 +871,10 @@ mountTtsRoutes(app, {
       (async () => {
         const displayName = await fetchUserDisplayName(viewerUserId);
         const who = displayName || `User ${viewerUserId}`;
+        const voice = voiceName ? ` (${voiceName})` : "";
         await sendExtensionChatMessage({
           broadcasterId: channelId,
-          text: `${who} sent a TTS message for ${bits} Bits!`,
+          text: `${who} used ${bits} Bits to say${voice}: "${message}"`,
         });
       })().catch(() => {});
     }

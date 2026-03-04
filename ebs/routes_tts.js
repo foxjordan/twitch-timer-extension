@@ -251,8 +251,9 @@ export function mountTtsRoutes(app, deps = {}) {
       return res.json({ approved: false, reason: `Message must be between 1 and ${settings.maxMessageLength} characters` });
     }
 
-    // Run moderation
-    const modResult = moderateMessage(trimmed, settings.bannedWords, settings.moderationEnabled);
+    // Run moderation (per-streamer + global admin config)
+    const globalMod = getGlobalTtsConfig().moderation;
+    const modResult = moderateMessage(trimmed, settings.bannedWords, settings.moderationEnabled, globalMod);
     if (!modResult.approved) {
       return res.json({ approved: false, reason: modResult.reason });
     }

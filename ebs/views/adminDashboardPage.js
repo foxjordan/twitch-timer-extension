@@ -139,6 +139,36 @@ export function renderAdminDashboardPage(options = {}) {
           </div>
           <div id="ttsVoiceGrid" class="voice-grid"></div>
         </div>
+        <div style="margin-top: 16px;">
+          <label style="display:block; font-size:13px; font-weight:600; margin-bottom:6px;">Moderation Settings</label>
+          <div style="font-size:12px; color:var(--text-muted); margin-bottom:8px;">These settings apply globally to all streamers (in addition to each streamer's own banned words and moderation toggle).</div>
+          <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px 18px;">
+            <label style="display:flex; align-items:center; gap:6px; font-size:13px; font-weight:normal;">
+              <input type="checkbox" id="modOffensive"> Offensive content filter (slurs, hate speech, threats)
+            </label>
+            <label style="display:flex; align-items:center; gap:6px; font-size:13px; font-weight:normal;">
+              <input type="checkbox" id="modBlockUrls"> Block URLs in messages
+            </label>
+            <label style="display:flex; align-items:center; gap:6px; font-size:13px; font-weight:normal;">
+              <input type="checkbox" id="modCaps"> Caps filter
+            </label>
+            <div style="display:flex; align-items:center; gap:6px; font-size:13px;">
+              <span style="white-space:nowrap;">Caps ratio:</span>
+              <input type="number" id="modCapsRatio" min="1" max="100" style="width:55px; padding:3px 6px; border-radius:4px; border:1px solid var(--surface-border); background:var(--surface-muted); color:var(--text-color); font-size:12px;">
+              <span style="opacity:0.6;">%</span>
+              <span style="white-space:nowrap; margin-left:8px;">Min length:</span>
+              <input type="number" id="modCapsMinLen" min="1" max="500" style="width:55px; padding:3px 6px; border-radius:4px; border:1px solid var(--surface-border); background:var(--surface-muted); color:var(--text-color); font-size:12px;">
+            </div>
+            <label style="display:flex; align-items:center; gap:6px; font-size:13px; font-weight:normal;">
+              <input type="checkbox" id="modRepeat"> Repeat character filter
+            </label>
+            <div style="display:flex; align-items:center; gap:6px; font-size:13px;">
+              <span style="white-space:nowrap;">Repeat threshold:</span>
+              <input type="number" id="modRepeatThreshold" min="2" max="50" style="width:55px; padding:3px 6px; border-radius:4px; border:1px solid var(--surface-border); background:var(--surface-muted); color:var(--text-color); font-size:12px;">
+              <span style="opacity:0.6;">chars</span>
+            </div>
+          </div>
+        </div>
       </div>
 
       <div class="table-card">
@@ -484,8 +514,17 @@ export function renderAdminDashboardPage(options = {}) {
         var ttsSaveBtn = document.getElementById('ttsSaveBtn');
         var ttsSaveStatus = document.getElementById('ttsSaveStatus');
         var ttsAllVoices = [];
-        var ttsCurrentConfig = { minTier: 'sound_300', availableVoices: [] };
+        var ttsCurrentConfig = { minTier: 'sound_300', availableVoices: [], moderation: {} };
         var previewAudio = null;
+
+        // Moderation elements
+        var modOffensiveEl = document.getElementById('modOffensive');
+        var modBlockUrlsEl = document.getElementById('modBlockUrls');
+        var modCapsEl = document.getElementById('modCaps');
+        var modCapsRatioEl = document.getElementById('modCapsRatio');
+        var modCapsMinLenEl = document.getElementById('modCapsMinLen');
+        var modRepeatEl = document.getElementById('modRepeat');
+        var modRepeatThresholdEl = document.getElementById('modRepeatThreshold');
 
         function fetchTtsConfig() {
           fetch('/api/admin/tts-config', { credentials: 'same-origin' })
@@ -497,8 +536,20 @@ export function renderAdminDashboardPage(options = {}) {
               var tiers = data.tiers || [];
               renderTtsTierSelect(tiers);
               renderTtsVoiceCheckboxes();
+              populateModerationFields();
             })
             .catch(function() {});
+        }
+
+        function populateModerationFields() {
+          var m = ttsCurrentConfig.moderation || {};
+          modOffensiveEl.checked = m.offensiveFilterEnabled !== false;
+          modBlockUrlsEl.checked = m.blockUrls === true;
+          modCapsEl.checked = m.capsFilterEnabled !== false;
+          modCapsRatioEl.value = m.capsRatio || 80;
+          modCapsMinLenEl.value = m.capsMinLength || 20;
+          modRepeatEl.checked = m.repeatFilterEnabled !== false;
+          modRepeatThresholdEl.value = m.repeatThreshold || 10;
         }
 
         function renderTtsTierSelect(tiers) {
@@ -605,7 +656,16 @@ export function renderAdminDashboardPage(options = {}) {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
               minTier: ttsMinTierSelect.value,
-              availableVoices: voicesToSend
+              availableVoices: voicesToSend,
+              moderation: {
+                offensiveFilterEnabled: modOffensiveEl.checked,
+                blockUrls: modBlockUrlsEl.checked,
+                capsFilterEnabled: modCapsEl.checked,
+                capsRatio: parseInt(modCapsRatioEl.value, 10) || 80,
+                capsMinLength: parseInt(modCapsMinLenEl.value, 10) || 20,
+                repeatFilterEnabled: modRepeatEl.checked,
+                repeatThreshold: parseInt(modRepeatThresholdEl.value, 10) || 10
+              }
             })
           })
           .then(function(r) { return r.json(); })

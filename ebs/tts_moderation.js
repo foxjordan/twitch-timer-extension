@@ -30,14 +30,17 @@ const BUILTIN_BLOCKED_PATTERNS = [
   /\bi(?:'ll|.?will)\s+(?:kill|murder|rape|shoot)\s+(?:you|them|her|him|everyone)\b/i,
 ];
 
+const URL_PATTERN = /https?:\/\/\S+|www\.\S+/i;
+
 /**
  * Moderate a TTS message before charging Bits.
  * @param {string} message - The viewer's message
  * @param {string[]} bannedWords - Streamer-defined banned words
- * @param {boolean} moderationEnabled - Whether built-in moderation is active
+ * @param {boolean} moderationEnabled - Whether built-in moderation is active (per-streamer)
+ * @param {object} [globalModConfig] - Global admin moderation config
  * @returns {{ approved: boolean, reason?: string }}
  */
-export function moderateMessage(message, bannedWords = [], moderationEnabled = true) {
+export function moderateMessage(message, bannedWords = [], moderationEnabled = true, globalModConfig = {}) {
   if (!message || typeof message !== "string") {
     return { approved: false, reason: "Message is empty" };
   }
@@ -55,33 +58,54 @@ export function moderateMessage(message, bannedWords = [], moderationEnabled = t
     }
   }
 
-  // Layers 2-3 only run if moderation is enabled
+  // Layers 2+ only run if per-streamer moderation is enabled
   if (!moderationEnabled) {
     return { approved: true };
   }
 
+  // Merge global config with defaults
+  const cfg = {
+    offensiveFilterEnabled: true,
+    capsFilterEnabled: true,
+    capsRatio: 80,
+    capsMinLength: 20,
+    repeatFilterEnabled: true,
+    repeatThreshold: 10,
+    blockUrls: false,
+    ...globalModConfig,
+  };
+
   // Layer 2: Built-in offensive content filter
-  for (const pattern of BUILTIN_BLOCKED_PATTERNS) {
-    if (pattern.test(trimmed)) {
-      return { approved: false, reason: "Message contains prohibited content" };
+  if (cfg.offensiveFilterEnabled) {
+    for (const pattern of BUILTIN_BLOCKED_PATTERNS) {
+      if (pattern.test(trimmed)) {
+        return { approved: false, reason: "Message contains prohibited content" };
+      }
     }
   }
 
-  // Layer 3: Heuristics
-  // Excessive capitalization (>80% caps for messages > 20 chars)
-  if (trimmed.length > 20) {
+  // Layer 3: URL blocking
+  if (cfg.blockUrls && URL_PATTERN.test(trimmed)) {
+    return { approved: false, reason: "URLs are not allowed" };
+  }
+
+  // Layer 4: Excessive capitalization
+  if (cfg.capsFilterEnabled && trimmed.length > cfg.capsMinLength) {
     const letters = trimmed.replace(/[^a-zA-Z]/g, "");
     if (letters.length > 0) {
-      const capsRatio = (letters.match(/[A-Z]/g) || []).length / letters.length;
-      if (capsRatio > 0.8) {
+      const ratio = (letters.match(/[A-Z]/g) || []).length / letters.length;
+      if (ratio > cfg.capsRatio / 100) {
         return { approved: false, reason: "Excessive capitalization" };
       }
     }
   }
 
-  // Excessive repeated characters (e.g., "aaaaaaaaaa")
-  if (/(.)\1{9,}/i.test(trimmed)) {
-    return { approved: false, reason: "Excessive repeated characters" };
+  // Layer 5: Excessive repeated characters
+  if (cfg.repeatFilterEnabled) {
+    const re = new RegExp(`(.)\\1{${cfg.repeatThreshold - 1},}`, "i");
+    if (re.test(trimmed)) {
+      return { approved: false, reason: "Excessive repeated characters" };
+    }
   }
 
   return { approved: true };

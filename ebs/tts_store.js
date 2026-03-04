@@ -25,6 +25,15 @@ const DEFAULT_TTS_SETTINGS = {
 let globalTtsConfig = {
   minTier: "sound_300",
   availableVoices: [], // empty = all voices available (populated on first load)
+  moderation: {
+    offensiveFilterEnabled: true,  // built-in slur/hate patterns
+    capsFilterEnabled: true,       // excessive caps detection
+    capsRatio: 80,                 // % of letters that must be caps (1-100)
+    capsMinLength: 20,             // only check messages longer than this
+    repeatFilterEnabled: true,     // repeated character detection
+    repeatThreshold: 10,           // consecutive identical chars to trigger
+    blockUrls: false,              // block messages containing URLs
+  },
 };
 
 function cloneSettings(s) {
@@ -49,6 +58,9 @@ export async function loadTtsSettings() {
     }
     if (Array.isArray(parsed.availableVoices)) {
       globalTtsConfig.availableVoices = parsed.availableVoices.filter((v) => typeof v === "string");
+    }
+    if (parsed.moderation && typeof parsed.moderation === "object") {
+      globalTtsConfig.moderation = { ...globalTtsConfig.moderation, ...parsed.moderation };
     }
   } catch {}
 
@@ -145,7 +157,11 @@ export function getPublicTtsSettings(uid) {
 // ===== Global admin TTS config =====
 
 export function getGlobalTtsConfig() {
-  return { ...globalTtsConfig, availableVoices: [...globalTtsConfig.availableVoices] };
+  return {
+    ...globalTtsConfig,
+    availableVoices: [...globalTtsConfig.availableVoices],
+    moderation: { ...globalTtsConfig.moderation },
+  };
 }
 
 export function setGlobalTtsConfig(patch) {
@@ -154,6 +170,17 @@ export function setGlobalTtsConfig(patch) {
   }
   if (Array.isArray(patch.availableVoices)) {
     globalTtsConfig.availableVoices = patch.availableVoices.filter((v) => typeof v === "string");
+  }
+  if (patch.moderation && typeof patch.moderation === "object") {
+    const m = patch.moderation;
+    const cur = globalTtsConfig.moderation;
+    if (typeof m.offensiveFilterEnabled === "boolean") cur.offensiveFilterEnabled = m.offensiveFilterEnabled;
+    if (typeof m.capsFilterEnabled === "boolean") cur.capsFilterEnabled = m.capsFilterEnabled;
+    if (typeof m.capsRatio === "number") cur.capsRatio = Math.max(1, Math.min(100, Math.floor(m.capsRatio)));
+    if (typeof m.capsMinLength === "number") cur.capsMinLength = Math.max(1, Math.min(500, Math.floor(m.capsMinLength)));
+    if (typeof m.repeatFilterEnabled === "boolean") cur.repeatFilterEnabled = m.repeatFilterEnabled;
+    if (typeof m.repeatThreshold === "number") cur.repeatThreshold = Math.max(2, Math.min(50, Math.floor(m.repeatThreshold)));
+    if (typeof m.blockUrls === "boolean") cur.blockUrls = m.blockUrls;
   }
   persistGlobal().catch(() => {});
   return getGlobalTtsConfig();

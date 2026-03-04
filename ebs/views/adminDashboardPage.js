@@ -521,7 +521,7 @@ export function renderAdminDashboardPage(options = {}) {
             nameSpan.textContent = v.name;
             var metaSpan = document.createElement('span');
             metaSpan.className = 'voice-meta';
-            metaSpan.textContent = v.gender ? ' (' + v.gender + ')' : '';
+            metaSpan.textContent = (v.gender && v.gender !== 'unknown') ? ' (' + v.gender + ')' : '';
             label.appendChild(cb);
             label.appendChild(nameSpan);
             label.appendChild(metaSpan);

@@ -1222,7 +1222,7 @@ export function renderSoundConfigPage(options = {}) {
             nameSpan.textContent = v.name;
             var genderSpan = document.createElement('span');
             genderSpan.style.cssText = 'font-size:11px; opacity:0.5; margin-left:2px;';
-            genderSpan.textContent = v.gender ? '(' + v.gender + ')' : '';
+            genderSpan.textContent = (v.gender && v.gender !== 'unknown') ? '(' + v.gender + ')' : '';
             label.appendChild(cb);
             label.appendChild(nameSpan);
             label.appendChild(genderSpan);

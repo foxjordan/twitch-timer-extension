@@ -162,9 +162,13 @@ export function mountTtsRoutes(app, deps = {}) {
   });
 
   // Preview a voice — returns audio directly (no overlay, no Bits)
+  // Accepts any auth: session (EBS dashboard / admin), or extension JWT (broadcaster / viewer)
   app.get("/api/tts/preview/:voiceId", async (req, res) => {
-    const uid = requireBroadcaster(req, res);
-    if (!uid) return;
+    const hasSession = req?.session?.isAdmin || req?.session?.twitchUser?.id;
+    const claims = !hasSession ? verifyExtensionJwt(req) : null;
+    if (!hasSession && !claims) {
+      return res.status(401).json({ error: "Authentication required" });
+    }
 
     const { voiceId } = req.params;
     if (!isValidVoice(voiceId)) {
@@ -177,7 +181,7 @@ export function mountTtsRoutes(app, deps = {}) {
       res.setHeader("Cache-Control", "public, max-age=3600");
       res.send(audioBuffer);
     } catch (err) {
-      logger.error("tts_preview_failed", { userId: uid, voiceId, message: err?.message });
+      logger.error("tts_preview_failed", { voiceId, message: err?.message });
       res.status(500).json({ error: "Voice preview failed" });
     }
   });

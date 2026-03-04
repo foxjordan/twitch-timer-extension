@@ -59,6 +59,9 @@ export function renderAdminDashboardPage(options = {}) {
       .voice-item { display: flex; align-items: center; gap: 6px; font-size: 13px; padding: 4px 0; }
       .voice-item input { margin: 0; }
       .voice-meta { font-size: 11px; color: var(--text-muted); }
+      .btn-preview { background: none; border: 1px solid var(--surface-border); border-radius: 4px; padding: 1px 5px; font-size: 11px; cursor: pointer; color: var(--text-muted); line-height: 1; }
+      .btn-preview:hover { color: var(--text-color); border-color: var(--text-color); }
+      .btn-preview.playing { color: #9146ff; border-color: #9146ff; }
       .tts-status { font-size: 12px; margin-top: 8px; padding: 6px 10px; border-radius: 6px; }
       .ban-reason { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
       .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; opacity: 0.7; }
@@ -482,6 +485,7 @@ export function renderAdminDashboardPage(options = {}) {
         var ttsSaveStatus = document.getElementById('ttsSaveStatus');
         var ttsAllVoices = [];
         var ttsCurrentConfig = { minTier: 'sound_300', availableVoices: [] };
+        var previewAudio = null;
 
         function fetchTtsConfig() {
           fetch('/api/admin/tts-config', { credentials: 'same-origin' })
@@ -526,12 +530,46 @@ export function renderAdminDashboardPage(options = {}) {
             var metaSpan = document.createElement('span');
             metaSpan.className = 'voice-meta';
             metaSpan.textContent = (v.gender && v.gender !== 'unknown') ? ' (' + v.gender + ')' : '';
+            var playBtn = document.createElement('button');
+            playBtn.type = 'button';
+            playBtn.className = 'btn-preview';
+            playBtn.textContent = '\u25B6';
+            playBtn.title = 'Preview ' + v.name;
+            playBtn.addEventListener('click', function(e) {
+              e.preventDefault();
+              e.stopPropagation();
+              playVoicePreview(v.id, playBtn);
+            });
             label.appendChild(cb);
             label.appendChild(nameSpan);
             label.appendChild(metaSpan);
+            label.appendChild(playBtn);
             ttsVoiceGrid.appendChild(label);
           });
           updateToggleLabel();
+        }
+
+        function playVoicePreview(voiceId, btn) {
+          if (previewAudio) {
+            previewAudio.pause();
+            previewAudio = null;
+            var allBtns = ttsVoiceGrid.querySelectorAll('.btn-preview');
+            allBtns.forEach(function(b) { b.classList.remove('playing'); b.textContent = '\u25B6'; });
+          }
+          btn.classList.add('playing');
+          btn.textContent = '\u23F9';
+          previewAudio = new Audio('/api/tts/preview/' + encodeURIComponent(voiceId));
+          previewAudio.play().catch(function() {});
+          previewAudio.addEventListener('ended', function() {
+            btn.classList.remove('playing');
+            btn.textContent = '\u25B6';
+            previewAudio = null;
+          });
+          previewAudio.addEventListener('error', function() {
+            btn.classList.remove('playing');
+            btn.textContent = '\u25B6';
+            previewAudio = null;
+          });
         }
 
         var ttsToggleAllBtn = document.getElementById('ttsToggleAll');

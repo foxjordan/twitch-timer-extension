@@ -259,6 +259,7 @@ function ComponentApp() {
   const [ttsValidating, setTtsValidating] = useState(false);
   const [ttsError, setTtsError] = useState(null);
   const [ttsCooldown, setTtsCooldown] = useState(false);
+  const [previewingVoice, setPreviewingVoice] = useState(null);
   const gridRef = useRef(null);
   const [canScrollUp, setCanScrollUp] = useState(false);
   const [canScrollDown, setCanScrollDown] = useState(false);
@@ -511,6 +512,35 @@ function ComponentApp() {
       });
   }
 
+  function playVoicePreview(voiceId) {
+    const currentAuth = authRef.current;
+    if (!currentAuth) return;
+    if (previewAudioRef.current) {
+      previewAudioRef.current.pause();
+      previewAudioRef.current = null;
+      setPreviewing(null);
+    }
+    if (previewingVoice === voiceId) {
+      setPreviewingVoice(null);
+      return;
+    }
+    setPreviewingVoice(voiceId);
+    const audio = new Audio();
+    audio.volume = 0.5;
+    previewAudioRef.current = audio;
+    fetch(`${EBS_BASE}/api/tts/preview/${encodeURIComponent(voiceId)}`, {
+      headers: { Authorization: `Bearer ${currentAuth.token}` },
+    })
+      .then((r) => { if (!r.ok) throw new Error(); return r.blob(); })
+      .then((blob) => {
+        const url = URL.createObjectURL(blob);
+        audio.src = url;
+        audio.onended = () => { setPreviewingVoice(null); previewAudioRef.current = null; URL.revokeObjectURL(url); };
+        return audio.play();
+      })
+      .catch(() => { setPreviewingVoice(null); previewAudioRef.current = null; });
+  }
+
   function getCost(tier) {
     const product = products.find((p) => p.sku === tier);
     if (product) return product.cost?.amount || TIER_COSTS[tier] || "?";
@@ -725,26 +755,45 @@ function ComponentApp() {
             <label style={{ fontSize: "clamp(9px, 2.4vw, 11px)", opacity: 0.7, display: "block", marginBottom: 2 }}>
               Voice
             </label>
-            <select
-              value={ttsVoice}
-              onChange={(e) => setTtsVoice(e.target.value)}
-              style={{
-                width: "100%",
-                padding: "4px 8px",
-                borderRadius: 6,
-                border: "1px solid rgba(48,48,56,0.6)",
-                background: "rgba(14,14,16,0.5)",
-                color: "#efeff1",
-                fontSize: "clamp(10px, 2.6vw, 13px)",
-                outline: "none",
-              }}
-            >
-              {(ttsConfig.voices || []).map((v) => (
-                <option key={v.id} value={v.id}>
-                  {v.name}
-                </option>
-              ))}
-            </select>
+            <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
+              <select
+                value={ttsVoice}
+                onChange={(e) => setTtsVoice(e.target.value)}
+                style={{
+                  flex: 1,
+                  padding: "4px 8px",
+                  borderRadius: 6,
+                  border: "1px solid rgba(48,48,56,0.6)",
+                  background: "rgba(14,14,16,0.5)",
+                  color: "#efeff1",
+                  fontSize: "clamp(10px, 2.6vw, 13px)",
+                  outline: "none",
+                }}
+              >
+                {(ttsConfig.voices || []).map((v) => (
+                  <option key={v.id} value={v.id}>
+                    {v.name}
+                  </option>
+                ))}
+              </select>
+              <button
+                type="button"
+                onClick={() => ttsVoice && playVoicePreview(ttsVoice)}
+                style={{
+                  background: "none",
+                  border: "1px solid rgba(48,48,56,0.6)",
+                  borderRadius: 6,
+                  padding: "3px 6px",
+                  fontSize: 11,
+                  cursor: "pointer",
+                  color: previewingVoice === ttsVoice ? "#9146ff" : "#aaa",
+                  lineHeight: 1,
+                }}
+                title="Preview voice"
+              >
+                {previewingVoice === ttsVoice ? "\u23F9" : "\u25B6"}
+              </button>
+            </div>
           </div>
 
           {/* Message input */}

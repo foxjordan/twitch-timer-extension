@@ -43,6 +43,8 @@ function ConfigApp() {
   const [ttsProActive, setTtsProActive] = useState(false);
   const [ttsMinTier, setTtsMinTier] = useState("sound_300");
   const [ttsBannedWordsText, setTtsBannedWordsText] = useState("");
+  const [previewingVoice, setPreviewingVoice] = useState(null);
+  const previewAudioRef = useRef(null);
 
   const headers = useCallback(
     () => ({
@@ -326,6 +328,34 @@ function ConfigApp() {
     } catch (e) {
       setError(e.message);
     }
+  }
+
+  function playVoicePreview(voiceId) {
+    if (previewAudioRef.current) {
+      previewAudioRef.current.pause();
+      previewAudioRef.current = null;
+    }
+    if (previewingVoice === voiceId) {
+      setPreviewingVoice(null);
+      return;
+    }
+    setPreviewingVoice(voiceId);
+    fetch(`${EBS_BASE}/api/tts/preview/${encodeURIComponent(voiceId)}`, {
+      headers: headers(),
+    })
+      .then((r) => {
+        if (!r.ok) throw new Error();
+        return r.blob();
+      })
+      .then((blob) => {
+        const url = URL.createObjectURL(blob);
+        const audio = new Audio(url);
+        previewAudioRef.current = audio;
+        audio.onended = () => { URL.revokeObjectURL(url); previewAudioRef.current = null; setPreviewingVoice(null); };
+        audio.onerror = () => { previewAudioRef.current = null; setPreviewingVoice(null); };
+        audio.play().catch(() => {});
+      })
+      .catch(() => setPreviewingVoice(null));
   }
 
   if (!auth) {
@@ -705,6 +735,14 @@ function ConfigApp() {
                     }}
                   />
                   {v.name}
+                  <button
+                    type="button"
+                    onClick={(e) => { e.preventDefault(); playVoicePreview(v.id); }}
+                    style={{ background: "none", border: "1px solid #555", borderRadius: 4, padding: "0 4px", fontSize: 10, cursor: "pointer", color: previewingVoice === v.id ? "#9146ff" : "#aaa", lineHeight: 1.4 }}
+                    title={`Preview ${v.name}`}
+                  >
+                    {previewingVoice === v.id ? "\u23F9" : "\u25B6"}
+                  </button>
                 </label>
               ))}
             </div>

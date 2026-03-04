@@ -1223,11 +1223,41 @@ export function renderSoundConfigPage(options = {}) {
             var genderSpan = document.createElement('span');
             genderSpan.style.cssText = 'font-size:11px; opacity:0.5; margin-left:2px;';
             genderSpan.textContent = (v.gender && v.gender !== 'unknown') ? '(' + v.gender + ')' : '';
+            var playBtn = document.createElement('button');
+            playBtn.type = 'button';
+            playBtn.style.cssText = 'background:none; border:1px solid var(--input-border); border-radius:4px; padding:1px 5px; font-size:11px; cursor:pointer; color:var(--text-muted); line-height:1; margin-left:auto;';
+            playBtn.textContent = '\u25B6';
+            playBtn.title = 'Preview ' + v.name;
+            playBtn.addEventListener('click', function(e) {
+              e.preventDefault();
+              e.stopPropagation();
+              playInlinePreview(v.id, playBtn);
+            });
             label.appendChild(cb);
             label.appendChild(nameSpan);
             label.appendChild(genderSpan);
+            label.appendChild(playBtn);
             ttsVoiceListEl.appendChild(label);
           });
+        }
+
+        function playInlinePreview(voiceId, btn) {
+          if (ttsPreviewAudio) { ttsPreviewAudio.pause(); ttsPreviewAudio = null; }
+          var allBtns = ttsVoiceListEl.querySelectorAll('button');
+          allBtns.forEach(function(b) { b.textContent = '\u25B6'; b.style.color = 'var(--text-muted)'; });
+          btn.textContent = '\u23F9';
+          btn.style.color = '#9146ff';
+          fetch('/api/tts/preview/' + encodeURIComponent(voiceId))
+            .then(function(r) { if (!r.ok) throw new Error(); return r.blob(); })
+            .then(function(blob) {
+              var url = URL.createObjectURL(blob);
+              ttsPreviewAudio = new Audio(url);
+              ttsPreviewAudio.volume = 0.6;
+              ttsPreviewAudio.onended = function() { URL.revokeObjectURL(url); ttsPreviewAudio = null; btn.textContent = '\u25B6'; btn.style.color = 'var(--text-muted)'; };
+              ttsPreviewAudio.onerror = function() { btn.textContent = '\u25B6'; btn.style.color = 'var(--text-muted)'; ttsPreviewAudio = null; };
+              ttsPreviewAudio.play().catch(function() {});
+            })
+            .catch(function() { btn.textContent = '\u25B6'; btn.style.color = 'var(--text-muted)'; });
         }
 
         function renderTtsTestVoiceDropdown(voices) {

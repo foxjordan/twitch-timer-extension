@@ -130,7 +130,10 @@ export function renderAdminDashboardPage(options = {}) {
         </div>
         <div style="margin-top: 16px;">
           <label style="display:block; font-size:13px; font-weight:600; margin-bottom:6px;">Available Voices for Streamers</label>
-          <div style="margin-bottom:6px; font-size:12px; color:var(--text-muted);">Unchecked voices will not appear in streamer or viewer UIs. If none are checked, all voices are available.</div>
+          <div style="margin-bottom:6px; font-size:12px; color:var(--text-muted); display:flex; align-items:center; gap:10px;">
+            <span>Unchecked voices will not appear in streamer or viewer UIs. If none are checked, all voices are available.</span>
+            <button type="button" id="ttsToggleAll" class="btn-save" style="padding:4px 10px; font-size:11px; white-space:nowrap;">Uncheck All</button>
+          </div>
           <div id="ttsVoiceGrid" class="voice-grid"></div>
         </div>
       </div>
@@ -517,6 +520,7 @@ export function renderAdminDashboardPage(options = {}) {
             cb.value = v.id;
             cb.checked = allChecked || available.includes(v.id);
             cb.dataset.voiceId = v.id;
+            cb.addEventListener('change', updateToggleLabel);
             var nameSpan = document.createElement('span');
             nameSpan.textContent = v.name;
             var metaSpan = document.createElement('span');
@@ -527,7 +531,23 @@ export function renderAdminDashboardPage(options = {}) {
             label.appendChild(metaSpan);
             ttsVoiceGrid.appendChild(label);
           });
+          updateToggleLabel();
         }
+
+        var ttsToggleAllBtn = document.getElementById('ttsToggleAll');
+        function updateToggleLabel() {
+          var cbs = ttsVoiceGrid.querySelectorAll('input[type=checkbox]');
+          var allChecked = true;
+          cbs.forEach(function(cb) { if (!cb.checked) allChecked = false; });
+          ttsToggleAllBtn.textContent = allChecked ? 'Uncheck All' : 'Check All';
+        }
+        ttsToggleAllBtn.addEventListener('click', function() {
+          var cbs = ttsVoiceGrid.querySelectorAll('input[type=checkbox]');
+          var allChecked = true;
+          cbs.forEach(function(cb) { if (!cb.checked) allChecked = false; });
+          cbs.forEach(function(cb) { cb.checked = !allChecked; });
+          updateToggleLabel();
+        });
 
         ttsSaveBtn.addEventListener('click', function() {
           ttsSaveBtn.disabled = true;

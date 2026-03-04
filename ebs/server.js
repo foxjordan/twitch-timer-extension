@@ -71,6 +71,9 @@ import { loadSoundAlerts, listSounds, getSoundSettings, setSoundSettings } from 
 import { loadBans, isBanned } from "./bans.js";
 import { loadSubscriptions } from "./subscription_store.js";
 import { mountStripeWebhookRoute, mountStripeRoutes } from "./routes_stripe.js";
+import { mountTtsRoutes } from "./routes_tts.js";
+import { loadTtsSettings, getTtsSettings } from "./tts_store.js";
+import { loadVoices } from "./tts_voices.js";
 
 const app = express();
 // honor X-Forwarded-* so req.protocol resolves to https behind Fly
@@ -231,6 +234,8 @@ loadGoals().catch(() => {});
 loadSoundAlerts().catch(() => {});
 loadBans().catch(() => {});
 loadSubscriptions().catch(() => {});
+loadTtsSettings().catch(() => {});
+loadVoices().catch(() => {});
 
 // ===== Per-user settings (persisted) =====
 const DATA_DIR = process.env.DATA_DIR || process.cwd();
@@ -812,6 +817,69 @@ mountSoundRoutes(app, {
   },
   deduplicateTx: (txId) => {
     const key = `soundtx:${txId}`;
+    if (state.seen.has(key)) return true;
+    state.seen.set(key, Date.now() + 24 * 3600 * 1000);
+    return false;
+  },
+});
+
+mountTtsRoutes(app, {
+  requireOverlayAuth,
+  getSessionUserId: (req) => req.session?.twitchUser?.id,
+  getUserIdForKey,
+  onTtsAlert: ({ channelId, message, voiceName, fileId, volume, txId, viewerUserId, tier }) => {
+    addLogEntry({
+      type: "tts_alert",
+      userId: String(channelId),
+      message,
+      voiceName,
+      viewerUserId: viewerUserId || undefined,
+      txId: txId || undefined,
+    });
+    const payload = JSON.stringify({
+      type: "tts",
+      message,
+      voiceName,
+      channelId,
+      txId,
+      audioUrl: `/api/tts/audio/${fileId}`,
+      volume: volume || 80,
+      ts: Date.now(),
+    });
+    for (const client of Array.from(sseClients)) {
+      if (
+        client.timerUserId &&
+        String(client.timerUserId) !== String(channelId)
+      )
+        continue;
+      try {
+        client.res.write("event: tts_alert\n");
+        client.res.write(`data: ${payload}\n\n`);
+      } catch (e) {
+        sseClients.delete(client);
+      }
+    }
+    broadcastToChannel({
+      broadcasterId: channelId,
+      type: "tts_alert",
+      payload: { message, voiceName },
+    }).catch(() => {});
+
+    // Post to chat (async, best-effort)
+    if (viewerUserId && tier) {
+      const bits = tier.replace("sound_", "");
+      (async () => {
+        const displayName = await fetchUserDisplayName(viewerUserId);
+        const who = displayName || `User ${viewerUserId}`;
+        await sendExtensionChatMessage({
+          broadcasterId: channelId,
+          text: `${who} sent a TTS message for ${bits} Bits!`,
+        });
+      })().catch(() => {});
+    }
+  },
+  deduplicateTx: (txId) => {
+    const key = `ttstx:${txId}`;
     if (state.seen.has(key)) return true;
     state.seen.set(key, Date.now() + 24 * 3600 * 1000);
     return false;

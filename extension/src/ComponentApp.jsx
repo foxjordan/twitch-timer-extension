@@ -245,11 +245,20 @@ function ComponentApp() {
   const [soundsEnabled, setSoundsEnabled] = useState(false);
   const [bitsEnabled, setBitsEnabled] = useState(false);
   const [products, setProducts] = useState([]);
-  const pendingSoundRef = useRef(null);
+  const pendingRef = useRef(null); // { type: "sound"|"tts", ...data }
   const [cooldowns, setCooldowns] = useState({});
   const [lastPlayed, setLastPlayed] = useState(null);
   const [previewing, setPreviewing] = useState(null);
   const previewAudioRef = useRef(null);
+
+  // TTS state
+  const [activeTab, setActiveTab] = useState("sounds");
+  const [ttsConfig, setTtsConfig] = useState(null);
+  const [ttsVoice, setTtsVoice] = useState("");
+  const [ttsMessage, setTtsMessage] = useState("");
+  const [ttsValidating, setTtsValidating] = useState(false);
+  const [ttsError, setTtsError] = useState(null);
+  const [ttsCooldown, setTtsCooldown] = useState(false);
   const gridRef = useRef(null);
   const [canScrollUp, setCanScrollUp] = useState(false);
   const [canScrollDown, setCanScrollDown] = useState(false);
@@ -303,12 +312,51 @@ function ComponentApp() {
       });
 
       fetchSounds(authData.token, authData.channelId);
+
+      // Fetch TTS public config
+      fetch(`${EBS_BASE}/api/tts/public?channelId=${authData.channelId}`, {
+        headers: { Authorization: `Bearer ${authData.token}` },
+      })
+        .then((r) => r.json())
+        .then((data) => {
+          if (data.enabled) {
+            setTtsConfig(data);
+            if (data.voices?.length > 0) setTtsVoice(data.voices[0].id);
+          }
+        })
+        .catch(() => {});
     });
 
     window.Twitch?.ext?.bits?.onTransactionComplete?.((tx) => {
-      const pending = pendingSoundRef.current;
+      const pending = pendingRef.current;
       const currentAuth = authRef.current;
-      if (pending && currentAuth) {
+      if (!pending || !currentAuth) return;
+      pendingRef.current = null;
+
+      if (pending.type === "tts") {
+        fetch(`${EBS_BASE}/api/tts/redeem`, {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${currentAuth.token}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            receipt: tx.transactionReceipt,
+            approvalToken: pending.approvalToken,
+            channelId: currentAuth.channelId,
+          }),
+        })
+          .then(() => {
+            logEvent("tts_redeemed", { voice: pending.voiceId });
+            setTtsMessage("");
+            setTtsError(null);
+            setLastPlayed("TTS Message");
+            setTimeout(() => setLastPlayed(null), 3000);
+            setTtsCooldown(true);
+            setTimeout(() => setTtsCooldown(false), pending.cooldownMs || 10000);
+          })
+          .catch(() => setTtsError("TTS redemption failed"));
+      } else {
         fetch(`${EBS_BASE}/api/sounds/redeem`, {
           method: "POST",
           headers: {
@@ -334,12 +382,11 @@ function ComponentApp() {
             setTimeout(() => setLastPlayed(null), 3000);
           })
           .catch(() => {});
-        pendingSoundRef.current = null;
       }
     });
 
     window.Twitch?.ext?.bits?.onTransactionCancelled?.(() => {
-      pendingSoundRef.current = null;
+      pendingRef.current = null;
     });
 
     window.Twitch?.ext?.listen?.("broadcast", (_t, _c, message) => {
@@ -349,18 +396,69 @@ function ComponentApp() {
           setLastPlayed(data.payload.soundName || "Sound");
           setTimeout(() => setLastPlayed(null), 3000);
         }
+        if (data.type === "tts_alert") {
+          setLastPlayed("TTS: " + (data.payload.voiceName || "Message"));
+          setTimeout(() => setLastPlayed(null), 3000);
+        }
       } catch {}
     });
   }, [fetchSounds]);
 
   function handleSoundClick(sound) {
     if (!bitsEnabled) return;
-    pendingSoundRef.current = sound;
+    pendingRef.current = { type: "sound", ...sound };
     logEvent("sound_redeem_started", {
       sound_name: sound.name,
       tier: sound.tier,
     });
     window.Twitch.ext.bits.useBits(sound.tier);
+  }
+
+  async function handleTtsSubmit() {
+    if (!bitsEnabled || !ttsConfig || ttsCooldown) return;
+    const currentAuth = authRef.current;
+    if (!currentAuth) return;
+
+    const trimmed = ttsMessage.trim();
+    if (!trimmed || !ttsVoice) return;
+
+    setTtsValidating(true);
+    setTtsError(null);
+
+    try {
+      const res = await fetch(`${EBS_BASE}/api/tts/validate`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${currentAuth.token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          message: trimmed,
+          voiceId: ttsVoice,
+          channelId: currentAuth.channelId,
+        }),
+      });
+      const data = await res.json();
+
+      if (!data.approved) {
+        setTtsError(data.reason || "Message was not approved");
+        setTtsValidating(false);
+        return;
+      }
+
+      pendingRef.current = {
+        type: "tts",
+        approvalToken: data.approvalToken,
+        voiceId: ttsVoice,
+        cooldownMs: ttsConfig.cooldownMs || 10000,
+      };
+      logEvent("tts_redeem_started", { voice: ttsVoice });
+      window.Twitch.ext.bits.useBits(ttsConfig.tier);
+    } catch {
+      setTtsError("Failed to validate message");
+    } finally {
+      setTtsValidating(false);
+    }
   }
 
   function handlePreview(e, sound) {
@@ -433,15 +531,18 @@ function ComponentApp() {
     );
   }
 
-  // No sounds or disabled
-  if (!soundsEnabled || sounds.length === 0) {
+  const hasSounds = soundsEnabled && sounds.length > 0;
+  const hasTts = ttsConfig?.enabled;
+
+  // No sounds or TTS
+  if (!hasSounds && !hasTts) {
     return (
       <div style={containerStyle}>
         <div style={headerStyle}>
           <span style={{ display: "flex", alignItems: "center", gap: 6 }}><img src="./alert_wave.png" alt="" style={{ height: 18, width: 18 }} />Sound Alerts</span>
         </div>
         <div style={{ padding: 12, textAlign: "center", opacity: 0.5 }}>
-          No sound alerts available
+          No alerts available
         </div>
       </div>
     );
@@ -451,34 +552,80 @@ function ComponentApp() {
     <div style={containerStyle}>
       {/* Header with scroll buttons */}
       <div style={headerStyle}>
-        <span style={{ display: "flex", alignItems: "center", gap: 6 }}><img src="./alert_wave.png" alt="" style={{ height: 18, width: 18 }} />Sound Alerts</span>
-        <div style={{ display: "flex", gap: 2 }}>
+        <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
+          <img src="./alert_wave.png" alt="" style={{ height: 18, width: 18 }} />
+          {(hasTts && (!hasSounds || activeTab === "tts")) ? "Text-to-Speech" : "Sound Alerts"}
+        </span>
+        {/* Only show scroll buttons on sounds tab */}
+        {(!hasTts || activeTab === "sounds") && (
+          <div style={{ display: "flex", gap: 2 }}>
+            <button
+              onClick={() => scrollBy(-150)}
+              disabled={!canScrollUp}
+              style={{
+                ...scrollBtnStyle,
+                opacity: canScrollUp ? 0.8 : 0.2,
+                cursor: canScrollUp ? "pointer" : "default",
+              }}
+              aria-label="Scroll up"
+            >
+              <ChevronUp />
+            </button>
+            <button
+              onClick={() => scrollBy(150)}
+              disabled={!canScrollDown}
+              style={{
+                ...scrollBtnStyle,
+                opacity: canScrollDown ? 0.8 : 0.2,
+                cursor: canScrollDown ? "pointer" : "default",
+              }}
+              aria-label="Scroll down"
+            >
+              <ChevronDown />
+            </button>
+          </div>
+        )}
+      </div>
+
+      {/* Tab bar (only show if both sounds and TTS are available) */}
+      {hasSounds && hasTts && (
+        <div style={{ display: "flex", gap: 4, margin: "0 10px 6px" }}>
           <button
-            onClick={() => scrollBy(-150)}
-            disabled={!canScrollUp}
+            onClick={() => setActiveTab("sounds")}
             style={{
-              ...scrollBtnStyle,
-              opacity: canScrollUp ? 0.8 : 0.2,
-              cursor: canScrollUp ? "pointer" : "default",
+              flex: 1,
+              padding: "4px 0",
+              borderRadius: 6,
+              border: "none",
+              fontSize: "clamp(10px, 2.6vw, 13px)",
+              fontWeight: 600,
+              cursor: "pointer",
+              background: activeTab === "sounds" ? "#9146FF" : "rgba(48,48,56,0.8)",
+              color: "#fff",
+              opacity: activeTab === "sounds" ? 1 : 0.7,
             }}
-            aria-label="Scroll up"
           >
-            <ChevronUp />
+            Sounds
           </button>
           <button
-            onClick={() => scrollBy(150)}
-            disabled={!canScrollDown}
+            onClick={() => setActiveTab("tts")}
             style={{
-              ...scrollBtnStyle,
-              opacity: canScrollDown ? 0.8 : 0.2,
-              cursor: canScrollDown ? "pointer" : "default",
+              flex: 1,
+              padding: "4px 0",
+              borderRadius: 6,
+              border: "none",
+              fontSize: "clamp(10px, 2.6vw, 13px)",
+              fontWeight: 600,
+              cursor: "pointer",
+              background: activeTab === "tts" ? "#9146FF" : "rgba(48,48,56,0.8)",
+              color: "#fff",
+              opacity: activeTab === "tts" ? 1 : 0.7,
             }}
-            aria-label="Scroll down"
           >
-            <ChevronDown />
+            TTS
           </button>
         </div>
-      </div>
+      )}
 
       {/* Now playing banner */}
       {lastPlayed && (
@@ -504,54 +651,168 @@ function ComponentApp() {
         </div>
       )}
 
-      {/* Scrollable card grid */}
-      <div
-        ref={gridRef}
-        onScroll={checkScroll}
-        onLoad={checkScroll}
-        style={{
-          flex: 1,
-          overflowY: "auto",
-          overflowX: "hidden",
-          padding: "0 10px 10px",
-          /* Hide scrollbar but keep functionality for touch/programmatic scroll */
-          scrollbarWidth: "none",
-          msOverflowStyle: "none",
-        }}
-      >
+      {/* Sounds tab — scrollable card grid */}
+      {hasSounds && (!hasTts || activeTab === "sounds") && (
         <div
+          ref={gridRef}
+          onScroll={checkScroll}
+          onLoad={checkScroll}
           style={{
-            display: "grid",
-            gridTemplateColumns:
-              "repeat(auto-fill, minmax(min(80px, 30%), 1fr))",
-            gap: "clamp(4px, 1.5vw, 8px)",
+            flex: 1,
+            overflowY: "auto",
+            overflowX: "hidden",
+            padding: "0 10px 10px",
+            scrollbarWidth: "none",
+            msOverflowStyle: "none",
           }}
         >
-          {sounds.map((sound) => {
-            const onCooldown =
-              cooldowns[sound.id] && Date.now() < cooldowns[sound.id];
-            const disabled = !bitsEnabled || onCooldown;
-            return (
-              <SoundCard
-                key={sound.id}
-                sound={sound}
-                auth={auth}
-                disabled={disabled}
-                onBuy={handleSoundClick}
-                onPreview={handlePreview}
-                isPreviewPlaying={previewing === sound.id}
-                getCost={getCost}
-              />
-            );
-          })}
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns:
+                "repeat(auto-fill, minmax(min(80px, 30%), 1fr))",
+              gap: "clamp(4px, 1.5vw, 8px)",
+            }}
+          >
+            {sounds.map((sound) => {
+              const onCooldown =
+                cooldowns[sound.id] && Date.now() < cooldowns[sound.id];
+              const disabled = !bitsEnabled || onCooldown;
+              return (
+                <SoundCard
+                  key={sound.id}
+                  sound={sound}
+                  auth={auth}
+                  disabled={disabled}
+                  onBuy={handleSoundClick}
+                  onPreview={handlePreview}
+                  isPreviewPlaying={previewing === sound.id}
+                  getCost={getCost}
+                />
+              );
+            })}
+          </div>
+          {/* Sentinel to trigger initial scroll check */}
+          <div
+            ref={(el) => {
+              if (el) setTimeout(checkScroll, 100);
+            }}
+          />
         </div>
-        {/* Sentinel to trigger initial scroll check */}
-        <div
-          ref={(el) => {
-            if (el) setTimeout(checkScroll, 100);
-          }}
-        />
-      </div>
+      )}
+
+      {/* TTS tab */}
+      {hasTts && (!hasSounds || activeTab === "tts") && (
+        <div style={{ flex: 1, overflowY: "auto", padding: "0 10px 10px", scrollbarWidth: "none", msOverflowStyle: "none" }}>
+          {ttsError && (
+            <div
+              style={{
+                padding: "4px 8px",
+                borderRadius: 6,
+                background: "#c0392b22",
+                border: "1px solid #c0392b44",
+                fontSize: "clamp(9px, 2.4vw, 12px)",
+                marginBottom: 6,
+                color: "#e74c3c",
+              }}
+            >
+              {ttsError}
+            </div>
+          )}
+
+          {/* Voice selector */}
+          <div style={{ marginBottom: 6 }}>
+            <label style={{ fontSize: "clamp(9px, 2.4vw, 11px)", opacity: 0.7, display: "block", marginBottom: 2 }}>
+              Voice
+            </label>
+            <select
+              value={ttsVoice}
+              onChange={(e) => setTtsVoice(e.target.value)}
+              style={{
+                width: "100%",
+                padding: "4px 8px",
+                borderRadius: 6,
+                border: "1px solid rgba(48,48,56,0.6)",
+                background: "rgba(14,14,16,0.5)",
+                color: "#efeff1",
+                fontSize: "clamp(10px, 2.6vw, 13px)",
+                outline: "none",
+              }}
+            >
+              {(ttsConfig.voices || []).map((v) => (
+                <option key={v.id} value={v.id}>
+                  {v.name}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Message input */}
+          <div style={{ marginBottom: 6 }}>
+            <label style={{ fontSize: "clamp(9px, 2.4vw, 11px)", opacity: 0.7, display: "block", marginBottom: 2 }}>
+              Message ({ttsMessage.length}/{ttsConfig.maxMessageLength || 300})
+            </label>
+            <textarea
+              value={ttsMessage}
+              onChange={(e) => setTtsMessage(e.target.value.slice(0, (ttsConfig.maxMessageLength || 300)))}
+              maxLength={ttsConfig.maxMessageLength || 300}
+              rows={2}
+              placeholder="Type your message..."
+              style={{
+                width: "100%",
+                padding: "4px 8px",
+                borderRadius: 6,
+                border: "1px solid rgba(48,48,56,0.6)",
+                background: "rgba(14,14,16,0.5)",
+                color: "#efeff1",
+                fontSize: "clamp(10px, 2.6vw, 13px)",
+                outline: "none",
+                resize: "vertical",
+                fontFamily: "inherit",
+              }}
+            />
+          </div>
+
+          {/* Submit button */}
+          <button
+            onClick={handleTtsSubmit}
+            disabled={!bitsEnabled || ttsValidating || ttsCooldown || !ttsMessage.trim()}
+            style={{
+              width: "100%",
+              padding: "6px 0",
+              borderRadius: 6,
+              border: "none",
+              background: ttsValidating || ttsCooldown ? "#555" : "#9146FF",
+              color: "#fff",
+              fontSize: "clamp(10px, 2.8vw, 14px)",
+              fontWeight: 600,
+              cursor: ttsValidating || ttsCooldown ? "not-allowed" : "pointer",
+              opacity: !bitsEnabled || !ttsMessage.trim() ? 0.5 : 1,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: 4,
+            }}
+          >
+            <span
+              style={{
+                width: "clamp(6px, 2vw, 10px)",
+                height: "clamp(6px, 2vw, 10px)",
+                borderRadius: "50%",
+                background: "linear-gradient(135deg, #9146FF, #772CE8)",
+                border: "1px solid rgba(255,255,255,0.3)",
+                display: "inline-block",
+                flexShrink: 0,
+              }}
+            />
+            {ttsValidating
+              ? "Checking..."
+              : ttsCooldown
+                ? "Cooldown..."
+                : `Send TTS - ${getCost(ttsConfig.tier)} Bits`}
+          </button>
+        </div>
+      )}
 
       <style>{`::-webkit-scrollbar { display: none; }`}</style>
     </div>

@@ -1,6 +1,7 @@
 import { renderAdminDashboardPage } from "./views/adminDashboardPage.js";
 import { getBan, banUser, unbanUser } from "./bans.js";
 import { getSubscription, isPro } from "./subscription_store.js";
+import { getTtsSettings, setTtsSettings } from "./tts_store.js";
 
 const SUPER_ADMIN_IDS = (process.env.SUPER_ADMIN_IDS || "")
   .split(",")
@@ -81,6 +82,12 @@ export function mountAdminRoutes(app, ctx) {
         videoClipsEnabled = soundSettings.videoClipsEnabled || false;
       } catch {}
 
+      // TTS
+      let ttsEnabled = false;
+      try {
+        ttsEnabled = getTtsSettings(uid).enabled || false;
+      } catch {}
+
       // Goals
       let goalCount = 0;
       try {
@@ -114,6 +121,7 @@ export function mountAdminRoutes(app, ctx) {
         soundCount,
         soundsEnabled,
         videoClipsEnabled,
+        ttsEnabled,
         goalCount,
         hasCustomStyle,
         defaultInitialSeconds: settings.defaultInitialSeconds || null,
@@ -205,5 +213,19 @@ export function mountAdminRoutes(app, ctx) {
     setSoundSettings(uid, { videoClipsEnabled: Boolean(enabled) });
 
     res.json({ ok: true, userId: uid, videoClipsEnabled: Boolean(enabled) });
+  });
+
+  // Toggle TTS feature for a user
+  app.post("/api/admin/toggle-tts", (req, res) => {
+    if (!req.session?.isAdmin || !isSuperAdmin(req)) {
+      return res.status(403).json({ error: "Access denied" });
+    }
+    const { userId, enabled } = req.body || {};
+    if (!userId) return res.status(400).json({ error: "userId required" });
+
+    const uid = String(userId);
+    setTtsSettings(uid, { enabled: Boolean(enabled) });
+
+    res.json({ ok: true, userId: uid, ttsEnabled: Boolean(enabled) });
   });
 }

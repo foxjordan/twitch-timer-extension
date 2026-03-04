@@ -16,7 +16,8 @@
       "Bash(zip -r ../dist.zip . -x '.*' '__MACOSX/*')",
       "Bash(zip -r ../dist.zip . -x \".*\")",
       "Bash(zip -r ../dist.zip .)",
-      "WebFetch(domain:driverjs.com)"
+      "WebFetch(domain:driverjs.com)",
+      "WebFetch(domain:docs.inworld.ai)"
     ]
   }
 }

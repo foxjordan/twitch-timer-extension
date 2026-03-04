@@ -287,6 +287,7 @@ export function renderAdminDashboardPage(options = {}) {
             }
             addPill('Sounds: ' + (u.soundCount || 0), u.soundsEnabled);
             addPill('Video/Clips', u.videoClipsEnabled);
+            addPill('TTS', u.ttsEnabled);
             addPill(u.isPro ? 'Pro' : (u.subscriptionStatus || 'Free'), u.isPro);
             addPill('Goals: ' + (u.goalCount || 0), u.goalCount > 0);
             addPill('Style', u.hasCustomStyle);
@@ -326,6 +327,13 @@ export function renderAdminDashboardPage(options = {}) {
             vcBtn.style.marginLeft = '4px';
             vcBtn.addEventListener('click', function() { toggleVideoClips(u.userId, !u.videoClipsEnabled); });
             tdActions.appendChild(vcBtn);
+            // TTS toggle
+            var ttsBtn = document.createElement('button');
+            ttsBtn.className = u.ttsEnabled ? 'btn-ban' : 'btn-unban';
+            ttsBtn.textContent = u.ttsEnabled ? 'Disable TTS' : 'Enable TTS';
+            ttsBtn.style.marginLeft = '4px';
+            ttsBtn.addEventListener('click', function() { toggleTts(u.userId, !u.ttsEnabled); });
+            tdActions.appendChild(ttsBtn);
             if (u.stripeCustomerId) {
               var stripeLink = document.createElement('a');
               stripeLink.href = 'https://dashboard.stripe.com/customers/' + u.stripeCustomerId;
@@ -400,6 +408,23 @@ export function renderAdminDashboardPage(options = {}) {
           var action = enabled ? 'Enable' : 'Disable';
           if (!confirm(action + ' video/clip alerts for user ' + userId + '?')) return;
           fetch('/api/admin/toggle-video-clips', {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ userId: userId, enabled: enabled })
+          })
+          .then(function(r) { return r.json(); })
+          .then(function(data) {
+            if (data.error) { alert('Error: ' + data.error); return; }
+            refresh();
+          })
+          .catch(function() { alert('Toggle request failed'); });
+        }
+
+        function toggleTts(userId, enabled) {
+          var action = enabled ? 'Enable' : 'Disable';
+          if (!confirm(action + ' TTS alerts for user ' + userId + '?')) return;
+          fetch('/api/admin/toggle-tts', {
             method: 'POST',
             credentials: 'same-origin',
             headers: { 'Content-Type': 'application/json' },

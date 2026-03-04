@@ -6,6 +6,14 @@ const EBS_BASE = import.meta.env.VITE_EBS_BASE || "https://livestreamerhub.com";
 
 import { TIER_LABELS, DEFAULT_TIER } from "./tiers.js";
 
+// TTS tiers: minimum 300 Bits
+const TTS_TIERS = Object.entries(TIER_LABELS)
+  .filter(([sku]) => {
+    const bits = parseInt(sku.replace("sound_", ""), 10);
+    return bits >= 300;
+  })
+  .map(([sku, label]) => ({ sku, label }));
+
 function ConfigApp() {
   const [auth, setAuth] = useState(null);
   const [sounds, setSounds] = useState([]);
@@ -30,6 +38,10 @@ function ConfigApp() {
   const [clipUrl, setClipUrl] = useState("");
   const [overlayUrl, setOverlayUrl] = useState(null);
   const [urlCopied, setUrlCopied] = useState(false);
+  const [ttsSettings, setTtsSettings] = useState(null);
+  const [ttsVoices, setTtsVoices] = useState([]);
+  const [ttsProActive, setTtsProActive] = useState(false);
+  const [ttsBannedWordsText, setTtsBannedWordsText] = useState("");
 
   const headers = useCallback(
     () => ({
@@ -71,6 +83,21 @@ function ConfigApp() {
         .then((r) => r.json())
         .then((data) => {
           if (data.url) setOverlayUrl(data.url);
+        })
+        .catch(() => {});
+
+      // Fetch TTS settings
+      fetch(`${EBS_BASE}/api/tts/settings`, {
+        headers: { Authorization: `Bearer ${authData.token}` },
+      })
+        .then((r) => r.json())
+        .then((data) => {
+          if (data.settings) {
+            setTtsSettings(data.settings);
+            setTtsBannedWordsText((data.settings.bannedWords || []).join("\n"));
+          }
+          if (data.voices) setTtsVoices(data.voices);
+          if (typeof data.proActive === "boolean") setTtsProActive(data.proActive);
         })
         .catch(() => {});
     });
@@ -252,6 +279,48 @@ function ConfigApp() {
       setSettings(data.settings);
       logEvent("settings_updated", patch);
       flash("Settings saved");
+    } catch (e) {
+      setError(e.message);
+    }
+  }
+
+  async function handleTtsSettingsUpdate(patch) {
+    setError(null);
+    try {
+      const res = await fetch(`${EBS_BASE}/api/tts/settings`, {
+        method: "POST",
+        headers: { ...headers(), "Content-Type": "application/json" },
+        body: JSON.stringify(patch),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error || "TTS settings update failed");
+      }
+      const data = await res.json();
+      setTtsSettings(data.settings);
+      logEvent("tts_settings_updated", patch);
+      flash("TTS settings saved");
+    } catch (e) {
+      setError(e.message);
+    }
+  }
+
+  async function handleTtsTest() {
+    if (!ttsSettings) return;
+    setError(null);
+    const voice = ttsSettings.allowedVoices?.[0];
+    if (!voice) return setError("No voices selected");
+    try {
+      const res = await fetch(`${EBS_BASE}/api/tts/test`, {
+        method: "POST",
+        headers: { ...headers(), "Content-Type": "application/json" },
+        body: JSON.stringify({ message: "This is a test of text to speech.", voiceId: voice }),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error || "TTS test failed");
+      }
+      flash("TTS test sent to overlay");
     } catch (e) {
       setError(e.message);
     }
@@ -580,6 +649,146 @@ function ConfigApp() {
           />
         ))}
       </div>
+
+      {/* TTS Settings */}
+      {ttsSettings && (
+        <div style={styles.card}>
+          <h3 style={styles.subHeading}>Text-to-Speech</h3>
+          {!ttsProActive && !ttsSettings.enabled && (
+            <div style={{ fontSize: 11, opacity: 0.5, marginBottom: 8 }}>
+              TTS alerts require a Pro plan or admin grant.
+            </div>
+          )}
+          <label style={styles.row}>
+            <span>Enabled</span>
+            <input
+              type="checkbox"
+              checked={ttsSettings.enabled}
+              disabled={!ttsProActive && !ttsSettings.enabled}
+              onChange={(e) =>
+                handleTtsSettingsUpdate({ enabled: e.target.checked })
+              }
+            />
+          </label>
+          <label style={styles.row}>
+            <span>Bits Cost</span>
+            <select
+              value={ttsSettings.tier}
+              onChange={(e) => handleTtsSettingsUpdate({ tier: e.target.value })}
+              style={styles.select}
+            >
+              {TTS_TIERS.map((t) => (
+                <option key={t.sku} value={t.sku}>
+                  {t.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <div style={{ marginBottom: 8 }}>
+            <div style={{ fontSize: 13, marginBottom: 4 }}>Allowed Voices</div>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+              {ttsVoices.map((v) => (
+                <label
+                  key={v.id}
+                  style={{ fontSize: 12, display: "flex", alignItems: "center", gap: 4 }}
+                >
+                  <input
+                    type="checkbox"
+                    checked={ttsSettings.allowedVoices.includes(v.id)}
+                    onChange={(e) => {
+                      const next = e.target.checked
+                        ? [...ttsSettings.allowedVoices, v.id]
+                        : ttsSettings.allowedVoices.filter((x) => x !== v.id);
+                      if (next.length > 0) handleTtsSettingsUpdate({ allowedVoices: next });
+                    }}
+                  />
+                  {v.name}
+                </label>
+              ))}
+            </div>
+          </div>
+          <label style={{ display: "block", marginBottom: 8 }}>
+            <div style={{ fontSize: 13, marginBottom: 4 }}>Banned Words (one per line)</div>
+            <textarea
+              value={ttsBannedWordsText}
+              onChange={(e) => setTtsBannedWordsText(e.target.value)}
+              onBlur={() => {
+                const words = ttsBannedWordsText
+                  .split("\n")
+                  .map((w) => w.trim())
+                  .filter(Boolean);
+                handleTtsSettingsUpdate({ bannedWords: words });
+              }}
+              rows={3}
+              style={{ ...styles.textInput, resize: "vertical" }}
+              placeholder="badword1&#10;badword2"
+            />
+          </label>
+          <label style={styles.row}>
+            <span>Content Moderation</span>
+            <input
+              type="checkbox"
+              checked={ttsSettings.moderationEnabled}
+              onChange={(e) =>
+                handleTtsSettingsUpdate({ moderationEnabled: e.target.checked })
+              }
+            />
+          </label>
+          {!ttsSettings.moderationEnabled && (
+            <div style={{ fontSize: 11, color: "#e67e22", marginBottom: 6, marginTop: -4 }}>
+              Disabling moderation may allow offensive messages. Banned words are still checked.
+            </div>
+          )}
+          <label style={styles.row}>
+            <span>Volume</span>
+            <input
+              type="range"
+              min="0"
+              max="100"
+              value={ttsSettings.volume}
+              onChange={(e) =>
+                handleTtsSettingsUpdate({ volume: Number(e.target.value) })
+              }
+              style={{ width: 120 }}
+            />
+            <span style={styles.muted}>{ttsSettings.volume}%</span>
+          </label>
+          <label style={styles.row}>
+            <span>Cooldown (sec)</span>
+            <input
+              type="number"
+              min="0"
+              max="120"
+              value={Math.round(ttsSettings.cooldownMs / 1000)}
+              onChange={(e) =>
+                handleTtsSettingsUpdate({
+                  cooldownMs: Number(e.target.value) * 1000,
+                })
+              }
+              style={styles.numberInput}
+            />
+          </label>
+          <label style={styles.row}>
+            <span>Max Message Length</span>
+            <input
+              type="number"
+              min="1"
+              max="300"
+              value={ttsSettings.maxMessageLength}
+              onChange={(e) =>
+                handleTtsSettingsUpdate({ maxMessageLength: Number(e.target.value) })
+              }
+              style={styles.numberInput}
+            />
+          </label>
+          <button
+            style={{ ...styles.btn, marginTop: 8 }}
+            onClick={handleTtsTest}
+          >
+            Test TTS
+          </button>
+        </div>
+      )}
 
       {/* OBS Overlay URL */}
       {overlayUrl && (

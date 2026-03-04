@@ -98,6 +98,16 @@ export function renderSoundAlertOverlayPage() {
         from { transform: translate(-50%, -50%) scale(0.9); opacity: 0; }
         to   { transform: translate(-50%, -50%) scale(1); opacity: 1; }
       }
+      /* TTS message popup */
+      .tts-message {
+        font-size: 13px;
+        font-weight: 400;
+        opacity: 0.85;
+        margin-top: 4px;
+        line-height: 1.4;
+        max-width: 300px;
+        word-wrap: break-word;
+      }
     </style>
   </head>
   <body>
@@ -131,7 +141,9 @@ export function renderSoundAlertOverlayPage() {
           var item = alertQueue.shift();
           var type = item.type || 'sound';
 
-          if (type === 'clip') {
+          if (type === 'tts') {
+            playTts(item);
+          } else if (type === 'clip') {
             playClip(item);
           } else if (type === 'video') {
             playVideo(item);
@@ -225,6 +237,55 @@ export function renderSoundAlertOverlayPage() {
           video.play().catch(function() { container.remove(); advance(); });
         }
 
+        function playTts(item) {
+          showTtsPopup(item.voiceName || 'TTS', item.message || '');
+          var vol = Math.min(1, Math.max(0, (item.volume || 100) / 100));
+          var audioUrl = item.audioUrl + '?key=' + encodeURIComponent(overlayKey);
+          var audio = new Audio(audioUrl);
+          audio.volume = vol;
+          audio.onended = advance;
+          audio.onerror = advance;
+          audio.play().catch(advance);
+        }
+
+        function showTtsPopup(voiceName, message) {
+          var el = document.createElement('div');
+          el.className = 'alert-popup';
+
+          var icon = document.createElement('div');
+          icon.className = 'alert-icon';
+          icon.textContent = '\\u{1F5E3}';
+          el.appendChild(icon);
+
+          var textWrap = document.createElement('div');
+          var nameEl = document.createElement('div');
+          nameEl.className = 'alert-text';
+          nameEl.textContent = voiceName;
+          textWrap.appendChild(nameEl);
+
+          var subEl = document.createElement('div');
+          subEl.className = 'alert-sub';
+          subEl.textContent = 'TTS Alert';
+          textWrap.appendChild(subEl);
+
+          if (message) {
+            var msgEl = document.createElement('div');
+            msgEl.className = 'tts-message';
+            msgEl.textContent = message;
+            textWrap.appendChild(msgEl);
+          }
+
+          el.appendChild(textWrap);
+          alertsEl.appendChild(el);
+
+          // TTS popups stay longer to account for audio length
+          var ttsDuration = Math.max(displayMs, 8000);
+          setTimeout(function() {
+            el.classList.add('exit');
+            setTimeout(function() { el.remove(); }, 350);
+          }, ttsDuration);
+        }
+
         function showPopup(name, type) {
           var el = document.createElement('div');
           el.className = 'alert-popup';
@@ -278,6 +339,17 @@ export function renderSoundAlertOverlayPage() {
               var data = JSON.parse(ev.data);
               if (!data.soundId || !data.soundName) return;
               if (alertQueue.length >= maxQueue) return;
+              alertQueue.push(data);
+              playNext();
+            } catch (e) {}
+          });
+
+          es.addEventListener('tts_alert', function(ev) {
+            try {
+              var data = JSON.parse(ev.data);
+              if (!data.audioUrl) return;
+              if (alertQueue.length >= maxQueue) return;
+              data.type = 'tts';
               alertQueue.push(data);
               playNext();
             } catch (e) {}

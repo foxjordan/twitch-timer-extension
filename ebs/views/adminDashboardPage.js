@@ -48,6 +48,18 @@ export function renderAdminDashboardPage(options = {}) {
       .btn-ban:hover { background: #b91c1c; }
       .btn-unban { background: #16a34a; color: #fff; border: none; padding: 4px 10px; border-radius: 6px; font-size: 12px; cursor: pointer; font-weight: 600; }
       .btn-unban:hover { background: #15803d; }
+      .btn-save { background: #9146ff; color: #fff; border: none; padding: 8px 18px; border-radius: 8px; font-size: 13px; cursor: pointer; font-weight: 600; }
+      .btn-save:hover { background: #7c3aed; }
+      .btn-save:disabled { opacity: 0.5; cursor: not-allowed; }
+      .tts-config-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+      @media (max-width: 700px) { .tts-config-grid { grid-template-columns: 1fr; } }
+      .tts-config-grid label { display: block; font-size: 13px; font-weight: 600; margin-bottom: 6px; }
+      .tts-config-grid select { width: 100%; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--surface-border); background: var(--surface-muted); color: var(--text-color); font-size: 13px; }
+      .voice-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 6px; max-height: 300px; overflow-y: auto; padding: 8px; background: var(--surface-muted); border-radius: 8px; }
+      .voice-item { display: flex; align-items: center; gap: 6px; font-size: 13px; padding: 4px 0; }
+      .voice-item input { margin: 0; }
+      .voice-meta { font-size: 11px; color: var(--text-muted); }
+      .tts-status { font-size: 12px; margin-top: 8px; padding: 6px 10px; border-radius: 6px; }
       .ban-reason { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
       .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; opacity: 0.7; }
       .empty-state { text-align: center; padding: 40px 20px; color: var(--text-muted); }
@@ -101,6 +113,25 @@ export function renderAdminDashboardPage(options = {}) {
         <h2>Server Health</h2>
         <div id="serverHealth" class="server-health-grid">
           <div class="empty-state">Loading...</div>
+        </div>
+      </div>
+
+      <div class="table-card" style="margin-bottom: 18px;">
+        <h2>TTS Configuration</h2>
+        <div class="tts-config-grid">
+          <div>
+            <label for="ttsMinTier">Minimum Bits Tier</label>
+            <select id="ttsMinTier"></select>
+          </div>
+          <div style="display: flex; align-items: flex-end;">
+            <button class="btn-save" id="ttsSaveBtn">Save TTS Config</button>
+            <span id="ttsSaveStatus" class="tts-status" style="display:none; margin-left: 10px;"></span>
+          </div>
+        </div>
+        <div style="margin-top: 16px;">
+          <label style="display:block; font-size:13px; font-weight:600; margin-bottom:6px;">Available Voices for Streamers</label>
+          <div style="margin-bottom:6px; font-size:12px; color:var(--text-muted);">Unchecked voices will not appear in streamer or viewer UIs. If none are checked, all voices are available.</div>
+          <div id="ttsVoiceGrid" class="voice-grid"></div>
         </div>
       </div>
 
@@ -440,6 +471,112 @@ export function renderAdminDashboardPage(options = {}) {
 
         refresh();
         setInterval(refresh, refreshInterval);
+
+        // ===== TTS Global Config =====
+        var ttsMinTierSelect = document.getElementById('ttsMinTier');
+        var ttsVoiceGrid = document.getElementById('ttsVoiceGrid');
+        var ttsSaveBtn = document.getElementById('ttsSaveBtn');
+        var ttsSaveStatus = document.getElementById('ttsSaveStatus');
+        var ttsAllVoices = [];
+        var ttsCurrentConfig = { minTier: 'sound_300', availableVoices: [] };
+
+        function fetchTtsConfig() {
+          fetch('/api/admin/tts-config', { credentials: 'same-origin' })
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+              if (data.error) return;
+              ttsCurrentConfig = data.config || ttsCurrentConfig;
+              ttsAllVoices = data.allVoices || [];
+              var tiers = data.tiers || [];
+              renderTtsTierSelect(tiers);
+              renderTtsVoiceCheckboxes();
+            })
+            .catch(function() {});
+        }
+
+        function renderTtsTierSelect(tiers) {
+          ttsMinTierSelect.textContent = '';
+          tiers.forEach(function(t) {
+            var opt = document.createElement('option');
+            opt.value = t.sku;
+            opt.textContent = t.label;
+            if (t.sku === ttsCurrentConfig.minTier) opt.selected = true;
+            ttsMinTierSelect.appendChild(opt);
+          });
+        }
+
+        function renderTtsVoiceCheckboxes() {
+          ttsVoiceGrid.textContent = '';
+          var available = ttsCurrentConfig.availableVoices || [];
+          var allChecked = available.length === 0;
+          ttsAllVoices.forEach(function(v) {
+            var label = document.createElement('label');
+            label.className = 'voice-item';
+            var cb = document.createElement('input');
+            cb.type = 'checkbox';
+            cb.value = v.id;
+            cb.checked = allChecked || available.includes(v.id);
+            cb.dataset.voiceId = v.id;
+            var nameSpan = document.createElement('span');
+            nameSpan.textContent = v.name;
+            var metaSpan = document.createElement('span');
+            metaSpan.className = 'voice-meta';
+            metaSpan.textContent = v.gender ? ' (' + v.gender + ')' : '';
+            label.appendChild(cb);
+            label.appendChild(nameSpan);
+            label.appendChild(metaSpan);
+            ttsVoiceGrid.appendChild(label);
+          });
+        }
+
+        ttsSaveBtn.addEventListener('click', function() {
+          ttsSaveBtn.disabled = true;
+          var selectedVoices = [];
+          var checkboxes = ttsVoiceGrid.querySelectorAll('input[type=checkbox]');
+          var allChecked = true;
+          checkboxes.forEach(function(cb) {
+            if (cb.checked) selectedVoices.push(cb.value);
+            else allChecked = false;
+          });
+          // If all are checked, send empty array (= all available)
+          var voicesToSend = allChecked ? [] : selectedVoices;
+
+          fetch('/api/admin/tts-config', {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              minTier: ttsMinTierSelect.value,
+              availableVoices: voicesToSend
+            })
+          })
+          .then(function(r) { return r.json(); })
+          .then(function(data) {
+            ttsSaveBtn.disabled = false;
+            if (data.error) {
+              ttsSaveStatus.textContent = 'Error: ' + data.error;
+              ttsSaveStatus.style.display = 'inline-block';
+              ttsSaveStatus.style.background = '#ef444433';
+              ttsSaveStatus.style.color = '#ef4444';
+            } else {
+              ttsCurrentConfig = data.config || ttsCurrentConfig;
+              ttsSaveStatus.textContent = 'Saved!';
+              ttsSaveStatus.style.display = 'inline-block';
+              ttsSaveStatus.style.background = '#10b98133';
+              ttsSaveStatus.style.color = '#10b981';
+              setTimeout(function() { ttsSaveStatus.style.display = 'none'; }, 3000);
+            }
+          })
+          .catch(function() {
+            ttsSaveBtn.disabled = false;
+            ttsSaveStatus.textContent = 'Save failed';
+            ttsSaveStatus.style.display = 'inline-block';
+            ttsSaveStatus.style.background = '#ef444433';
+            ttsSaveStatus.style.color = '#ef4444';
+          });
+        });
+
+        fetchTtsConfig();
       })();
     </script>
     <button class="tour-btn" id="tourBtn" title="Show guided tour">Take A Tour</button>

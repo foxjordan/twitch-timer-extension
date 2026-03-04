@@ -1,7 +1,9 @@
 import { renderAdminDashboardPage } from "./views/adminDashboardPage.js";
 import { getBan, banUser, unbanUser } from "./bans.js";
 import { getSubscription, isPro } from "./subscription_store.js";
-import { getTtsSettings, setTtsSettings } from "./tts_store.js";
+import { getTtsSettings, setTtsSettings, getGlobalTtsConfig, setGlobalTtsConfig } from "./tts_store.js";
+import { getVoices } from "./tts_voices.js";
+import { VALID_TIERS, TIER_LABELS, TIER_COSTS } from "./tiers.js";
 
 const SUPER_ADMIN_IDS = (process.env.SUPER_ADMIN_IDS || "")
   .split(",")
@@ -227,5 +229,25 @@ export function mountAdminRoutes(app, ctx) {
     setTtsSettings(uid, { enabled: Boolean(enabled) });
 
     res.json({ ok: true, userId: uid, ttsEnabled: Boolean(enabled) });
+  });
+
+  // Get global TTS admin config
+  app.get("/api/admin/tts-config", (req, res) => {
+    if (!req.session?.isAdmin || !isSuperAdmin(req)) {
+      return res.status(403).json({ error: "Access denied" });
+    }
+    const config = getGlobalTtsConfig();
+    const allVoices = getVoices();
+    const tiers = VALID_TIERS.map((sku) => ({ sku, label: TIER_LABELS[sku], cost: TIER_COSTS[sku] }));
+    res.json({ config, allVoices, tiers });
+  });
+
+  // Update global TTS admin config
+  app.post("/api/admin/tts-config", (req, res) => {
+    if (!req.session?.isAdmin || !isSuperAdmin(req)) {
+      return res.status(403).json({ error: "Access denied" });
+    }
+    const updated = setGlobalTtsConfig(req.body || {});
+    res.json({ ok: true, config: updated });
   });
 }

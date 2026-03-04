@@ -291,6 +291,74 @@ export function renderSoundConfigPage(options = {}) {
         </div>
       </div>
 
+      <!-- TTS Settings (collapsible, collapsed by default) -->
+      <div class="card" id="ttsCard">
+        <h2 style="cursor:pointer; display:flex; align-items:center; justify-content:space-between; margin:0;" id="ttsToggle">
+          Text-to-Speech
+          <span id="ttsArrow" style="font-size:12px; transition:transform .2s;">&#9662;</span>
+        </h2>
+        <div id="ttsBody" style="display:none; margin-top:12px;">
+          <div id="ttsAccessHint" class="hint" style="margin-bottom:10px; display:none;">TTS requires a Pro plan or admin grant.</div>
+          <div id="ttsSettings">
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px 20px;">
+              <label style="display:flex; align-items:center; gap:8px; font-size:13px;">
+                <input type="checkbox" id="ttsEnabled">
+                Enabled
+              </label>
+              <label style="font-size:13px; display:flex; align-items:center; gap:8px;">
+                Bits Cost
+                <select id="ttsTier" style="min-width:100px;"></select>
+              </label>
+              <label style="font-size:13px; display:flex; align-items:center; gap:8px;">
+                Volume
+                <input type="range" id="ttsVolume" min="0" max="100" value="80" style="width:100px">
+                <span id="ttsVolumeVal" style="font-size:12px; opacity:0.7;">80%</span>
+              </label>
+              <label style="font-size:13px; display:flex; align-items:center; gap:8px;">
+                Cooldown (sec)
+                <input type="number" id="ttsCooldown" min="0" max="120" value="10" style="width:60px">
+              </label>
+              <label style="font-size:13px; display:flex; align-items:center; gap:8px;">
+                Max Message Length
+                <input type="number" id="ttsMaxLength" min="1" max="300" value="200" style="width:60px">
+              </label>
+              <label style="display:flex; align-items:center; gap:8px; font-size:13px;">
+                <input type="checkbox" id="ttsModeration" checked>
+                Content Moderation
+              </label>
+            </div>
+
+            <div style="margin-top:12px;">
+              <label style="font-size:13px; font-weight:600; display:block; margin-bottom:6px;">Allowed Voices</label>
+              <div id="ttsVoiceList" style="display:flex; flex-wrap:wrap; gap:6px;"></div>
+            </div>
+
+            <div style="margin-top:12px;">
+              <label style="font-size:13px; font-weight:600; display:block; margin-bottom:4px;">Banned Words</label>
+              <textarea id="ttsBannedWords" rows="2" placeholder="comma-separated: badword1, badword2" style="width:100%; max-width:400px; padding:6px 8px; border-radius:6px; border:1px solid var(--input-border); background:var(--input-bg); color:var(--text-color); font-size:12px; resize:vertical;"></textarea>
+            </div>
+
+            <div style="margin-top:12px;">
+              <label style="font-size:13px; font-weight:600; display:block; margin-bottom:6px;">Test TTS</label>
+              <div style="display:flex; gap:6px; flex-wrap:wrap; align-items:center;">
+                <select id="ttsTestVoice" style="min-width:120px;"></select>
+                <button id="ttsPreviewVoiceBtn" class="secondary" style="font-size:12px; padding:4px 10px;">Preview Voice</button>
+              </div>
+              <div style="display:flex; gap:6px; margin-top:6px; flex-wrap:wrap; align-items:center;">
+                <input type="text" id="ttsTestMessage" placeholder="Test message..." maxlength="300" style="flex:1; min-width:150px; max-width:300px;">
+                <button id="ttsTestBtn" style="font-size:12px; padding:4px 10px;">Send Test to Overlay</button>
+              </div>
+              <span id="ttsTestHint" class="hint" style="margin-top:4px; display:block;"></span>
+            </div>
+
+            <div style="margin-top:12px;">
+              <button id="saveTtsSettings">Save TTS Settings</button>
+              <span id="ttsSettingsHint" class="hint" style="margin-left:8px;"></span>
+            </div>
+          </div>
+        </div>
+      </div>
+
     </main>
 
     <script>
@@ -1059,6 +1127,205 @@ export function renderSoundConfigPage(options = {}) {
           });
         }
 
+        // ===== TTS Settings =====
+        setupCollapsible('ttsToggle', 'ttsBody', 'ttsArrow', false);
+
+        var ttsEnabledEl = document.getElementById('ttsEnabled');
+        var ttsTierEl = document.getElementById('ttsTier');
+        var ttsVolumeEl2 = document.getElementById('ttsVolume');
+        var ttsVolumeValEl = document.getElementById('ttsVolumeVal');
+        var ttsCooldownEl = document.getElementById('ttsCooldown');
+        var ttsMaxLengthEl = document.getElementById('ttsMaxLength');
+        var ttsModerationEl = document.getElementById('ttsModeration');
+        var ttsBannedWordsEl = document.getElementById('ttsBannedWords');
+        var ttsVoiceListEl = document.getElementById('ttsVoiceList');
+        var ttsTestVoiceEl = document.getElementById('ttsTestVoice');
+        var ttsPreviewVoiceBtnEl = document.getElementById('ttsPreviewVoiceBtn');
+        var ttsTestMessageEl = document.getElementById('ttsTestMessage');
+        var ttsTestBtnEl = document.getElementById('ttsTestBtn');
+        var ttsTestHintEl = document.getElementById('ttsTestHint');
+        var saveTtsBtnEl = document.getElementById('saveTtsSettings');
+        var ttsSettingsHintEl2 = document.getElementById('ttsSettingsHint');
+        var ttsAccessHintEl = document.getElementById('ttsAccessHint');
+
+        var ttsVoicesCache = [];
+        var ttsAllowedSet = new Set();
+        var ttsPreviewAudio = null;
+
+        if (ttsVolumeEl2) ttsVolumeEl2.addEventListener('input', function() {
+          if (ttsVolumeValEl) ttsVolumeValEl.textContent = this.value + '%';
+        });
+
+        async function fetchTtsSettings() {
+          try {
+            var r = await fetch('/api/tts/settings', { cache: 'no-store' });
+            var data = await r.json();
+            var s = data.settings || {};
+            var voices = data.voices || [];
+            var proActive = data.proActive || false;
+            var minTier = data.minTier || 'sound_300';
+            ttsVoicesCache = voices;
+
+            // Show/hide access hint
+            if (!proActive && !s.enabled) {
+              if (ttsAccessHintEl) ttsAccessHintEl.style.display = '';
+            } else {
+              if (ttsAccessHintEl) ttsAccessHintEl.style.display = 'none';
+            }
+
+            // Rebuild tier dropdown with admin-enforced minimum
+            if (ttsTierEl) {
+              var allTiers = ${JSON.stringify(VALID_TIERS)};
+              var tierLabels = ${JSON.stringify(TIER_LABELS)};
+              var minIdx = allTiers.indexOf(minTier);
+              if (minIdx < 0) minIdx = 0;
+              ttsTierEl.textContent = '';
+              for (var i = minIdx; i < allTiers.length; i++) {
+                var opt = document.createElement('option');
+                opt.value = allTiers[i];
+                opt.textContent = tierLabels[allTiers[i]];
+                ttsTierEl.appendChild(opt);
+              }
+            }
+
+            // Populate fields
+            if (ttsEnabledEl) ttsEnabledEl.checked = s.enabled !== false;
+            if (ttsTierEl) ttsTierEl.value = s.tier || minTier;
+            if (ttsVolumeEl2) { ttsVolumeEl2.value = s.volume ?? 80; if (ttsVolumeValEl) ttsVolumeValEl.textContent = ttsVolumeEl2.value + '%'; }
+            if (ttsCooldownEl) ttsCooldownEl.value = Math.round((s.cooldownMs || 10000) / 1000);
+            if (ttsMaxLengthEl) ttsMaxLengthEl.value = s.maxMessageLength || 200;
+            if (ttsModerationEl) ttsModerationEl.checked = s.moderationEnabled !== false;
+            if (ttsBannedWordsEl) ttsBannedWordsEl.value = (s.bannedWords || []).join(', ');
+
+            // Build voice checkboxes + test voice dropdown
+            ttsAllowedSet = new Set(s.allowedVoices || []);
+            renderTtsVoices(voices);
+            renderTtsTestVoiceDropdown(voices);
+          } catch (err) {}
+        }
+
+        function renderTtsVoices(voices) {
+          if (!ttsVoiceListEl) return;
+          ttsVoiceListEl.textContent = '';
+          voices.forEach(function(v) {
+            var label = document.createElement('label');
+            label.style.cssText = 'display:flex; align-items:center; gap:4px; font-size:13px; padding:4px 8px; border-radius:6px; border:1px solid var(--input-border); background:var(--input-bg); cursor:pointer; user-select:none;';
+            var cb = document.createElement('input');
+            cb.type = 'checkbox';
+            cb.checked = ttsAllowedSet.has(v.id);
+            cb.dataset.voiceId = v.id;
+            cb.addEventListener('change', function() {
+              if (this.checked) ttsAllowedSet.add(v.id);
+              else ttsAllowedSet.delete(v.id);
+            });
+            var nameSpan = document.createElement('span');
+            nameSpan.textContent = v.name;
+            var genderSpan = document.createElement('span');
+            genderSpan.style.cssText = 'font-size:11px; opacity:0.5; margin-left:2px;';
+            genderSpan.textContent = v.gender ? '(' + v.gender + ')' : '';
+            label.appendChild(cb);
+            label.appendChild(nameSpan);
+            label.appendChild(genderSpan);
+            ttsVoiceListEl.appendChild(label);
+          });
+        }
+
+        function renderTtsTestVoiceDropdown(voices) {
+          if (!ttsTestVoiceEl) return;
+          ttsTestVoiceEl.textContent = '';
+          voices.forEach(function(v) {
+            var opt = document.createElement('option');
+            opt.value = v.id;
+            opt.textContent = v.name;
+            ttsTestVoiceEl.appendChild(opt);
+          });
+        }
+
+        // Preview voice (plays a short sample directly)
+        if (ttsPreviewVoiceBtnEl) {
+          ttsPreviewVoiceBtnEl.addEventListener('click', async function() {
+            var voiceId = ttsTestVoiceEl ? ttsTestVoiceEl.value : '';
+            if (!voiceId) return;
+            if (ttsPreviewAudio) { ttsPreviewAudio.pause(); ttsPreviewAudio = null; }
+            flashButton(ttsPreviewVoiceBtnEl);
+            setBusy(ttsPreviewVoiceBtnEl, true);
+            if (ttsTestHintEl) ttsTestHintEl.textContent = 'Generating preview…';
+            try {
+              var r = await fetch('/api/tts/preview/' + encodeURIComponent(voiceId));
+              if (!r.ok) throw new Error('Preview failed');
+              var blob = await r.blob();
+              var url = URL.createObjectURL(blob);
+              ttsPreviewAudio = new Audio(url);
+              ttsPreviewAudio.volume = 0.6;
+              ttsPreviewAudio.onended = function() { URL.revokeObjectURL(url); ttsPreviewAudio = null; };
+              await ttsPreviewAudio.play();
+              if (ttsTestHintEl) ttsTestHintEl.textContent = '';
+            } catch (err) {
+              if (ttsTestHintEl) ttsTestHintEl.textContent = 'Preview failed';
+            }
+            setBusy(ttsPreviewVoiceBtnEl, false);
+          });
+        }
+
+        // Test TTS (sends to overlay)
+        if (ttsTestBtnEl) {
+          ttsTestBtnEl.addEventListener('click', async function() {
+            var voiceId = ttsTestVoiceEl ? ttsTestVoiceEl.value : '';
+            var message = ttsTestMessageEl ? ttsTestMessageEl.value.trim() : '';
+            if (!voiceId || !message) { if (ttsTestHintEl) ttsTestHintEl.textContent = 'Select a voice and enter a message'; return; }
+            flashButton(ttsTestBtnEl);
+            setBusy(ttsTestBtnEl, true);
+            if (ttsTestHintEl) ttsTestHintEl.textContent = 'Generating…';
+            try {
+              var r = await fetch('/api/tts/test', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ message: message, voiceId: voiceId })
+              });
+              if (!r.ok) { var body = await r.json().catch(function() { return {}; }); throw new Error(body.error || 'Test failed'); }
+              if (ttsTestHintEl) { ttsTestHintEl.textContent = 'Sent to overlay!'; setTimeout(function() { ttsTestHintEl.textContent = ''; }, 2500); }
+            } catch (err) {
+              if (ttsTestHintEl) ttsTestHintEl.textContent = err.message || 'Test failed';
+            }
+            setBusy(ttsTestBtnEl, false);
+          });
+        }
+
+        // Save TTS settings
+        if (saveTtsBtnEl) {
+          saveTtsBtnEl.addEventListener('click', async function() {
+            flashButton(saveTtsBtnEl);
+            setBusy(saveTtsBtnEl, true);
+            try {
+              var bannedRaw = ttsBannedWordsEl ? ttsBannedWordsEl.value : '';
+              var bannedWords = bannedRaw.split(',').map(function(w) { return w.trim(); }).filter(Boolean);
+              var payload = {
+                enabled: ttsEnabledEl ? ttsEnabledEl.checked : false,
+                tier: ttsTierEl ? ttsTierEl.value : 'sound_300',
+                volume: ttsVolumeEl2 ? Number(ttsVolumeEl2.value) : 80,
+                cooldownMs: ttsCooldownEl ? Number(ttsCooldownEl.value) * 1000 : 10000,
+                maxMessageLength: ttsMaxLengthEl ? Number(ttsMaxLengthEl.value) : 200,
+                moderationEnabled: ttsModerationEl ? ttsModerationEl.checked : true,
+                bannedWords: bannedWords,
+                allowedVoices: Array.from(ttsAllowedSet)
+              };
+              var r = await fetch('/api/tts/settings', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+              });
+              if (!r.ok) { var body = await r.json().catch(function() { return {}; }); throw new Error(body.error || 'Save failed'); }
+              if (ttsSettingsHintEl2) {
+                ttsSettingsHintEl2.textContent = 'TTS settings saved!';
+                setTimeout(function() { ttsSettingsHintEl2.textContent = ''; }, 2500);
+              }
+            } catch (err) {
+              if (ttsSettingsHintEl2) ttsSettingsHintEl2.textContent = err.message || 'Save failed';
+            }
+            setBusy(saveTtsBtnEl, false);
+          });
+        }
+
         // Logout handler
         var logoutBtn = document.getElementById('logout');
         if (logoutBtn) {
@@ -1069,6 +1336,7 @@ export function renderSoundConfigPage(options = {}) {
 
         // Initial load
         fetchSoundsAdmin();
+        fetchTtsSettings();
       })();
     </script>
     <button class="tour-btn" id="tourBtn" title="Show guided tour">Take A Tour</button>

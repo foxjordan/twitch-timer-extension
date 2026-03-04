@@ -1,26 +1,16 @@
 import fetch from "node-fetch";
 import { logger } from "./logger.js";
 
-// Hardcoded fallback voices (English, Inworld.ai)
+// Curated fallback voices (English, Inworld.ai) — a balanced subset with variety
 const FALLBACK_VOICES = [
-  { id: "Alex", name: "Alex", gender: "male" },
-  { id: "Ashley", name: "Ashley", gender: "female" },
-  { id: "Craig", name: "Craig", gender: "male" },
-  { id: "Deborah", name: "Deborah", gender: "female" },
-  { id: "Dennis", name: "Dennis", gender: "male" },
-  { id: "Edward", name: "Edward", gender: "male" },
-  { id: "Elizabeth", name: "Elizabeth", gender: "female" },
-  { id: "Julia", name: "Julia", gender: "female" },
-  { id: "Mark", name: "Mark", gender: "male" },
-  { id: "Olivia", name: "Olivia", gender: "female" },
-  { id: "Pixie", name: "Pixie", gender: "female" },
-  { id: "Priya", name: "Priya", gender: "female" },
-  { id: "Ronald", name: "Ronald", gender: "male" },
-  { id: "Sarah", name: "Sarah", gender: "female" },
-  { id: "Shaun", name: "Shaun", gender: "male" },
-  { id: "Theodore", name: "Theodore", gender: "male" },
-  { id: "Timothy", name: "Timothy", gender: "male" },
-  { id: "Wendy", name: "Wendy", gender: "female" },
+  { id: "Alex", name: "Alex", gender: "male", description: "Energetic and expressive mid-range male voice" },
+  { id: "Ashley", name: "Ashley", gender: "female", description: "Warm and friendly female voice" },
+  { id: "Julia", name: "Julia", gender: "female", description: "Clear and confident female voice" },
+  { id: "Mark", name: "Mark", gender: "male", description: "Deep and calm male voice" },
+  { id: "Olivia", name: "Olivia", gender: "female", description: "Bright and articulate female voice" },
+  { id: "Priya", name: "Priya", gender: "female", description: "Smooth and expressive female voice" },
+  { id: "Sarah", name: "Sarah", gender: "female", description: "Natural and conversational female voice" },
+  { id: "Shaun", name: "Shaun", gender: "male", description: "Relaxed and casual male voice" },
 ];
 
 export const DEFAULT_ALLOWED_VOICES = ["Ashley", "Alex", "Julia", "Mark", "Sarah"];

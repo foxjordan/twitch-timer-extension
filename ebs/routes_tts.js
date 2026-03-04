@@ -5,7 +5,7 @@ import crypto from "crypto";
 import path from "path";
 import { writeFile, unlink, mkdir } from "fs/promises";
 import { existsSync } from "fs";
-import { getTtsSettings, setTtsSettings, getPublicTtsSettings } from "./tts_store.js";
+import { getTtsSettings, setTtsSettings, getPublicTtsSettings, getGlobalTtsConfig } from "./tts_store.js";
 import { getVoices, isValidVoice } from "./tts_voices.js";
 import { moderateMessage } from "./tts_moderation.js";
 import { createApprovalToken, consumeApprovalToken } from "./tts_tokens.js";
@@ -85,16 +85,21 @@ export function mountTtsRoutes(app, deps = {}) {
 
   // ===== Broadcaster endpoints =====
 
-  // Get TTS settings + curated voices + Pro status
+  // Get TTS settings + curated voices + Pro status + global config
   app.get("/api/tts/settings", (req, res) => {
     const uid = requireBroadcaster(req, res);
     if (!uid) return;
 
     const settings = getTtsSettings(uid);
-    const voices = getVoices();
+    const globalConfig = getGlobalTtsConfig();
+    // Filter voices to only admin-available ones (empty = all available)
+    let voices = getVoices();
+    if (globalConfig.availableVoices.length > 0) {
+      voices = voices.filter((v) => globalConfig.availableVoices.includes(v.id));
+    }
     const proActive = isPro(uid);
 
-    res.json({ settings, voices, proActive });
+    res.json({ settings, voices, proActive, minTier: globalConfig.minTier });
   });
 
   // Update TTS settings
@@ -156,6 +161,27 @@ export function mountTtsRoutes(app, deps = {}) {
     }
   });
 
+  // Preview a voice — returns audio directly (no overlay, no Bits)
+  app.get("/api/tts/preview/:voiceId", async (req, res) => {
+    const uid = requireBroadcaster(req, res);
+    if (!uid) return;
+
+    const { voiceId } = req.params;
+    if (!isValidVoice(voiceId)) {
+      return res.status(400).json({ error: "Invalid voice" });
+    }
+
+    try {
+      const audioBuffer = await synthesizeSpeech("Hello! This is a preview of my voice.", voiceId);
+      res.setHeader("Content-Type", "audio/mpeg");
+      res.setHeader("Cache-Control", "public, max-age=3600");
+      res.send(audioBuffer);
+    } catch (err) {
+      logger.error("tts_preview_failed", { userId: uid, voiceId, message: err?.message });
+      res.status(500).json({ error: "Voice preview failed" });
+    }
+  });
+
   // ===== Viewer endpoints =====
 
   // Get public TTS config for a channel
@@ -172,7 +198,12 @@ export function mountTtsRoutes(app, deps = {}) {
       settings.enabled = false;
     }
 
-    const voices = getVoices().filter((v) => settings.allowedVoices.includes(v.id));
+    const globalConfig = getGlobalTtsConfig();
+    let allVoices = getVoices();
+    if (globalConfig.availableVoices.length > 0) {
+      allVoices = allVoices.filter((v) => globalConfig.availableVoices.includes(v.id));
+    }
+    const voices = allVoices.filter((v) => settings.allowedVoices.includes(v.id));
     res.json({ ...settings, voices });
   });
 

@@ -1,7 +1,7 @@
 // Single source of truth for sound tier SKUs on the extension (frontend) side.
 // Mirrors ebs/tiers.js — kept separate because the extension can't import from ebs/.
 
-const VALID_TIERS = [
+export const VALID_TIERS = [
   "sound_10",
   "sound_25",
   "sound_50",

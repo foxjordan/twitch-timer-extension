@@ -6,13 +6,13 @@ const EBS_BASE = import.meta.env.VITE_EBS_BASE || "https://livestreamerhub.com";
 
 import { TIER_LABELS, DEFAULT_TIER } from "./tiers.js";
 
-// TTS tiers: minimum 300 Bits
-const TTS_TIERS = Object.entries(TIER_LABELS)
-  .filter(([sku]) => {
-    const bits = parseInt(sku.replace("sound_", ""), 10);
-    return bits >= 300;
-  })
-  .map(([sku, label]) => ({ sku, label }));
+import { VALID_TIERS } from "./tiers.js";
+
+function getTtsTiers(minTier) {
+  const minIdx = VALID_TIERS.indexOf(minTier || "sound_300");
+  const startIdx = minIdx >= 0 ? minIdx : 0;
+  return VALID_TIERS.slice(startIdx).map((sku) => ({ sku, label: TIER_LABELS[sku] }));
+}
 
 function ConfigApp() {
   const [auth, setAuth] = useState(null);
@@ -41,6 +41,7 @@ function ConfigApp() {
   const [ttsSettings, setTtsSettings] = useState(null);
   const [ttsVoices, setTtsVoices] = useState([]);
   const [ttsProActive, setTtsProActive] = useState(false);
+  const [ttsMinTier, setTtsMinTier] = useState("sound_300");
   const [ttsBannedWordsText, setTtsBannedWordsText] = useState("");
 
   const headers = useCallback(
@@ -98,6 +99,7 @@ function ConfigApp() {
           }
           if (data.voices) setTtsVoices(data.voices);
           if (typeof data.proActive === "boolean") setTtsProActive(data.proActive);
+          if (data.minTier) setTtsMinTier(data.minTier);
         })
         .catch(() => {});
     });
@@ -677,7 +679,7 @@ function ConfigApp() {
               onChange={(e) => handleTtsSettingsUpdate({ tier: e.target.value })}
               style={styles.select}
             >
-              {TTS_TIERS.map((t) => (
+              {getTtsTiers(ttsMinTier).map((t) => (
                 <option key={t.sku} value={t.sku}>
                   {t.label}
                 </option>

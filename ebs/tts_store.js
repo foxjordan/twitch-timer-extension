@@ -5,6 +5,7 @@ import { DEFAULT_ALLOWED_VOICES, isValidVoice } from "./tts_voices.js";
 
 const DATA_DIR = process.env.DATA_DIR || process.cwd();
 const TTS_PATH = path.resolve(DATA_DIR, "overlay-tts-settings.json");
+const TTS_GLOBAL_PATH = path.resolve(DATA_DIR, "tts-global-config.json");
 
 // userId -> TtsSettings
 const ttsSettingsByUser = new Map();
@@ -20,8 +21,11 @@ const DEFAULT_TTS_SETTINGS = {
   moderationEnabled: true,
 };
 
-// Minimum tier index (sound_300 = index of "sound_300" in VALID_TIERS)
-const MIN_TIER = "sound_300";
+// ===== Global admin TTS config =====
+let globalTtsConfig = {
+  minTier: "sound_300",
+  availableVoices: [], // empty = all voices available (populated on first load)
+};
 
 function cloneSettings(s) {
   return JSON.parse(JSON.stringify(s));
@@ -36,6 +40,19 @@ function ensureUser(uid) {
 }
 
 export async function loadTtsSettings() {
+  // Load global admin config
+  try {
+    const raw = await readFile(TTS_GLOBAL_PATH, "utf-8");
+    const parsed = JSON.parse(raw);
+    if (typeof parsed.minTier === "string" && VALID_TIERS.includes(parsed.minTier)) {
+      globalTtsConfig.minTier = parsed.minTier;
+    }
+    if (Array.isArray(parsed.availableVoices)) {
+      globalTtsConfig.availableVoices = parsed.availableVoices.filter((v) => typeof v === "string");
+    }
+  } catch {}
+
+  // Load per-user settings
   try {
     const raw = await readFile(TTS_PATH, "utf-8");
     const obj = JSON.parse(raw);
@@ -67,9 +84,9 @@ export function setTtsSettings(uid, patch) {
   }
 
   if (typeof patch.tier === "string" && VALID_TIERS.includes(patch.tier)) {
-    // Enforce minimum of sound_300
+    // Enforce global minimum tier set by admin
     const tierIdx = VALID_TIERS.indexOf(patch.tier);
-    const minIdx = VALID_TIERS.indexOf(MIN_TIER);
+    const minIdx = VALID_TIERS.indexOf(globalTtsConfig.minTier);
     if (tierIdx >= minIdx) {
       curr.tier = patch.tier;
     }
@@ -123,4 +140,27 @@ export function getPublicTtsSettings(uid) {
     volume: s.volume,
     cooldownMs: s.cooldownMs,
   };
+}
+
+// ===== Global admin TTS config =====
+
+export function getGlobalTtsConfig() {
+  return { ...globalTtsConfig, availableVoices: [...globalTtsConfig.availableVoices] };
+}
+
+export function setGlobalTtsConfig(patch) {
+  if (typeof patch.minTier === "string" && VALID_TIERS.includes(patch.minTier)) {
+    globalTtsConfig.minTier = patch.minTier;
+  }
+  if (Array.isArray(patch.availableVoices)) {
+    globalTtsConfig.availableVoices = patch.availableVoices.filter((v) => typeof v === "string");
+  }
+  persistGlobal().catch(() => {});
+  return getGlobalTtsConfig();
+}
+
+async function persistGlobal() {
+  try {
+    await writeFile(TTS_GLOBAL_PATH, JSON.stringify(globalTtsConfig, null, 2), "utf-8");
+  } catch {}
 }

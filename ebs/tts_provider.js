@@ -18,7 +18,7 @@ providers.inworld = async (text, voiceId) => {
     body: JSON.stringify({
       text,
       voiceId,
-      modelId: "inworld-tts-1.5-max",
+      modelId: "inworld-tts-1.5-mini",
     }),
   });
 

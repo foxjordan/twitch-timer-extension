@@ -77,6 +77,9 @@ export function renderUtilitiesPage(options = {}) {
       .wheel-duration label { display:flex; align-items:center; gap: 8px; font-weight: 600; color: var(--text-color); }
       canvas { width: 100%; max-width: 360px; height: 360px; background: var(--surface-color); border-radius: 50%; border: 1px solid var(--surface-border); box-shadow: inset 0 0 20px rgba(0,0,0,0.12); margin: 0 auto; }
       .wheel-result { text-align: center; font-size: 24px; font-weight: 600; }
+      .wheel-result-row { display:flex; align-items:center; justify-content:center; gap: 10px; }
+      .wheel-remove-winner { font-size: 13px; padding: 4px 10px; border-radius: 8px; background: var(--secondary-button-bg); color: var(--text-muted); border: 1px solid var(--secondary-button-border); cursor: pointer; white-space: nowrap; }
+      .wheel-remove-winner:hover { color: var(--accent-color); }
       .wheel-share { display:flex; flex-wrap: wrap; gap: 8px; align-items: center; font-size: 13px; color: var(--text-muted); }
       .global-footer { margin-top: 24px; padding-top: 18px; border-top: 1px solid var(--surface-border); display:flex; flex-wrap: wrap; gap: 12px; justify-content: center; font-size: 14px; color: var(--text-muted); }
       .global-footer a { color: var(--text-muted); text-decoration: none; }
@@ -101,6 +104,42 @@ export function renderUtilitiesPage(options = {}) {
       <h1>Utilities lab</h1>
       <p class="lead">Lightweight, browser-friendly tools you can project to stream or pipe into a Browser Source. Configure them below, copy the URL for OBS, or trigger them with future webhook hooks.</p>
       <div class="utilities-grid">
+        <section class="utility-card" id="wheel-tool" style="grid-column: span 2;">
+          <h2>Wheel spinner</h2>
+          <p>Enter options and choose colors below. Click spin to animate the wheel.</p>
+            <div class="wheel-wrapper">
+              <div class="wheel-config">
+                <div>
+                  <label style="font-size:13px; letter-spacing:.04em; text-transform:uppercase; color:var(--text-muted);">Options</label>
+                  <div id="wheelOptionsList" class="wheel-options-list"></div>
+                  <div style="display:flex; gap:8px; margin-top:8px;">
+                    <button id="addWheelOption" class="secondary" type="button">Add option</button>
+                    <button id="resetWheel" class="secondary" type="button" style="color:var(--text-muted);">Reset</button>
+                  </div>
+                </div>
+              </div>
+              <div class="wheel-duration">
+              <label>Spin duration (sec, 2-15)
+                <input id="wheelDuration" type="number" step="0.5" inputmode="decimal" value="4" />
+              </label>
+              <span>Longer spins are more dramatic but take longer to resolve.</span>
+            </div>
+              <button id="spinWheel" class="secondary" type="button">Spin the wheel</button>
+              <canvas id="wheelCanvas" width="360" height="360"></canvas>
+              <div class="wheel-result-row">
+                <div id="wheelResult" class="wheel-result">Awaiting spin…</div>
+                <button id="removeWinner" class="wheel-remove-winner" type="button" style="display:none;">Remove &amp; respin</button>
+              </div>
+            <div class="wheel-share">
+              <button id="copyWheelLink" type="button" class="secondary" ${
+                overlayKey ? "" : "disabled"
+              }>Copy Browser Source link</button>
+              <span id="copyWheelStatus">${
+                overlayKey ? "" : "Set an overlay key to enable sharing."
+              }</span>
+            </div>
+          </div>
+        </section>
         <section class="utility-card" id="coin-tool">
           <h2>Coin flip</h2>
           <p>Simple heads/tails resolver. Perfect for chat challenges or quick decisions.</p>
@@ -130,36 +169,6 @@ export function renderUtilitiesPage(options = {}) {
           </div>
           <div id="diceResult" class="dice-output">Select a die to start rolling.</div>
           <div id="diceNotice" class="dice-note">Max 20 dice per roll.</div>
-        </section>
-        <section class="utility-card" id="wheel-tool" style="grid-column: span 2;">
-          <h2>Wheel spinner</h2>
-          <p>Enter options and choose colors below. Click spin to animate the wheel.</p>
-            <div class="wheel-wrapper">
-              <div class="wheel-config">
-                <div>
-                  <label style="font-size:13px; letter-spacing:.04em; text-transform:uppercase; color:var(--text-muted);">Options</label>
-                  <div id="wheelOptionsList" class="wheel-options-list"></div>
-                  <button id="addWheelOption" class="secondary wheel-add" type="button">Add option</button>
-                </div>
-              </div>
-              <div class="wheel-duration">
-              <label>Spin duration (sec, 2-15)
-                <input id="wheelDuration" type="number" step="0.5" inputmode="decimal" value="4" />
-              </label>
-              <span>Longer spins are more dramatic but take longer to resolve.</span>
-            </div>
-              <button id="spinWheel" class="secondary" type="button">Spin the wheel</button>
-              <canvas id="wheelCanvas" width="360" height="360"></canvas>
-              <div id="wheelResult" class="wheel-result">Awaiting spin…</div>
-            <div class="wheel-share">
-              <button id="copyWheelLink" type="button" class="secondary" ${
-                overlayKey ? "" : "disabled"
-              }>Copy Browser Source link</button>
-              <span id="copyWheelStatus">${
-                overlayKey ? "" : "Set an overlay key to enable sharing."
-              }</span>
-            </div>
-          </div>
         </section>
         <section class="utility-card todo-card">
           <h2>Webhooks</h2>
@@ -275,7 +284,10 @@ export function renderUtilitiesPage(options = {}) {
         const wheelDurationInput = document.getElementById('wheelDuration');
         const copyWheelLinkBtn = document.getElementById('copyWheelLink');
         const copyWheelStatus = document.getElementById('copyWheelStatus');
+        const resetWheelBtn = document.getElementById('resetWheel');
+        const removeWinnerBtn = document.getElementById('removeWinner');
         let currentDurationSeconds = wheelDurationInput ? Number(wheelDurationInput.value) || 4 : 4;
+        let lastWinnerIndex = -1;
         const ctx = wheelCanvas ? wheelCanvas.getContext('2d') : null;
         const defaultColors = ['#9146FF','#F97316','#3B82F6','#10B981','#EC4899','#FCD34D'];
         const TWO_PI = Math.PI * 2;
@@ -283,6 +295,38 @@ export function renderUtilitiesPage(options = {}) {
         let wheelSegments = [];
         let wheelRotation = 0;
         let spinning = false;
+        const WHEEL_STORAGE_KEY = 'lsh_wheel_options';
+        const WHEEL_DURATION_KEY = 'lsh_wheel_duration';
+
+        function saveWheelToStorage() {
+          try {
+            localStorage.setItem(WHEEL_STORAGE_KEY, JSON.stringify(wheelOptions));
+            localStorage.setItem(WHEEL_DURATION_KEY, String(currentDurationSeconds));
+          } catch (e) {}
+        }
+
+        function loadWheelFromStorage() {
+          try {
+            const raw = localStorage.getItem(WHEEL_STORAGE_KEY);
+            if (raw) {
+              const parsed = JSON.parse(raw);
+              const sanitized = sanitizeWheelOptions(parsed);
+              if (sanitized.length) return sanitized;
+            }
+          } catch (e) {}
+          return null;
+        }
+
+        function loadDurationFromStorage() {
+          try {
+            const raw = localStorage.getItem(WHEEL_DURATION_KEY);
+            if (raw) {
+              const val = Number(raw);
+              if (Number.isFinite(val)) return val;
+            }
+          } catch (e) {}
+          return null;
+        }
 
         function getDefaultWheelOptions() {
           return [
@@ -319,6 +363,7 @@ export function renderUtilitiesPage(options = {}) {
               wheelOptions[idx].label = textInput.value;
               refreshWheelSegments();
               updateShareUrl();
+              saveWheelToStorage();
             });
             const colorInput = document.createElement('input');
             colorInput.type = 'color';
@@ -328,6 +373,7 @@ export function renderUtilitiesPage(options = {}) {
               wheelOptions[idx].color = colorInput.value;
               refreshWheelSegments();
               updateShareUrl();
+              saveWheelToStorage();
             });
             row.appendChild(textInput);
             row.appendChild(colorInput);
@@ -341,6 +387,7 @@ export function renderUtilitiesPage(options = {}) {
                 renderWheelOptionsEditor();
                 refreshWheelSegments();
                 updateShareUrl();
+                saveWheelToStorage();
               });
               row.appendChild(removeBtn);
             }
@@ -397,9 +444,22 @@ export function renderUtilitiesPage(options = {}) {
           ctx.fill();
         }
 
+        function hideRemoveWinner() {
+          lastWinnerIndex = -1;
+          if (removeWinnerBtn) removeWinnerBtn.style.display = 'none';
+        }
+
+        function showRemoveWinner(index) {
+          lastWinnerIndex = index;
+          if (removeWinnerBtn && wheelOptions.length > 2) {
+            removeWinnerBtn.style.display = '';
+          }
+        }
+
         function announceWinner() {
           if (!wheelSegments.length) {
             wheelResult.textContent = '—';
+            hideRemoveWinner();
             return;
           }
           const slice = TWO_PI / wheelSegments.length;
@@ -409,6 +469,7 @@ export function renderUtilitiesPage(options = {}) {
           const index = Math.floor(relative / slice) % wheelSegments.length;
           const winner = wheelSegments[index];
           wheelResult.textContent = winner ? winner.label : '—';
+          showRemoveWinner(index);
         }
 
         function animateWheel(finalAngle, durationMs, onDone) {
@@ -456,9 +517,11 @@ export function renderUtilitiesPage(options = {}) {
           if (baseDelta < 0) baseDelta += TWO_PI;
           const delta = lapCount * TWO_PI + baseDelta;
           const finalAngle = wheelRotation + delta;
+          hideRemoveWinner();
           animateWheel(finalAngle, payload.durationMs || 3200, () => {
             const label = payload.winnerLabel || wheelSegments[winnerIndex]?.label || '—';
             wheelResult.textContent = label;
+            showRemoveWinner(winnerIndex);
           });
         }
 
@@ -474,7 +537,7 @@ export function renderUtilitiesPage(options = {}) {
         }
 
         if (wheelDurationInput) {
-          const applyClamp = () => clampDurationSeconds(wheelDurationInput.value);
+          const applyClamp = () => { clampDurationSeconds(wheelDurationInput.value); saveWheelToStorage(); };
           wheelDurationInput.addEventListener('blur', applyClamp);
           wheelDurationInput.addEventListener('keydown', (event) => {
             if (event.key === 'Enter') {
@@ -488,6 +551,7 @@ export function renderUtilitiesPage(options = {}) {
 
         async function requestWheelSpin() {
           if (spinning) return;
+          hideRemoveWinner();
           if (!overlayShareKey) {
             if (copyWheelStatus) copyWheelStatus.textContent = 'Set an overlay key first.';
             return;
@@ -564,6 +628,19 @@ export function renderUtilitiesPage(options = {}) {
           renderWheelOptionsEditor();
           refreshWheelSegments();
           updateShareUrl();
+          saveWheelToStorage();
+        }
+
+        function resetWheelOptions() {
+          wheelOptions = sanitizeWheelOptions(getDefaultWheelOptions());
+          currentDurationSeconds = 4;
+          if (wheelDurationInput) wheelDurationInput.value = '4';
+          wheelRotation = 0;
+          renderWheelOptionsEditor();
+          refreshWheelSegments();
+          updateShareUrl();
+          saveWheelToStorage();
+          wheelResult.textContent = 'Awaiting spin\u2026';
         }
 
         function updateShareUrl() {
@@ -583,6 +660,7 @@ export function renderUtilitiesPage(options = {}) {
 
         const encodedFromQuery = qs.get('options');
         if (encodedFromQuery) {
+          // URL params take priority
           const decoded = decodeOptions(encodedFromQuery);
           if (decoded) {
             try {
@@ -598,6 +676,15 @@ export function renderUtilitiesPage(options = {}) {
           if (legacyText) {
             const legacy = parseLegacyOptions(legacyText);
             if (legacy.length) wheelOptions = legacy;
+          } else {
+            // No URL params — load from localStorage
+            const stored = loadWheelFromStorage();
+            if (stored) wheelOptions = stored;
+            const storedDuration = loadDurationFromStorage();
+            if (storedDuration !== null) {
+              currentDurationSeconds = storedDuration;
+              if (wheelDurationInput) wheelDurationInput.value = String(storedDuration);
+            }
           }
         }
 
@@ -605,6 +692,22 @@ export function renderUtilitiesPage(options = {}) {
         refreshWheelSegments();
         if (addWheelOptionBtn) {
           addWheelOptionBtn.addEventListener('click', addWheelOption);
+        }
+        if (resetWheelBtn) {
+          resetWheelBtn.addEventListener('click', resetWheelOptions);
+        }
+        if (removeWinnerBtn) {
+          removeWinnerBtn.addEventListener('click', () => {
+            if (lastWinnerIndex < 0 || lastWinnerIndex >= wheelOptions.length || wheelOptions.length <= 2) return;
+            wheelOptions.splice(lastWinnerIndex, 1);
+            hideRemoveWinner();
+            wheelRotation = 0;
+            renderWheelOptionsEditor();
+            refreshWheelSegments();
+            updateShareUrl();
+            saveWheelToStorage();
+            wheelResult.textContent = 'Removed! Spin again.';
+          });
         }
         updateShareUrl();
         if (spinBtn) spinBtn.addEventListener('click', requestWheelSpin);

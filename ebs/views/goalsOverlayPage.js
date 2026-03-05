@@ -33,7 +33,6 @@ export function renderGoalsOverlayPage(options = {}) {
         --goal-height: 240px;
         --track-thickness: 38px;
         --fill-color: #9146FF;
-        --fill-secondary: var(--fill-color);
         --empty-color: rgba(255,255,255,0.12);
         --label-color: #FFFFFF;
         --value-color: #FFFFFF;
@@ -183,7 +182,6 @@ export function renderGoalsOverlayPage(options = {}) {
     <div id="goal-root" class="goal-root">
       <div class="empty">Loading goal data…</div>
     </div>
-    <style id="goal-custom-style"></style>
     <script>
       (function(){
         const params = new URLSearchParams(window.location.search);
@@ -201,7 +199,6 @@ export function renderGoalsOverlayPage(options = {}) {
           lastRenderId: null
         };
         const root = document.getElementById('goal-root');
-        const customCssEl = document.getElementById('goal-custom-style');
         const segmentLabels = {
           tier1000: 'Tier 1',
           tier2000: 'Tier 2',
@@ -252,7 +249,7 @@ export function renderGoalsOverlayPage(options = {}) {
           root.style.padding = (style.overlayPadding || 24) + 'px';
           document.body.style.background = style.backgroundColor || 'transparent';
           document.body.style.fontFamily = style.fontFamily || document.body.style.fontFamily;
-          if (customCssEl) customCssEl.textContent = style.customCss || '';
+
         }
 
         function buildGoalCard(goal) {
@@ -270,7 +267,6 @@ export function renderGoalsOverlayPage(options = {}) {
           card.style.setProperty('--goal-height', goalHeight + 'px');
           card.style.setProperty('--track-thickness', Math.max(12, style.trackThickness || 38) + 'px');
           card.style.setProperty('--fill-color', style.fillColor || '#9146FF');
-          card.style.setProperty('--fill-secondary', style.fillSecondaryColor || style.fillColor || '#9146FF');
           card.style.setProperty('--empty-color', style.emptyColor || 'rgba(255,255,255,0.12)');
           card.style.setProperty('--label-color', style.labelColor || '#FFFFFF');
           card.style.setProperty('--value-color', style.valueColor || '#FFFFFF');
@@ -334,17 +330,14 @@ export function renderGoalsOverlayPage(options = {}) {
           fill.className = 'goal-fill';
           if (style.animateFill !== false) fill.classList.add('animate');
           const percentComplete = goal.targetValue > 0 ? Math.min(100, Math.max(0, (goal.currentValue / goal.targetValue) * 100)) : 0;
-          const gradient =
-            style.fillSecondaryColor && style.fillSecondaryColor !== style.fillColor
-              ? 'linear-gradient(90deg, ' + (style.fillColor || '#9146FF') + ', ' + style.fillSecondaryColor + ')'
-              : style.fillColor || '#9146FF';
+          const fillBg = style.fillColor || '#9146FF';
           if (orientation === 'vertical') {
-            fill.style.background = gradient;
+            fill.style.background = fillBg;
             fill.style.height = percentComplete + '%';
             fill.style.width = '100%';
             fill.style.bottom = '0';
           } else {
-            fill.style.background = gradient;
+            fill.style.background = fillBg;
             fill.style.width = percentComplete + '%';
             fill.style.height = '100%';
           }

@@ -307,11 +307,7 @@ export function renderGoalsConfigPage(options = {}) {
         track.style.background = style.emptyColor || 'rgba(255,255,255,0.12)';
         const fill = document.createElement('div');
         fill.className = 'goal-preview-fill';
-        const gradient =
-          style.fillSecondaryColor && style.fillSecondaryColor !== style.fillColor
-            ? 'linear-gradient(90deg, ' + (style.fillColor || '#9146FF') + ', ' + style.fillSecondaryColor + ')'
-            : (style.fillColor || '#9146FF');
-        fill.style.background = gradient;
+        fill.style.background = style.fillColor || '#9146FF';
         fill.style.width = percent + '%';
         const segments = Object.entries(data.segments || {}).filter(function(entry) { return Number(entry[1]) > 0; });
         const totalSegments = segments.reduce(function(sum, entry) { return sum + Number(entry[1] || 0); }, 0) || Math.max(1, Number(data.currentValue || 0));
@@ -643,10 +639,6 @@ export function renderGoalsConfigPage(options = {}) {
                   '<input type="color" data-field="style.fillColor" value="' + escHtml(style.fillColor || '#9146FF') + '" />' +
                 '</div>' +
                 '<div class="goal-field">' +
-                  '<label>Fill gradient</label>' +
-                  '<input type="color" data-field="style.fillSecondaryColor" value="' + escHtml(style.fillSecondaryColor || style.fillColor || '#772CE8') + '" />' +
-                '</div>' +
-                '<div class="goal-field">' +
                   '<label>Empty color</label>' +
                   '<input type="color" data-field="style.emptyColor" value="' + escHtml(style.emptyColor || '#222229') + '" />' +
                 '</div>' +
@@ -683,12 +675,12 @@ export function renderGoalsConfigPage(options = {}) {
                   '<input type="color" data-field="style.segmentColors.bits" value="' + escHtml(segmentColors.bits || '#10B981') + '" />' +
                 '</div>' +
                 '<div class="goal-field">' +
+                  '<label>Follows color</label>' +
+                  '<input type="color" data-field="style.segmentColors.follows" value="' + escHtml(segmentColors.follows || '#3B82F6') + '" />' +
+                '</div>' +
+                '<div class="goal-field">' +
                   '<label>Manual color</label>' +
                   '<input type="color" data-field="style.segmentColors.manual" value="' + escHtml(segmentColors.manual || '#38BDF8') + '" />' +
-                '</div>' +
-                '<div class="goal-field" style="grid-column: 1 / -1;">' +
-                  '<label>Custom CSS</label>' +
-                  '<textarea rows="2" data-field="style.customCss" placeholder=".goal-card { }">' + escHtml(style.customCss || '') + '</textarea>' +
                 '</div>' +
               '</div>' +
               '<div class="goal-grid">' +

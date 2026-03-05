@@ -248,8 +248,24 @@ export function renderGoalsOverlayPage(options = {}) {
           root.style.alignItems = state.boardMode ? 'flex-start' : 'center';
           root.style.padding = (style.overlayPadding || 24) + 'px';
           document.body.style.background = style.backgroundColor || 'transparent';
-          document.body.style.fontFamily = style.fontFamily || document.body.style.fontFamily;
+          if (style.fontFamily) {
+            loadGoogleFont(style.fontFamily);
+            document.body.style.fontFamily = style.fontFamily;
+          }
 
+        }
+
+        const loadedFonts = {};
+        function loadGoogleFont(fontFamily) {
+          const match = fontFamily.match(/^'([^']+)'/);
+          const name = match ? match[1] : fontFamily.split(',')[0].trim().replace(/['"]/g, '');
+          const systemFonts = ['Inter','Arial','Helvetica','Verdana','Tahoma','Georgia','Times New Roman','Courier New','Trebuchet MS','Impact','Comic Sans MS','system-ui','sans-serif','serif','monospace'];
+          if (systemFonts.includes(name) || loadedFonts[name]) return;
+          loadedFonts[name] = true;
+          const link = document.createElement('link');
+          link.rel = 'stylesheet';
+          link.href = 'https://fonts.googleapis.com/css2?family=' + encodeURIComponent(name).replace(/%20/g, '+') + ':wght@400;600;700;800&display=swap';
+          document.head.appendChild(link);
         }
 
         function buildGoalCard(goal) {

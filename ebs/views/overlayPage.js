@@ -9,6 +9,9 @@ export function renderOverlayPage(options = {}) {
   const fontFamily = String(
     query.font ?? "Inter,system-ui,Arial,sans-serif"
   );
+  const systemFonts = ["Inter","Arial","Helvetica","Verdana","Tahoma","Georgia","Times New Roman","Courier New","Trebuchet MS","Impact","Comic Sans MS","system-ui","sans-serif","serif","monospace"];
+  const firstFont = fontFamily.match(/^'([^']+)'/) ? fontFamily.match(/^'([^']+)'/)[1] : fontFamily.split(",")[0].trim().replace(/['"]/g, "");
+  const googleFontLink = systemFonts.includes(firstFont) ? "" : `<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=${encodeURIComponent(firstFont).replace(/%20/g, "+")}:wght@400;600;700;800&display=swap">`;
   const showLabel = String(query.label ?? "0") !== "0";
   const align = String(query.align ?? "center"); // left|center|right
   const weight = Number(query.weight ?? 700);
@@ -30,6 +33,7 @@ export function renderOverlayPage(options = {}) {
     <meta http-equiv="Pragma" content="no-cache" />
     <meta http-equiv="Expires" content="0" />
     <title>Timer Overlay</title>
+    ${googleFontLink}
     <style>
       html, body { height: 100%; }
       body { margin: 0; background: ${bg}; color: ${color}; font-family: ${fontFamily}; }
@@ -204,6 +208,19 @@ export function renderOverlayPage(options = {}) {
           }, 1000);
         }
 
+        var _loadedFonts = {};
+        function loadGoogleFont(fontFamily) {
+          var match = fontFamily.match(/^'([^']+)'/);
+          var name = match ? match[1] : fontFamily.split(',')[0].trim().replace(/['"]/g, '');
+          var systemFonts = ['Inter','Arial','Helvetica','Verdana','Tahoma','Georgia','Times New Roman','Courier New','Trebuchet MS','Impact','Comic Sans MS','system-ui','sans-serif','serif','monospace'];
+          if (systemFonts.indexOf(name) !== -1 || _loadedFonts[name]) return;
+          _loadedFonts[name] = true;
+          var link = document.createElement('link');
+          link.rel = 'stylesheet';
+          link.href = 'https://fonts.googleapis.com/css2?family=' + encodeURIComponent(name).replace(/%20/g, '+') + ':wght@400;600;700;800&display=swap';
+          document.head.appendChild(link);
+        }
+
         function applyStyle(s) {
           if (!s) return;
           try {
@@ -212,7 +229,9 @@ export function renderOverlayPage(options = {}) {
             const clock = document.getElementById('clock');
             clock.style.fontSize = (s.fontSize || 64) + 'px';
             clock.style.color = s.color || '#FFFFFF';
-            clock.style.fontFamily = s.font || 'Inter,system-ui,Arial,sans-serif';
+            var fontVal = s.font || 'Inter,system-ui,Arial,sans-serif';
+            loadGoogleFont(fontVal);
+            clock.style.fontFamily = fontVal;
             clock.style.fontWeight = String(s.weight || 700);
             clock.style.textAlign = s.align || 'center';
             if (s.shadow) {

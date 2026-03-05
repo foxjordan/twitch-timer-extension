@@ -6,6 +6,56 @@ import {
 import { GLOBAL_HEADER_STYLES, renderGlobalHeader } from "./globalHeader.js";
 import { renderFirebaseScript } from "./firebase.js";
 
+const FONT_OPTIONS = [
+  { value: "", label: "Default (Inter)" },
+  { value: "Inter, system-ui, sans-serif", label: "Inter" },
+  { value: "Arial, Helvetica, sans-serif", label: "Arial" },
+  { value: "Verdana, Geneva, sans-serif", label: "Verdana" },
+  { value: "Tahoma, Geneva, sans-serif", label: "Tahoma" },
+  { value: "Georgia, serif", label: "Georgia" },
+  { value: "'Times New Roman', Times, serif", label: "Times New Roman" },
+  { value: "'Courier New', Courier, monospace", label: "Courier New" },
+  { value: "'Trebuchet MS', sans-serif", label: "Trebuchet MS" },
+  { value: "Impact, sans-serif", label: "Impact" },
+  { value: "'Comic Sans MS', cursive", label: "Comic Sans MS" },
+  { value: "'Roboto', sans-serif", label: "Roboto", google: true },
+  { value: "'Open Sans', sans-serif", label: "Open Sans", google: true },
+  { value: "'Lato', sans-serif", label: "Lato", google: true },
+  { value: "'Montserrat', sans-serif", label: "Montserrat", google: true },
+  { value: "'Poppins', sans-serif", label: "Poppins", google: true },
+  { value: "'Oswald', sans-serif", label: "Oswald", google: true },
+  { value: "'Raleway', sans-serif", label: "Raleway", google: true },
+  { value: "'Bebas Neue', sans-serif", label: "Bebas Neue", google: true },
+  { value: "'Righteous', sans-serif", label: "Righteous", google: true },
+  { value: "'Bangers', cursive", label: "Bangers", google: true },
+  { value: "'Press Start 2P', monospace", label: "Press Start 2P", google: true },
+  { value: "'Permanent Marker', cursive", label: "Permanent Marker", google: true },
+  { value: "'Russo One', sans-serif", label: "Russo One", google: true },
+  { value: "'Orbitron', sans-serif", label: "Orbitron", google: true },
+  { value: "'Chakra Petch', sans-serif", label: "Chakra Petch", google: true },
+];
+
+function escAttr(s) {
+  return String(s).replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;");
+}
+
+function buildFontOptions(currentValue) {
+  const cv = (currentValue || "").trim();
+  let html = "";
+  let matched = false;
+  for (const f of FONT_OPTIONS) {
+    const sel = cv === f.value || (!cv && !f.value) ? " selected" : "";
+    if (sel) matched = true;
+    html += '<option value="' + escAttr(f.value) + '"' + sel + '>' + f.label + (f.google ? " *" : "") + '</option>';
+  }
+  if (!matched && cv) {
+    html += '<option value="' + escAttr(cv) + '" selected>' + escAttr(cv) + ' (custom)</option>';
+  }
+  return html;
+}
+
+export { FONT_OPTIONS };
+
 export function renderGoalsConfigPage(options = {}) {
   const base = String(options.base || "");
   const adminName = String(options.adminName || "");
@@ -133,7 +183,7 @@ export function renderGoalsConfigPage(options = {}) {
       </p>
       <div class="goal-toolbar">
         <button id="createGoal">New goal</button>
-        <button class="secondary" id="createSubGoal">New sub goal</button>
+        <button class="secondary" id="createSubGoal">New subscriber goal</button>
         <button class="secondary" id="refreshGoals">Refresh</button>
         <button class="section-help-btn" data-help="toolbar" title="What are goals?">?</button>
       </div>
@@ -177,6 +227,19 @@ export function renderGoalsConfigPage(options = {}) {
 
       function escHtml(value) {
         return String(value != null ? value : '').replace(/[&<>"']/g, function(ch) { return htmlEscapeMap[ch] || ch; });
+      }
+
+      const _loadedFonts = {};
+      function loadGoogleFont(fontFamily) {
+        const match = fontFamily.match(/^'([^']+)'/);
+        const name = match ? match[1] : fontFamily.split(',')[0].trim().replace(/['"]/g, '');
+        const systemFonts = ['Inter','Arial','Helvetica','Verdana','Tahoma','Georgia','Times New Roman','Courier New','Trebuchet MS','Impact','Comic Sans MS','system-ui','sans-serif','serif','monospace'];
+        if (systemFonts.indexOf(name) !== -1 || _loadedFonts[name]) return;
+        _loadedFonts[name] = true;
+        const link = document.createElement('link');
+        link.rel = 'stylesheet';
+        link.href = 'https://fonts.googleapis.com/css2?family=' + encodeURIComponent(name).replace(/%20/g, '+') + ':wght@400;600;700;800&display=swap';
+        document.head.appendChild(link);
       }
 
       function prettyNumber(value) {
@@ -282,6 +345,7 @@ export function renderGoalsConfigPage(options = {}) {
         container.className = 'goal-preview-card';
         container.style.color = style.labelColor || '#FFFFFF';
         if (style.backgroundColor) container.style.background = style.backgroundColor;
+        if (style.fontFamily) { loadGoogleFont(style.fontFamily); container.style.fontFamily = style.fontFamily; }
         container.style.padding = '8px 10px';
         container.style.alignItems =
           style.align === 'left' ? 'flex-start' : style.align === 'right' ? 'flex-end' : 'center';
@@ -389,7 +453,7 @@ export function renderGoalsConfigPage(options = {}) {
         const baselineText = Number.isFinite(subBaseline) ? prettyNumber(subBaseline) : '\u2014';
         const liveText = Number.isFinite(lastSubCount) ? prettyNumber(lastSubCount) : '\u2014';
         const unitField = isSubGoal
-          ? '<div class="goal-field"><label>Unit label</label><div class="hint">Sub goals always use subs</div></div>'
+          ? '<div class="goal-field"><label>Unit label</label><div class="hint">Subscriber goals automatically track your live sub count</div></div>'
           : '<div class="goal-field">' +
                 '<label>Unit label</label>' +
                 '<input type="text" data-field="unitLabel" value="' + escHtml(goal.unitLabel || 'points') + '" placeholder="points, minutes, subs\u2026" />' +
@@ -571,7 +635,7 @@ export function renderGoalsConfigPage(options = {}) {
                 '</div>' +
                 '<div class="goal-field">' +
                   '<label>Archived</label>' +
-                  '<label style="display:flex; align-items:center; gap:6px;"><input type="checkbox" data-field="archived" ' + boolAttr(archived) + ' /> Hide from dashboard</label>' +
+                  '<label style="display:flex; align-items:center; gap:6px;"><input type="checkbox" data-field="archived" ' + boolAttr(archived) + ' /> Stop tracking (no new contributions)</label>' +
                 '</div>' +
                 subInfoBlock +
               '</div>' +
@@ -624,7 +688,9 @@ export function renderGoalsConfigPage(options = {}) {
                 '</div>' +
                 '<div class="goal-field">' +
                   '<label>Font family</label>' +
-                  '<input type="text" data-field="style.fontFamily" value="' + escHtml(style.fontFamily || '') + '" placeholder="Inter, system-ui" />' +
+                  '<select data-field="style.fontFamily">' +
+                    buildFontOptions(style.fontFamily || '') +
+                  '</select>' +
                 '</div>' +
                 '<div class="goal-field">' +
                   '<label>Font weight</label>' +
@@ -778,7 +844,7 @@ export function renderGoalsConfigPage(options = {}) {
         setBusy(btn, true);
         const defaultEnd = new Date(Date.now() + 7 * 24 * 3600 * 1000).toISOString();
         const body = {
-          title: 'New Sub Goal',
+          title: 'Subscriber Goal',
           targetValue: 25,
           goalType: 'sub_goal',
           type: 'sub_goal',
@@ -792,7 +858,7 @@ export function renderGoalsConfigPage(options = {}) {
           });
           if (!res.ok) {
             const msg = await res.text();
-            alert('Unable to create sub goal. ' + msg);
+            alert('Unable to create subscriber goal. ' + msg);
           } else {
             await fetchGoalsAdmin();
           }
@@ -1000,7 +1066,7 @@ export function renderGoalsConfigPage(options = {}) {
         var helpText = {
           toolbar: {
             title: 'Goal Tracking Bars',
-            description: 'Create persistent goal bars for subs, bits, or mixed fundraisers. Click "New goal" for a standalone bar, or "New sub goal" to create one that feeds into a parent goal. Each goal gets its own Browser Source URL for OBS.'
+            description: 'Create persistent goal bars for subs, bits, or mixed fundraisers. Click "New goal" for a customizable bar, or "New subscriber goal" to create one that automatically tracks your live subscriber count. Each goal gets its own Browser Source URL for OBS.'
           },
           basics: {
             title: 'Basics',
@@ -1008,7 +1074,7 @@ export function renderGoalsConfigPage(options = {}) {
           },
           appearance: {
             title: 'Appearance',
-            description: 'Customize the bar\\'s layout (horizontal or vertical), dimensions, colors for the fill/empty track, labels, and per-tier segment colors. Toggle what\\'s shown on the overlay and add custom CSS for advanced styling.'
+            description: 'Customize the bar\\'s layout (horizontal or vertical), dimensions, colors for the fill/empty track, labels, and per-tier segment colors. Toggle what\\'s shown on the overlay.'
           },
           rules: {
             title: 'Rules & Contributions',

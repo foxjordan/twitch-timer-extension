@@ -353,7 +353,7 @@ function normalizeGoal(raw = {}) {
   const normalized = {
     id: goal.id ? String(goal.id) : crypto.randomUUID(),
     type,
-    title: sanitizeString(goal.title, type === "sub_goal" ? "Sub Goal" : "New Goal"),
+    title: sanitizeString(goal.title, type === "sub_goal" ? "Subscriber Goal" : "New Goal"),
     description: sanitizeString(goal.description, ""),
     unitLabel:
       type === "sub_goal"

@@ -5,6 +5,7 @@ import {
 } from "./theme.js";
 import { GLOBAL_HEADER_STYLES, renderGlobalHeader } from "./globalHeader.js";
 import { renderFirebaseScript } from "./firebase.js";
+import { FONT_OPTIONS } from "./goalsConfigPage.js";
 
 export function renderOverlayConfigPage(options = {}) {
   const {
@@ -303,9 +304,13 @@ export function renderOverlayConfigPage(options = {}) {
             <div class="control"><label>Background</label><input id="bg" type="color" value="${
               initial.bg
             }"></div>
-            <div class="control"><label>Font Family</label><input id="font" type="text" value="${
-              initial.font
-            }"></div>
+            <div class="control"><label>Font Family</label><select id="font">${
+              FONT_OPTIONS.map(f => {
+                const cv = initial.font.trim();
+                const sel = cv === f.value || (!cv && !f.value) ? " selected" : "";
+                return '<option value="' + f.value.replace(/&/g,"&amp;").replace(/"/g,"&quot;") + '"' + sel + '>' + f.label + (f.google ? " *" : "") + '</option>';
+              }).join("") + (FONT_OPTIONS.every(f => f.value.trim() !== initial.font.trim()) && initial.font.trim() ? '<option value="' + initial.font.replace(/"/g,"&quot;") + '" selected>' + initial.font + ' (custom)</option>' : "")
+            }</select></div>
             <div class="control"><label>Show Label</label><input id="label" type="checkbox" ${
               initial.label ? "checked" : ""
             }></div>

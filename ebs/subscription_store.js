@@ -45,9 +45,9 @@ export function removeSubscription(userId) {
 }
 
 export function isPro(userId) {
-  const sub = subscriptions.get(String(userId));
-  if (!sub) return false;
-  return sub.status === "active" || sub.status === "trialing";
+  // TODO: Temporary — grant Pro to everyone for open testing.
+  // Revert to subscription check once testing is complete.
+  return true;
 }
 
 export function findUserByCustomerId(stripeCustomerId) {

@@ -36,6 +36,7 @@ export function renderWheelOverlayPage(options = {}) {
         const defaultOptions = ${JSON.stringify(defaultOptions)};
         const qs = new URLSearchParams(window.location.search);
         const overlayKey = qs.get('key') || '';
+        const wheelId = qs.get('wheelId') || '';
         const canvas = document.getElementById('wheelCanvas');
         const resultEl = document.getElementById('wheelResult');
         const statusEl = document.getElementById('wheelStatus');
@@ -237,7 +238,8 @@ export function renderWheelOverlayPage(options = {}) {
 
         (function connectSSE() {
           var retryDelay = 4000;
-          const streamUrl = '/api/overlay/stream?key=' + encodeURIComponent(overlayKey);
+          let streamUrl = '/api/overlay/stream?key=' + encodeURIComponent(overlayKey);
+          if (wheelId) streamUrl += '&wheelId=' + encodeURIComponent(wheelId);
           const source = new EventSource(streamUrl);
 
           source.addEventListener('open', () => {

@@ -441,8 +441,10 @@ app.post("/api/wheel/spin", (req, res) => {
   const pointerOffset = WHEEL_POINTER_ANGLE - (winnerIndex * slice + slice / 2);
   const normalizedTarget = ((pointerOffset % TWO_PI) + TWO_PI) % TWO_PI;
   const lapCount = Math.max(2, Math.floor(durationMs / 800));
+  const wheelId = typeof req.body?.wheelId === "string" ? req.body.wheelId.trim() : "";
   const payload = {
     spinId: uuidv4(),
+    wheelId,
     options: wheelOptions,
     winnerIndex,
     winnerLabel: wheelOptions[winnerIndex]?.label || "",
@@ -452,9 +454,11 @@ app.post("/api/wheel/spin", (req, res) => {
     durationSeconds: Number(durationMs / 1000),
     triggeredAt: new Date().toISOString(),
   };
-  lastWheelSpinByKey.set(overlayKey, payload);
+  const cacheKey = wheelId ? `${overlayKey}:${wheelId}` : overlayKey;
+  lastWheelSpinByKey.set(cacheKey, payload);
   for (const client of Array.from(sseClients)) {
     if (!client || client.key !== overlayKey) continue;
+    if (wheelId && client.wheelId && client.wheelId !== wheelId) continue;
     try {
       client.res.write("event: wheel_spin\n");
       client.res.write(`data: ${JSON.stringify(payload)}\n\n`);
@@ -573,7 +577,8 @@ app.get("/api/overlay/stream", (req, res) => {
   const key = normKey(req.query.key);
   const goalUserId = resolveGoalUserIdFromRequest(req);
   const timerUserId = resolveTimerUserIdFromRequest(req);
-  const client = { res, key, goalUserId, timerUserId };
+  const wheelId = typeof req.query.wheelId === "string" ? req.query.wheelId.trim() : "";
+  const client = { res, key, goalUserId, timerUserId, wheelId };
   sseClients.add(client);
   observability.totalSseClientsServed += 1;
   logger.info("sse_client_connected", {
@@ -604,7 +609,8 @@ app.get("/api/overlay/stream", (req, res) => {
     broadcastGoalSnapshot(goalUserId, client);
   }
 
-  const lastWheel = lastWheelSpinByKey.get(key);
+  const wheelCacheKey = wheelId ? `${key}:${wheelId}` : key;
+  const lastWheel = lastWheelSpinByKey.get(wheelCacheKey);
   if (lastWheel) {
     res.write("event: wheel_spin\n");
     res.write(`data: ${JSON.stringify(lastWheel)}\n\n`);

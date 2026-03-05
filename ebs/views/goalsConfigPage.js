@@ -174,6 +174,7 @@ export function renderGoalsConfigPage(options = {}) {
       includeThemeToggle: true,
       showFeedback: true,
       showLogout: true,
+      showUtilitiesLink: true,
       showAdminLink,
     })}
     <main>
@@ -755,6 +756,7 @@ export function renderGoalsConfigPage(options = {}) {
                   '<label>Tier 3 color</label>' +
                   '<input type="color" data-field="style.segmentColors.tier3000" value="' + escHtml(segmentColors.tier3000 || '#FFB347') + '" />' +
                 '</div>' +
+                (isSubGoal ? '' :
                 '<div class="goal-field">' +
                   '<label>Bits color</label>' +
                   '<input type="color" data-field="style.segmentColors.bits" value="' + escHtml(segmentColors.bits || '#10B981') + '" />' +
@@ -766,7 +768,7 @@ export function renderGoalsConfigPage(options = {}) {
                 '<div class="goal-field">' +
                   '<label>Manual color</label>' +
                   '<input type="color" data-field="style.segmentColors.manual" value="' + escHtml(segmentColors.manual || '#38BDF8') + '" />' +
-                '</div>' +
+                '</div>') +
               '</div>' +
               '<div class="goal-grid">' +
                 '<div class="goal-field"><label><input type="checkbox" data-field="style.showLabel" ' + boolAttr(style.showLabel !== false) + ' /> Show label</label></div>' +

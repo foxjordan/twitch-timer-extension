@@ -2,8 +2,16 @@ import { renderAdminDashboardPage } from "./views/adminDashboardPage.js";
 import { getBan, banUser, unbanUser } from "./bans.js";
 import { getSubscription, isPro } from "./subscription_store.js";
 import { getTtsSettings, setTtsSettings, getGlobalTtsConfig, setGlobalTtsConfig } from "./tts_store.js";
-import { getVoices } from "./tts_voices.js";
+import { getVoices, isValidVoice } from "./tts_voices.js";
+import { synthesizeSpeech } from "./tts_provider.js";
 import { VALID_TIERS, TIER_LABELS, TIER_COSTS } from "./tiers.js";
+import crypto from "crypto";
+import path from "path";
+import { writeFile, mkdir } from "fs/promises";
+import { existsSync } from "fs";
+
+const DATA_DIR = process.env.DATA_DIR || process.cwd();
+const TTS_AUDIO_DIR = path.resolve(DATA_DIR, "tts_audio");
 
 const SUPER_ADMIN_IDS = (process.env.SUPER_ADMIN_IDS || "")
   .split(",")
@@ -35,6 +43,8 @@ export function mountAdminRoutes(app, ctx) {
     observability,
     onUserBanned,
     getUserProfile,
+    onSoundAlert,
+    onTtsAlert,
   } = ctx;
 
   app.get("/admin", (req, res) => {
@@ -249,5 +259,97 @@ export function mountAdminRoutes(app, ctx) {
     }
     const updated = setGlobalTtsConfig(req.body || {});
     res.json({ ok: true, config: updated });
+  });
+
+  // ===== Test Alert Endpoints (bypass Bits) =====
+
+  // Get sounds for a specific broadcaster (for test UI)
+  app.get("/api/admin/test/sounds/:userId", (req, res) => {
+    if (!req.session?.isAdmin || !isSuperAdmin(req)) {
+      return res.status(403).json({ error: "Access denied" });
+    }
+    const uid = String(req.params.userId);
+    try {
+      const sounds = listSounds(uid).filter((s) => s.enabled);
+      res.json({ sounds: sounds.map((s) => ({ id: s.id, name: s.name, tier: s.tier, type: s.type || "sound" })) });
+    } catch {
+      res.json({ sounds: [] });
+    }
+  });
+
+  // Test a sound alert (no Bits required)
+  app.post("/api/admin/test/sound", (req, res) => {
+    if (!req.session?.isAdmin || !isSuperAdmin(req)) {
+      return res.status(403).json({ error: "Access denied" });
+    }
+    const { userId, soundId } = req.body || {};
+    if (!userId || !soundId) return res.status(400).json({ error: "userId and soundId required" });
+
+    const uid = String(userId);
+    let sound;
+    try {
+      const sounds = listSounds(uid);
+      sound = sounds.find((s) => s.id === soundId);
+    } catch {}
+    if (!sound) return res.status(404).json({ error: "Sound not found" });
+
+    if (typeof onSoundAlert === "function") {
+      onSoundAlert({
+        channelId: uid,
+        soundId: sound.id,
+        soundName: sound.name,
+        tier: sound.tier,
+        txId: `test_${Date.now()}`,
+        type: sound.type || "sound",
+        clipSlug: sound.clipSlug || "",
+        volume: sound.volume || 80,
+      });
+    }
+
+    res.json({ ok: true, sound: { id: sound.id, name: sound.name } });
+  });
+
+  // Test a TTS alert (no Bits required)
+  app.post("/api/admin/test/tts", async (req, res) => {
+    if (!req.session?.isAdmin || !isSuperAdmin(req)) {
+      return res.status(403).json({ error: "Access denied" });
+    }
+    const { userId, message, voiceId } = req.body || {};
+    if (!userId) return res.status(400).json({ error: "userId required" });
+    if (!message || typeof message !== "string" || message.trim().length === 0) {
+      return res.status(400).json({ error: "Message is required" });
+    }
+    if (!voiceId || !isValidVoice(voiceId)) {
+      return res.status(400).json({ error: "Invalid voice" });
+    }
+
+    const uid = String(userId);
+    const trimmed = message.trim().slice(0, 300);
+
+    try {
+      const audioBuffer = await synthesizeSpeech(trimmed, voiceId);
+      const fileId = `tts_${crypto.randomUUID().slice(0, 12)}`;
+      if (!existsSync(TTS_AUDIO_DIR)) await mkdir(TTS_AUDIO_DIR, { recursive: true });
+      const filePath = path.resolve(TTS_AUDIO_DIR, `${fileId}.mp3`);
+      await writeFile(filePath, audioBuffer);
+
+      const voice = getVoices().find((v) => v.id === voiceId);
+      const settings = getTtsSettings(uid);
+
+      if (typeof onTtsAlert === "function") {
+        onTtsAlert({
+          channelId: uid,
+          message: trimmed,
+          voiceName: voice?.name || voiceId,
+          fileId,
+          volume: settings.volume || 80,
+          txId: `test_${Date.now()}`,
+        });
+      }
+
+      res.json({ ok: true, fileId });
+    } catch (err) {
+      res.status(500).json({ error: "TTS generation failed: " + (err?.message || "unknown") });
+    }
   });
 }

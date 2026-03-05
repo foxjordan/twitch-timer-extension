@@ -171,6 +171,39 @@ export function renderAdminDashboardPage(options = {}) {
         </div>
       </div>
 
+      <div class="table-card" style="margin-bottom: 18px;">
+        <h2>Test Alerts</h2>
+        <div style="font-size:12px; color:var(--text-muted); margin-bottom:12px;">Trigger sound or TTS alerts without Bits. Useful for testing overlay playback. The alert will be sent to the broadcaster's OBS overlay via SSE.</div>
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:18px;">
+          <div>
+            <label style="display:block; font-size:13px; font-weight:600; margin-bottom:6px;">Broadcaster</label>
+            <select id="testBroadcaster" style="width:100%; padding:8px 10px; border-radius:8px; border:1px solid var(--surface-border); background:var(--surface-muted); color:var(--text-color); font-size:13px;">
+              <option value="">Select a broadcaster...</option>
+            </select>
+          </div>
+          <div></div>
+        </div>
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:18px; margin-top:14px;">
+          <div style="padding:14px; background:var(--surface-muted); border-radius:10px;">
+            <label style="display:block; font-size:13px; font-weight:600; margin-bottom:8px;">Sound Alert Test</label>
+            <select id="testSoundSelect" style="width:100%; padding:8px 10px; border-radius:8px; border:1px solid var(--surface-border); background:var(--page-bg); color:var(--text-color); font-size:13px; margin-bottom:8px;" disabled>
+              <option value="">Select a broadcaster first</option>
+            </select>
+            <button class="btn-save" id="testSoundBtn" disabled style="padding:6px 14px; font-size:12px;">Test Sound</button>
+            <span id="testSoundStatus" class="tts-status" style="display:none; margin-left:8px;"></span>
+          </div>
+          <div style="padding:14px; background:var(--surface-muted); border-radius:10px;">
+            <label style="display:block; font-size:13px; font-weight:600; margin-bottom:8px;">TTS Alert Test</label>
+            <select id="testTtsVoice" style="width:100%; padding:8px 10px; border-radius:8px; border:1px solid var(--surface-border); background:var(--page-bg); color:var(--text-color); font-size:13px; margin-bottom:8px;" disabled>
+              <option value="">Select a broadcaster first</option>
+            </select>
+            <textarea id="testTtsMessage" placeholder="Enter test message..." rows="2" style="width:100%; padding:8px 10px; border-radius:8px; border:1px solid var(--surface-border); background:var(--page-bg); color:var(--text-color); font-size:13px; margin-bottom:8px; resize:vertical; font-family:inherit; box-sizing:border-box;" disabled></textarea>
+            <button class="btn-save" id="testTtsBtn" disabled style="padding:6px 14px; font-size:12px;">Test TTS</button>
+            <span id="testTtsStatus" class="tts-status" style="display:none; margin-left:8px;"></span>
+          </div>
+        </div>
+      </div>
+
       <div class="table-card">
         <h2>Broadcasters <span class="refresh-info" id="lastRefresh"></span></h2>
         <div id="tableContainer">
@@ -431,6 +464,7 @@ export function renderAdminDashboardPage(options = {}) {
             .then(function(data) {
               if (!data) return;
               renderTable(data);
+              if (typeof populateTestBroadcasters === 'function') populateTestBroadcasters(data.users || []);
               if (lastRefreshEl) lastRefreshEl.textContent = 'Updated ' + new Date().toLocaleTimeString();
             })
             .catch(function() {
@@ -695,6 +729,149 @@ export function renderAdminDashboardPage(options = {}) {
         });
 
         fetchTtsConfig();
+
+        // ===== Test Alerts =====
+        var testBroadcasterEl = document.getElementById('testBroadcaster');
+        var testSoundSelectEl = document.getElementById('testSoundSelect');
+        var testSoundBtn = document.getElementById('testSoundBtn');
+        var testSoundStatus = document.getElementById('testSoundStatus');
+        var testTtsVoiceEl = document.getElementById('testTtsVoice');
+        var testTtsMessageEl = document.getElementById('testTtsMessage');
+        var testTtsBtn = document.getElementById('testTtsBtn');
+        var testTtsStatus = document.getElementById('testTtsStatus');
+        var cachedBroadcasters = [];
+
+        function populateTestBroadcasters(users) {
+          cachedBroadcasters = users || [];
+          var currentVal = testBroadcasterEl.value;
+          testBroadcasterEl.textContent = '';
+          var defaultOpt = document.createElement('option');
+          defaultOpt.value = '';
+          defaultOpt.textContent = 'Select a broadcaster...';
+          testBroadcasterEl.appendChild(defaultOpt);
+          cachedBroadcasters.forEach(function(u) {
+            var opt = document.createElement('option');
+            opt.value = u.userId;
+            opt.textContent = (u.displayName || u.login || u.userId) + ' (' + u.userId + ')';
+            if (u.userId === currentVal) opt.selected = true;
+            testBroadcasterEl.appendChild(opt);
+          });
+        }
+
+        testBroadcasterEl.addEventListener('change', function() {
+          var uid = testBroadcasterEl.value;
+          testSoundSelectEl.disabled = !uid;
+          testSoundBtn.disabled = true;
+          testTtsVoiceEl.disabled = !uid;
+          testTtsMessageEl.disabled = !uid;
+          testTtsBtn.disabled = !uid;
+          testSoundSelectEl.textContent = '';
+          if (!uid) {
+            var ph = document.createElement('option');
+            ph.value = '';
+            ph.textContent = 'Select a broadcaster first';
+            testSoundSelectEl.appendChild(ph);
+            return;
+          }
+          // Load sounds for this broadcaster
+          var loadOpt = document.createElement('option');
+          loadOpt.value = '';
+          loadOpt.textContent = 'Loading sounds...';
+          testSoundSelectEl.appendChild(loadOpt);
+          fetch('/api/admin/test/sounds/' + encodeURIComponent(uid), { credentials: 'same-origin' })
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+              testSoundSelectEl.textContent = '';
+              var sounds = data.sounds || [];
+              if (sounds.length === 0) {
+                var noOpt = document.createElement('option');
+                noOpt.value = '';
+                noOpt.textContent = 'No sounds configured';
+                testSoundSelectEl.appendChild(noOpt);
+              } else {
+                sounds.forEach(function(s) {
+                  var opt = document.createElement('option');
+                  opt.value = s.id;
+                  opt.textContent = s.name + ' (' + s.tier.replace('sound_', '') + ' Bits)';
+                  testSoundSelectEl.appendChild(opt);
+                });
+                testSoundBtn.disabled = false;
+              }
+            })
+            .catch(function() {
+              testSoundSelectEl.textContent = '';
+              var errOpt = document.createElement('option');
+              errOpt.value = '';
+              errOpt.textContent = 'Failed to load sounds';
+              testSoundSelectEl.appendChild(errOpt);
+            });
+          // Populate TTS voices
+          testTtsVoiceEl.textContent = '';
+          ttsAllVoices.forEach(function(v) {
+            var opt = document.createElement('option');
+            opt.value = v.id;
+            opt.textContent = v.name;
+            testTtsVoiceEl.appendChild(opt);
+          });
+        });
+
+        function showTestStatus(el, msg, isError) {
+          el.textContent = msg;
+          el.style.display = 'inline-block';
+          el.style.background = isError ? '#ef444433' : '#10b98133';
+          el.style.color = isError ? '#ef4444' : '#10b981';
+          setTimeout(function() { el.style.display = 'none'; }, 4000);
+        }
+
+        testSoundBtn.addEventListener('click', function() {
+          var uid = testBroadcasterEl.value;
+          var soundId = testSoundSelectEl.value;
+          if (!uid || !soundId) return;
+          testSoundBtn.disabled = true;
+          fetch('/api/admin/test/sound', {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ userId: uid, soundId: soundId })
+          })
+          .then(function(r) { return r.json(); })
+          .then(function(data) {
+            testSoundBtn.disabled = false;
+            if (data.error) { showTestStatus(testSoundStatus, 'Error: ' + data.error, true); }
+            else { showTestStatus(testSoundStatus, 'Sent: ' + (data.sound ? data.sound.name : 'OK'), false); }
+          })
+          .catch(function() {
+            testSoundBtn.disabled = false;
+            showTestStatus(testSoundStatus, 'Request failed', true);
+          });
+        });
+
+        testTtsBtn.addEventListener('click', function() {
+          var uid = testBroadcasterEl.value;
+          var voiceId = testTtsVoiceEl.value;
+          var message = testTtsMessageEl.value.trim();
+          if (!uid || !voiceId || !message) {
+            showTestStatus(testTtsStatus, 'Enter a message', true);
+            return;
+          }
+          testTtsBtn.disabled = true;
+          fetch('/api/admin/test/tts', {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ userId: uid, message: message, voiceId: voiceId })
+          })
+          .then(function(r) { return r.json(); })
+          .then(function(data) {
+            testTtsBtn.disabled = false;
+            if (data.error) { showTestStatus(testTtsStatus, 'Error: ' + data.error, true); }
+            else { showTestStatus(testTtsStatus, 'TTS sent to overlay!', false); }
+          })
+          .catch(function() {
+            testTtsBtn.disabled = false;
+            showTestStatus(testTtsStatus, 'Request failed', true);
+          });
+        });
       })();
     </script>
     <button class="tour-btn" id="tourBtn" title="Show guided tour">Take A Tour</button>

@@ -920,6 +920,24 @@ mountAdminRoutes(app, {
   DEFAULT_STYLE,
   observability,
   getUserProfile,
+  onSoundAlert: ({ channelId, soundId, soundName, tier, txId, viewerUserId, type, clipSlug, volume }) => {
+    addLogEntry({ type: "sound_alert", userId: String(channelId), soundId, soundName, txId: txId || undefined });
+    const payload = JSON.stringify({ soundId, soundName, channelId, txId, ts: Date.now(), type: type || "sound", clipSlug: clipSlug || "", volume: volume || 80 });
+    for (const client of Array.from(sseClients)) {
+      if (client.timerUserId && String(client.timerUserId) !== String(channelId)) continue;
+      try { client.res.write("event: sound_alert\n"); client.res.write(`data: ${payload}\n\n`); } catch { sseClients.delete(client); }
+    }
+    broadcastToChannel({ broadcasterId: channelId, type: "sound_alert", payload: { soundId, soundName } }).catch(() => {});
+  },
+  onTtsAlert: ({ channelId, message, voiceName, fileId, volume, txId }) => {
+    addLogEntry({ type: "tts_alert", userId: String(channelId), message, voiceName, txId: txId || undefined });
+    const payload = JSON.stringify({ type: "tts", message, voiceName, channelId, txId, audioUrl: `/api/tts/audio/${fileId}`, volume: volume || 80, ts: Date.now() });
+    for (const client of Array.from(sseClients)) {
+      if (client.timerUserId && String(client.timerUserId) !== String(channelId)) continue;
+      try { client.res.write("event: tts_alert\n"); client.res.write(`data: ${payload}\n\n`); } catch { sseClients.delete(client); }
+    }
+    broadcastToChannel({ broadcasterId: channelId, type: "tts_alert", payload: { message, voiceName } }).catch(() => {});
+  },
   onUserBanned: (uid) => {
     // Disconnect their EventSub WebSocket
     closeEventSubForUser(uid);

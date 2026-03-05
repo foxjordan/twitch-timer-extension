@@ -22,24 +22,42 @@ export function renderOverlayConfigPage(options = {}) {
   const defH = Math.floor(defSecs / 3600);
   const defM = Math.floor((defSecs % 3600) / 60);
   const defS = defSecs % 60;
+  // Coerce value to boolean — handles true, false, "1", "0", "true", "false"
+  const toBool = (v, fallback) => {
+    if (v === undefined || v === null) return fallback;
+    if (typeof v === "boolean") return v;
+    const s = String(v).toLowerCase();
+    if (s === "0" || s === "false") return false;
+    return true;
+  };
   const initial = {
     fontSize: Number(initialQuery.fontSize ?? 64),
     color: String(initialQuery.color ?? "#efeff1"),
     bg: String(initialQuery.bg ?? "#111114"),
-    transparent: String(initialQuery.transparent ?? "0") !== "0",
+    transparent: toBool(initialQuery.transparent, false),
     font: String(initialQuery.font ?? "Inter,system-ui,Arial,sans-serif"),
-    label: String(initialQuery.label ?? "0") !== "0",
+    label: toBool(initialQuery.label, false),
     title: String(initialQuery.title ?? "Stream Countdown"),
     align: String(initialQuery.align ?? "center"),
     weight: Number(initialQuery.weight ?? 700),
-    shadow: String(initialQuery.shadow ?? "0") !== "0",
+    shadow: toBool(initialQuery.shadow, false),
     shadowColor: String(initialQuery.shadowColor ?? "rgba(0,0,0,0.7)"),
     shadowBlur: Number(initialQuery.shadowBlur ?? 8),
     stroke: Number(initialQuery.stroke ?? 0),
     strokeColor: String(initialQuery.strokeColor ?? "#000000"),
-    warnEnabled: String(initialQuery.warnEnabled ?? "1") !== "0",
-    dangerEnabled: String(initialQuery.dangerEnabled ?? "1") !== "0",
-    flashEnabled: String(initialQuery.flashEnabled ?? "1") !== "0",
+    warnEnabled: toBool(initialQuery.warnEnabled, true),
+    warnUnderSeconds: Number(initialQuery.warnUnderSeconds ?? 300),
+    warnColor: String(initialQuery.warnColor ?? "#FFA500"),
+    dangerEnabled: toBool(initialQuery.dangerEnabled, true),
+    dangerUnderSeconds: Number(initialQuery.dangerUnderSeconds ?? 60),
+    dangerColor: String(initialQuery.dangerColor ?? "#FF4D4D"),
+    flashEnabled: toBool(initialQuery.flashEnabled, true),
+    flashUnderSeconds: Number(initialQuery.flashUnderSeconds ?? 0),
+    timeFormat: String(initialQuery.timeFormat ?? "mm:ss"),
+    addEffectEnabled: toBool(initialQuery.addEffectEnabled, true),
+    addEffectMode: String(initialQuery.addEffectMode ?? "pulse"),
+    hypeLabelEnabled: toBool(initialQuery.hypeLabelEnabled, true),
+    hypeLabel: String(initialQuery.hypeLabel ?? "\ud83d\udd25 Hype Train active"),
     key: String(initialQuery.key ?? ""),
   };
   const collapsedSections = (settings && settings.panelCollapsedSections) || {};
@@ -336,20 +354,20 @@ export function renderOverlayConfigPage(options = {}) {
             <div class="control"><label>Shadow</label><input id="shadow" type="checkbox" ${
               initial.shadow ? "checked" : ""
             }></div>
-            <div class="control"><label>Shadow Color</label><input id="shadowColor" type="color" value="#000000"></div>
+            <div class="control"><label>Shadow Color</label><input id="shadowColor" type="color" value="${initial.shadowColor}"></div>
             <div class="control"><label>Shadow Blur</label><input id="shadowBlur" type="number" min="0" max="50" step="1" value="${
               initial.shadowBlur
             }"></div>
             <div class="control"><label>Outline Width</label><input id="stroke" type="number" min="0" max="20" step="1" value="${
               initial.stroke
             }"></div>
-            <div class="control"><label>Outline Color</label><input id="strokeColor" type="color" value="#000000"></div>
+            <div class="control"><label>Outline Color</label><input id="strokeColor" type="color" value="${initial.strokeColor}"></div>
             <div class="control"><label>Time format</label>
               <select id="timeFormat">
-                <option value="mm:ss" >mm:ss</option>
-                <option value="hh:mm:ss">hh:mm:ss</option>
-                <option value="dd:hh:mm:ss">dd:hh:mm:ss</option>
-                <option value="auto" selected>auto (expands as needed)</option>
+                <option value="mm:ss" ${initial.timeFormat === "mm:ss" ? "selected" : ""}>mm:ss</option>
+                <option value="hh:mm:ss" ${initial.timeFormat === "hh:mm:ss" ? "selected" : ""}>hh:mm:ss</option>
+                <option value="dd:hh:mm:ss" ${initial.timeFormat === "dd:hh:mm:ss" ? "selected" : ""}>dd:hh:mm:ss</option>
+                <option value="auto" ${initial.timeFormat === "auto" ? "selected" : ""}>auto (expands as needed)</option>
               </select>
             </div>
             <div style="margin:12px 0; opacity:0.85; font-weight:600;">Threshold Styling</div>
@@ -360,8 +378,8 @@ export function renderOverlayConfigPage(options = {}) {
                 } /> Enabled
               </label>
             </div>
-            <div class="control"><label>Warn under (sec)</label><input id="warnUnder" type="number" min="0" step="1" value="300"></div>
-            <div class="control"><label>Warn color</label><input id="warnColor" type="color" value="#FFA500"></div>
+            <div class="control"><label>Warn under (sec)</label><input id="warnUnder" type="number" min="0" step="1" value="${initial.warnUnderSeconds}"></div>
+            <div class="control"><label>Warn color</label><input id="warnColor" type="color" value="${initial.warnColor}"></div>
             <div class="control"><label>Danger styling</label>
               <label style="display:flex; gap:6px; align-items:center; opacity:.85;">
                 <input id="dangerEnabled" type="checkbox" ${
@@ -369,8 +387,8 @@ export function renderOverlayConfigPage(options = {}) {
                 } /> Enabled
               </label>
             </div>
-            <div class="control"><label>Danger under (sec)</label><input id="dangerUnder" type="number" min="0" step="1" value="60"></div>
-            <div class="control"><label>Danger color</label><input id="dangerColor" type="color" value="#FF4D4D"></div>
+            <div class="control"><label>Danger under (sec)</label><input id="dangerUnder" type="number" min="0" step="1" value="${initial.dangerUnderSeconds}"></div>
+            <div class="control"><label>Danger color</label><input id="dangerColor" type="color" value="${initial.dangerColor}"></div>
             <div class="control"><label>Flash effect</label>
               <label style="display:flex; gap:6px; align-items:center; opacity:.85;">
                 <input id="flashEnabled" type="checkbox" ${
@@ -378,25 +396,25 @@ export function renderOverlayConfigPage(options = {}) {
                 } /> Enabled
               </label>
             </div>
-            <div class="control"><label>Flash under (sec)</label><input id="flashUnder" type="number" min="0" step="1" value="0"></div>
+            <div class="control"><label>Flash under (sec)</label><input id="flashUnder" type="number" min="0" step="1" value="${initial.flashUnderSeconds}"></div>
             <div class="control"><label>Hype text</label>
               <div style="display:flex; gap:8px; align-items:center;">
                 <label style="display:flex; gap:6px; align-items:center; opacity:.85;">
-                  <input id="hypeLabelEnabled" type="checkbox" checked /> Show
+                  <input id="hypeLabelEnabled" type="checkbox" ${initial.hypeLabelEnabled ? "checked" : ""} /> Show
                 </label>
-                <input id="hypeLabel" type="text" value="🔥 Hype Train active" />
+                <input id="hypeLabel" type="text" value="${initial.hypeLabel.replace(/"/g, '&quot;')}" />
               </div>
             </div>
             <div class="control"><label>On-add effect</label>
               <div style="display:flex; gap:8px; align-items:center;">
                 <label style="display:flex; gap:6px; align-items:center; opacity:.85;">
-                  <input id="addEffectEnabled" type="checkbox" checked /> Enabled
+                  <input id="addEffectEnabled" type="checkbox" ${initial.addEffectEnabled ? "checked" : ""} /> Enabled
                 </label>
                 <select id="addEffectMode" style="max-width:180px">
-                  <option value="pulse">Pulse</option>
-                  <option value="shake">Shake</option>
-                  <option value="bounce">Bounce</option>
-                  <option value="none">None</option>
+                  <option value="pulse" ${initial.addEffectMode === "pulse" ? "selected" : ""}>Pulse</option>
+                  <option value="shake" ${initial.addEffectMode === "shake" ? "selected" : ""}>Shake</option>
+                  <option value="bounce" ${initial.addEffectMode === "bounce" ? "selected" : ""}>Bounce</option>
+                  <option value="none" ${initial.addEffectMode === "none" ? "selected" : ""}>None</option>
                 </select>
               </div>
             </div>

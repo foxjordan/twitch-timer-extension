@@ -905,6 +905,7 @@ mountOverlayPageRoutes(app, {
   requireAdmin,
   getUserSettings,
   getRules,
+  getSavedStyle,
 });
 
 mountHomePageRoutes(app);

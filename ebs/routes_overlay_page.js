@@ -8,7 +8,7 @@ import { renderSoundConfigPage } from "./views/soundConfigPage.js";
 import { isSuperAdmin } from "./routes_admin.js";
 
 export function mountOverlayPageRoutes(app, deps) {
-  const { requireOverlayAuth, requireAdmin, getUserSettings, getRules } =
+  const { requireOverlayAuth, requireAdmin, getUserSettings, getRules, getSavedStyle } =
     deps;
 
   app.get("/overlay", (req, res) => {
@@ -112,13 +112,17 @@ export function mountOverlayPageRoutes(app, deps) {
     const settings = getUserSettings(req.session?.twitchUser?.id);
     const rulesSnapshot = getRules(req.session?.twitchUser?.id);
 
+    // Load saved style and merge with query params (query params override saved values)
+    const savedStyle = getSavedStyle ? getSavedStyle(userKey) : {};
+    const initialQuery = Object.assign({}, savedStyle, req.query || {});
+
     const html = renderOverlayConfigPage({
       base: "",
       adminName,
       userKey,
       settings,
       rulesSnapshot,
-      initialQuery: req.query || {},
+      initialQuery,
       showAdminLink: isSuperAdmin(req),
     });
 

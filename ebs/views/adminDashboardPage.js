@@ -48,6 +48,8 @@ export function renderAdminDashboardPage(options = {}) {
       .btn-ban:hover { background: #b91c1c; }
       .btn-unban { background: #16a34a; color: #fff; border: none; padding: 4px 10px; border-radius: 6px; font-size: 12px; cursor: pointer; font-weight: 600; }
       .btn-unban:hover { background: #15803d; }
+      .btn-delete { background: #7f1d1d; color: #fff; border: none; padding: 4px 10px; border-radius: 6px; font-size: 12px; cursor: pointer; font-weight: 600; }
+      .btn-delete:hover { background: #991b1b; }
       .btn-save { background: #9146ff; color: #fff; border: none; padding: 8px 18px; border-radius: 8px; font-size: 13px; cursor: pointer; font-weight: 600; }
       .btn-save:hover { background: #7c3aed; }
       .btn-save:disabled { opacity: 0.5; cursor: not-allowed; }
@@ -443,6 +445,13 @@ export function renderAdminDashboardPage(options = {}) {
               stripeLink.style.cssText = 'font-size:11px; color:#9146ff; margin-left:6px;';
               tdActions.appendChild(stripeLink);
             }
+            // Delete user data
+            var delBtn = document.createElement('button');
+            delBtn.className = 'btn-delete';
+            delBtn.textContent = 'Delete';
+            delBtn.style.marginLeft = '4px';
+            delBtn.addEventListener('click', function() { doDeleteUser(u.userId, u.displayName || u.login || u.userId); });
+            tdActions.appendChild(delBtn);
             tr.appendChild(tdActions);
 
             tbody.appendChild(tr);
@@ -538,6 +547,22 @@ export function renderAdminDashboardPage(options = {}) {
             refresh();
           })
           .catch(function() { alert('Toggle request failed'); });
+        }
+
+        function doDeleteUser(userId, displayName) {
+          if (!confirm('DELETE ALL DATA for ' + displayName + ' (' + userId + ')? This cannot be undone.')) return;
+          if (!confirm('Are you absolutely sure? This will permanently delete their profile, settings, sounds, goals, timer state, and all uploaded content.')) return;
+          fetch('/api/admin/users/' + encodeURIComponent(userId), {
+            method: 'DELETE',
+            credentials: 'same-origin'
+          })
+          .then(function(r) { return r.json(); })
+          .then(function(data) {
+            if (data.error) { alert('Error: ' + data.error); return; }
+            alert('Deleted data for ' + displayName + ': ' + (data.deleted || []).join(', '));
+            refresh();
+          })
+          .catch(function() { alert('Delete request failed'); });
         }
 
         refresh();

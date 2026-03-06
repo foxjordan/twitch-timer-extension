@@ -7,6 +7,10 @@ export function storeUserAccessToken(uid, token, expiresIn) {
   accessTokens.set(String(uid), { token, expiresAt });
 }
 
+export function deleteUserAccessToken(uid) {
+  accessTokens.delete(String(uid));
+}
+
 export function getUserAccessToken(uid) {
   const entry = accessTokens.get(String(uid));
   if (!entry) return null;

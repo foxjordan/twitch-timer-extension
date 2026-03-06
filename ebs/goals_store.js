@@ -473,6 +473,14 @@ export function deleteGoal(uid, goalId) {
   return removed;
 }
 
+export function deleteAllGoals(uid) {
+  const id = uid ? String(uid) : "default";
+  const existed = goalsByUser.has(id);
+  goalsByUser.delete(id);
+  if (existed) persistGoals().catch(() => {});
+  return existed;
+}
+
 export function resetGoal(uid, goalId, options = {}) {
   const map = ensureUserMap(uid);
   const goal = map.get(String(goalId));

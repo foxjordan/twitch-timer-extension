@@ -2,6 +2,7 @@ import { renderAdminDashboardPage } from "./views/adminDashboardPage.js";
 import { getBan, banUser, unbanUser } from "./bans.js";
 import { getSubscription, isPro } from "./subscription_store.js";
 import { getTtsSettings, setTtsSettings, getGlobalTtsConfig, setGlobalTtsConfig } from "./tts_store.js";
+import { deleteAllUserData } from "./user_data_deletion.js";
 import { getVoices, isValidVoice } from "./tts_voices.js";
 import { synthesizeSpeech } from "./tts_provider.js";
 import { VALID_TIERS, TIER_LABELS, TIER_COSTS } from "./tiers.js";
@@ -351,5 +352,22 @@ export function mountAdminRoutes(app, ctx) {
     } catch (err) {
       res.status(500).json({ error: "TTS generation failed: " + (err?.message || "unknown") });
     }
+  });
+
+  // Delete all data for a user (admin-initiated)
+  app.delete("/api/admin/users/:userId", async (req, res) => {
+    if (!req.session?.isAdmin || !isSuperAdmin(req)) {
+      return res.status(403).json({ error: "Access denied" });
+    }
+    const uid = String(req.params.userId);
+    if (!uid) return res.status(400).json({ error: "userId required" });
+
+    // Don't allow deleting a super admin
+    if (SUPER_ADMIN_IDS.includes(uid)) {
+      return res.status(400).json({ error: "Cannot delete a super admin" });
+    }
+
+    const result = await deleteAllUserData(uid, ctx.deletionCtx || {});
+    res.json({ ok: true, userId: uid, deleted: result.deleted });
   });
 }

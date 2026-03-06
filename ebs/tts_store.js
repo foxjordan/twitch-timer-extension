@@ -82,6 +82,14 @@ async function persist() {
   } catch {}
 }
 
+export function deleteTtsSettings(uid) {
+  const id = uid ? String(uid) : "default";
+  const existed = ttsSettingsByUser.has(id);
+  ttsSettingsByUser.delete(id);
+  if (existed) persist().catch(() => {});
+  return existed;
+}
+
 export function getTtsSettings(uid) {
   const id = ensureUser(uid);
   return cloneSettings(ttsSettingsByUser.get(id));

@@ -113,6 +113,14 @@ export async function loadTimerState() {
   } catch {}
 }
 
+export function deleteTimerState(uid) {
+  const id = String(uid || DEFAULT_USER_ID);
+  const existed = state.users.has(id);
+  state.users.delete(id);
+  if (existed) persistTimerState().catch(() => {});
+  return existed;
+}
+
 export function clearTimer(uid = DEFAULT_USER_ID) {
   const s = ensure(uid);
   s.timerExpiryEpochMs = 0;

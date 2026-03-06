@@ -1,6 +1,7 @@
 import { renderHomePage } from "./views/homePage.js";
 import { renderPrivacyPage } from "./views/privacyPage.js";
 import { renderGdprPage } from "./views/gdprPage.js";
+import { renderTermsPage } from "./views/termsPage.js";
 import { renderUtilitiesPage } from "./views/utilitiesPage.js";
 import { isSuperAdmin } from "./routes_admin.js";
 
@@ -32,6 +33,11 @@ const SITEMAP_XML = `<?xml version="1.0" encoding="UTF-8"?>
   </url>
   <url>
     <loc>https://livestreamerhub.com/gdpr</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.3</priority>
+  </url>
+  <url>
+    <loc>https://livestreamerhub.com/terms</loc>
     <changefreq>monthly</changefreq>
     <priority>0.3</priority>
   </url>
@@ -88,6 +94,13 @@ export function mountHomePageRoutes(app) {
 
   app.get("/gdpr", (req, res) => {
     const html = renderGdprPage({ base: "", contactEmail });
+    res.setHeader("Content-Type", "text/html; charset=utf-8");
+    res.setHeader("Cache-Control", "public, max-age=3600");
+    res.send(html);
+  });
+
+  app.get("/terms", (req, res) => {
+    const html = renderTermsPage({ base: "", contactEmail });
     res.setHeader("Content-Type", "text/html; charset=utf-8");
     res.setHeader("Cache-Control", "public, max-age=3600");
     res.send(html);

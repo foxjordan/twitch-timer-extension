@@ -957,9 +957,39 @@ mountAdminRoutes(app, {
     }
     logger.info("user_banned_disconnected", { userId: uid });
   },
+  deletionCtx: {
+    userSettings,
+    persistUserSettings,
+    broadcasterConnections,
+    sseClients,
+    closeEventSubForUser,
+  },
 });
 
 mountStripeRoutes(app);
+
+// ---- Self-service account deletion ----
+import { deleteAllUserData } from "./user_data_deletion.js";
+
+app.delete("/api/account", async (req, res) => {
+  if (!req.session?.isAdmin || !req.session?.twitchUser?.id) {
+    return res.status(401).json({ error: "Not authenticated" });
+  }
+  const uid = String(req.session.twitchUser.id);
+
+  const result = await deleteAllUserData(uid, {
+    userSettings,
+    persistUserSettings,
+    broadcasterConnections,
+    sseClients,
+    closeEventSubForUser,
+  });
+
+  // Destroy the session after deletion
+  req.session.destroy(() => {});
+
+  res.json({ ok: true, userId: uid, deleted: result.deleted });
+});
 
 // ---- EventSub integration ----
 function secondsFromEvent(notification, uid = "default") {

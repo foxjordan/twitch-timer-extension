@@ -93,6 +93,15 @@ export function getRules(uid) {
   return DEFAULT_RULES;
 }
 
+export function deleteRules(uid) {
+  const id = String(uid || '').trim();
+  if (!id) return false;
+  const existed = id in byUser;
+  delete byUser[id];
+  if (existed) persistRules().catch(() => {});
+  return existed;
+}
+
 export function setRules(uid, patch = {}) {
   const id = String(uid || '').trim();
   if (!id) throw new Error('User id required');

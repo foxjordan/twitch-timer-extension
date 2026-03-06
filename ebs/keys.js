@@ -39,6 +39,14 @@ export function rotateUserKey(userId) {
   return key;
 }
 
+export function deleteUserKey(userId) {
+  const uid = String(userId);
+  const existed = overlayKeys.has(uid);
+  overlayKeys.delete(uid);
+  if (existed) persistOverlayKeys().catch(() => {});
+  return existed;
+}
+
 export function keyIsValid(globalKey, candidate) {
   if (!candidate) return false;
   if (globalKey && candidate === globalKey) return true;

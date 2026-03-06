@@ -1,4 +1,4 @@
-import { readFile, writeFile, mkdir, unlink, stat, copyFile } from "fs/promises";
+import { readFile, writeFile, mkdir, unlink, stat, copyFile, rm } from "fs/promises";
 import { existsSync } from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
@@ -251,6 +251,27 @@ export async function deleteSound(uid, soundId) {
       await unlink(imgPath);
     } catch {}
   }
+  persistSoundAlerts().catch(() => {});
+  return true;
+}
+
+export async function deleteAllSounds(uid) {
+  const id = uid ? String(uid) : "default";
+  const user = soundAlertsByUser.get(id);
+  if (!user) return false;
+  // Delete all files from disk
+  for (const sound of user.sounds.values()) {
+    if (sound.filename) {
+      try { await unlink(getSoundFilePath(uid, sound)); } catch {}
+    }
+    if (sound.imageFilename) {
+      try { await unlink(path.resolve(SOUNDS_FILE_DIR, String(uid), sound.imageFilename)); } catch {}
+    }
+  }
+  // Remove the user's sound directory
+  const userDir = getSoundFileDir(uid);
+  try { await rm(userDir, { recursive: true }); } catch {}
+  soundAlertsByUser.delete(id);
   persistSoundAlerts().catch(() => {});
   return true;
 }

@@ -83,6 +83,14 @@ export function setSavedStyle(k, s = {}) {
   return overlayStyles.get(key);
 }
 
+export function deleteStyle(k) {
+  const key = normKey(k);
+  const existed = overlayStyles.has(key);
+  overlayStyles.delete(key);
+  if (existed) persistStyles().catch(() => {});
+  return existed;
+}
+
 export async function loadStyles() {
   try {
     const raw = await readFile(STYLES_PATH, 'utf-8');

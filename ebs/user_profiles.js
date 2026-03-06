@@ -37,3 +37,11 @@ export function setUserProfile(userId, login, displayName) {
 export function getUserProfile(userId) {
   return profiles.get(String(userId)) || null;
 }
+
+export function deleteUserProfile(userId) {
+  const uid = String(userId);
+  const existed = profiles.has(uid);
+  profiles.delete(uid);
+  if (existed) persistUserProfiles().catch(() => {});
+  return existed;
+}

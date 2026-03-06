@@ -58,7 +58,7 @@ function serializeAllUsers() {
   return obj;
 }
 
-async function persistTimerState() {
+export async function persistTimerState() {
   try {
     const data = { users: serializeAllUsers() };
     await writeFile(TIMER_STATE_PATH, JSON.stringify(data, null, 2), 'utf-8');

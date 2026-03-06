@@ -5,6 +5,9 @@ primary_region = "sjc"
 [build]
   dockerfile = "ebs/Dockerfile"
 
+[deploy]
+  strategy = "rolling"
+
 [env]
   PORT = "8080"
   DATA_DIR = "/data"

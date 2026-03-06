@@ -135,6 +135,8 @@ export function renderOverlayConfigPage(options = {}) {
       button:disabled { opacity: 0.5; cursor: not-allowed; }
       @keyframes btnpulse { 0% { transform: scale(0.99); } 100% { transform: scale(1); } }
       .btn-click { animation: btnpulse .18s ease; }
+      .reconnect-toast { position: fixed; top: 16px; right: 16px; background: var(--accent-color, #9146FF); color: #fff; padding: 10px 18px; border-radius: 10px; font-size: 13px; font-weight: 500; z-index: 9999; box-shadow: 0 4px 20px rgba(0,0,0,.25); opacity: 0; transform: translateY(-12px); transition: opacity .3s, transform .3s; pointer-events: none; }
+      .reconnect-toast.show { opacity: 1; transform: translateY(0); pointer-events: auto; }
       .hint { font-size: 12px; color: var(--text-muted); }
       .log-box { margin-top: 8px; padding: 8px; background: var(--log-bg); border: 1px solid var(--log-border); border-radius: 8px; max-height: 160px; overflow-y: auto; font-size: 12px; }
       .log-line { margin-bottom: 4px; white-space: nowrap; text-overflow: ellipsis; overflow: hidden; }
@@ -157,6 +159,7 @@ export function renderOverlayConfigPage(options = {}) {
     </style>
   </head>
   <body>
+    <div id="reconnect-toast" class="reconnect-toast">Service updated — reconnected automatically</div>
     ${renderGlobalHeader({
       base: "",
       adminName,
@@ -1122,8 +1125,23 @@ export function renderOverlayConfigPage(options = {}) {
           }).catch(function(){});
         })();
 
-        // Show current remaining
-        function updateRemain(){ fetch('/api/timer/state').then(function(r){return r.json();}).then(function(j){ document.getElementById('remain').textContent = fmt(j.remaining||0); }).catch(function(){}); }
+        // Show current remaining + detect server restart via bootId
+        var _knownBootId = null;
+        function showReconnectToast() {
+          var t = document.getElementById('reconnect-toast');
+          if (!t) return;
+          t.classList.add('show');
+          setTimeout(function(){ t.classList.remove('show'); }, 4000);
+        }
+        function updateRemain(){
+          fetch('/api/timer/state').then(function(r){return r.json();}).then(function(j){
+            document.getElementById('remain').textContent = fmt(j.remaining||0);
+            if (j.bootId && _knownBootId && j.bootId !== _knownBootId) {
+              showReconnectToast();
+            }
+            if (j.bootId) _knownBootId = j.bootId;
+          }).catch(function(){});
+        }
         updateRemain(); setInterval(updateRemain, 1000);
         updateCapStatus(); setInterval(updateCapStatus, 3000);
         function pollBonus(){ if (!_bonusHasSchedule) return; getBonusState().then(function(s){ updateBonusUI(s.bonusActive, s.bonusStartEpochMs, s.bonusEndEpochMs); }).catch(function(){}); }

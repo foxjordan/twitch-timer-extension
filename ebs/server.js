@@ -27,6 +27,7 @@ import {
   loadTimerState,
   clearTimer,
   setCapForcedOn,
+  persistTimerState,
 } from "./state.js";
 import {
   DEFAULT_STYLE,
@@ -74,6 +75,7 @@ import { mountStripeWebhookRoute, mountStripeRoutes } from "./routes_stripe.js";
 import { mountTtsRoutes } from "./routes_tts.js";
 import { loadTtsSettings, getTtsSettings } from "./tts_store.js";
 import { loadVoices } from "./tts_voices.js";
+import { persistTokens, loadTokens, getAllTokenUserIds, getUserAccessToken } from "./twitch_tokens.js";
 
 const app = express();
 // honor X-Forwarded-* so req.protocol resolves to https behind Fly
@@ -152,6 +154,10 @@ app.use((req, res, next) => {
   if (req.method === "OPTIONS") return res.sendStatus(204);
   next();
 });
+
+// Unique ID generated each time the server boots – clients compare this to
+// detect that a restart happened and re-sync state.
+const SERVER_BOOT_ID = uuidv4();
 
 // Environment-based broadcaster (for backward compatibility)
 const ENV_BROADCASTER_ID = process.env.BROADCASTER_USER_ID;
@@ -236,6 +242,7 @@ loadBans().catch(() => {});
 loadSubscriptions().catch(() => {});
 loadTtsSettings().catch(() => {});
 loadVoices().catch(() => {});
+loadTokens().catch(() => {});
 
 // ===== Per-user settings (persisted) =====
 const DATA_DIR = process.env.DATA_DIR || process.cwd();
@@ -360,6 +367,7 @@ mountTimerRoutes(app, {
   getTotals,
   clearTimer,
   setCapForcedOn,
+  bootId: SERVER_BOOT_ID,
   onBroadcastError: () => {
     observability.lastBroadcastErrorAt = new Date().toISOString();
   },
@@ -590,12 +598,13 @@ app.get("/api/overlay/stream", (req, res) => {
   // Send a ping comment so OBS marks as connected
   res.write(": connected\n\n");
 
-  // Send initial snapshot as an event
+  // Send initial snapshot as an event (includes bootId so clients detect restarts)
   const snapshot = {
     userId: timerUserId,
     remaining: getRemainingSeconds(timerUserId),
     hype: state.users.get(String(timerUserId))?.hypeActive,
     paused: state.users.get(String(timerUserId))?.paused,
+    bootId: SERVER_BOOT_ID,
   };
   res.write(`event: timer_tick\n`);
   res.write(`data: ${JSON.stringify(snapshot)}\n\n`);
@@ -1341,6 +1350,7 @@ setInterval(async () => {
         capReached: cap,
         capMessage: capMsg,
         capStyle,
+        bootId: SERVER_BOOT_ID,
       });
       client.res.write("event: timer_tick\n");
       client.res.write(`data: ${payload}\n\n`);
@@ -1368,5 +1378,50 @@ if (ENV_BROADCASTER_ID && ENV_BROADCASTER_TOKEN) {
   startEventSubForUser(ENV_BROADCASTER_ID);
 }
 
+// Restore EventSub connections for users whose tokens survived the restart.
+// Runs after a short delay to let loadTokens() and loadUserProfiles() finish.
+setTimeout(async () => {
+  const tokenUserIds = getAllTokenUserIds();
+  for (const uid of tokenUserIds) {
+    // Skip env broadcaster (already handled above) and banned users
+    if (uid === ENV_BROADCASTER_ID) continue;
+    if (isBanned(uid)) continue;
+    if (broadcasterConnections.has(uid)) continue;
+
+    const token = getUserAccessToken(uid);
+    if (!token) continue;
+
+    const profile = getUserProfile(uid);
+    broadcasterConnections.set(uid, {
+      broadcasterId: uid,
+      broadcasterLogin: profile?.login || 'restored',
+      broadcasterToken: token,
+      ws: null,
+      reconnectTimer: null,
+      lastEventAt: null,
+    });
+    startEventSubForUser(uid);
+    logger.info("eventsub_restored_from_token", { userId: uid, login: profile?.login });
+  }
+}, 2000);
+
+// Graceful shutdown – persist all state before Fly.io kills the process
+async function gracefulShutdown(signal) {
+  logger.info("shutdown_signal", { signal, bootId: SERVER_BOOT_ID });
+  try {
+    await Promise.all([
+      persistTimerState(),
+      persistUserSettings(),
+      persistTokens(),
+    ]);
+    logger.info("shutdown_state_persisted");
+  } catch (e) {
+    logger.error("shutdown_persist_failed", { message: e?.message });
+  }
+  process.exit(0);
+}
+process.on("SIGTERM", () => gracefulShutdown("SIGTERM"));
+process.on("SIGINT", () => gracefulShutdown("SIGINT"));
+
 const port = process.env.PORT || 8080;
-app.listen(port, () => console.log(`EBS listening on :${port}`));
+app.listen(port, () => console.log(`EBS listening on :${port} (boot ${SERVER_BOOT_ID})`));

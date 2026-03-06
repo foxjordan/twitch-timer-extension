@@ -305,6 +305,7 @@ export function renderOverlayPage(options = {}) {
           fetch(u, { cache: 'no-store' }).then(function(r){ return r.json(); }).then(applyStyle).catch(function(){});
         }, 5000);
 
+          var knownBootId = null;
           (function connectSSE() {
             var retryDelay = 4000;
             try {
@@ -313,6 +314,14 @@ export function renderOverlayPage(options = {}) {
               es.addEventListener('timer_tick', function(ev){
                 try {
                   const data = JSON.parse(ev.data);
+                  // Detect server restart via boot ID change
+                  if (data.bootId && knownBootId && data.bootId !== knownBootId) {
+                    // Server restarted – re-fetch style in case it changed
+                    var su = '/api/overlay/style${qs}';
+                    su += (su.indexOf('?') === -1 ? '?' : '&') + '_=' + Date.now();
+                    fetch(su, { cache: 'no-store' }).then(function(r){ return r.json(); }).then(applyStyle).catch(function(){});
+                  }
+                  if (data.bootId) knownBootId = data.bootId;
                   const prev = typeof remaining === 'number' ? remaining : null;
                   if (typeof data.remaining === 'number') { remaining = data.remaining; }
                   if (typeof data.hype === 'boolean') { hype = data.hype; }

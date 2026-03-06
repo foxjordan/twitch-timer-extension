@@ -135,6 +135,7 @@ export function mountTimerRoutes(app, ctx) {
       hype: state.users.get(String(uid))?.hypeActive,
       paused: state.users.get(String(uid))?.paused,
       capReached: typeof capReached === 'function' ? capReached(uid) : false,
+      bootId: ctx.bootId || null,
     });
   });
 

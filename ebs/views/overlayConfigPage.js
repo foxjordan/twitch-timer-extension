@@ -217,6 +217,7 @@ export function renderOverlayConfigPage(options = {}) {
                   <input id="maxM" type="number" min="0" max="59" step="1" value="0"><span>m</span>
                   <input id="maxS" type="number" min="0" max="59" step="1" value="0"><span>s</span>
                   <button class="secondary" id="clearMax" title="Remove the max cap" style="font-size:12px; padding:4px 10px;">Clear</button>
+                  <span id="maxSaveStatus" style="font-size:11px; opacity:0.6; margin-left:4px;"></span>
                 </div>
               </div>
             </div>
@@ -226,7 +227,7 @@ export function renderOverlayConfigPage(options = {}) {
               <button class="secondary" id="resume">Resume</button>
               <button class="secondary" id="endTimer">End Timer</button>
               <button class="secondary" id="restartTimer">Restart Timer</button>
-              <button class="secondary" id="saveDefault">Save Default</button>
+              <button class="secondary" id="saveDefault">Save Starting Time</button>
             </div>
             <div class="timer-addons">
               <button class="secondary" data-add="300">+5 min</button>
@@ -753,12 +754,7 @@ export function renderOverlayConfigPage(options = {}) {
 
       async function saveDefaultInitial() {
         var secs = totalSeconds();
-        var maxH = parseInt(document.getElementById('maxH').value||'0',10)||0;
-        var maxM = parseInt(document.getElementById('maxM').value||'0',10)||0;
-        var maxS = parseInt(document.getElementById('maxS').value||'0',10)||0;
-        if (maxM > 59) maxM = 59; if (maxS > 59) maxS = 59; if (maxH < 0) maxH = 0; if (maxM < 0) maxM = 0; if (maxS < 0) maxS = 0;
-        var maxTotal = (maxH*3600)+(maxM*60)+maxS;
-        const payload = { defaultInitialSeconds: secs, maxTotalSeconds: maxTotal };
+        const payload = { defaultInitialSeconds: secs };
         try { await fetch('/api/user/settings', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) }); } catch(e) {}
       }
 
@@ -869,9 +865,33 @@ export function renderOverlayConfigPage(options = {}) {
             document.getElementById('maxS').value = 0;
             await saveMaxOnly(0);
             await updateCapStatus();
+            var st = document.getElementById('maxSaveStatus');
+            if (st) { st.textContent = 'Cleared'; setTimeout(function(){ st.textContent = ''; }, 2000); }
             setBusy(clearMaxBtn, false);
           });
         }
+
+        // Auto-save max time when inputs change (debounced)
+        var _maxSaveTimer = null;
+        function autoSaveMax() {
+          clearTimeout(_maxSaveTimer);
+          _maxSaveTimer = setTimeout(async function(){
+            var maxH = parseInt(document.getElementById('maxH').value||'0',10)||0;
+            var maxM = parseInt(document.getElementById('maxM').value||'0',10)||0;
+            var maxS = parseInt(document.getElementById('maxS').value||'0',10)||0;
+            if (maxH < 0) maxH = 0; if (maxM < 0) maxM = 0; if (maxS < 0) maxS = 0;
+            if (maxM > 59) maxM = 59; if (maxS > 59) maxS = 59;
+            var total = (maxH*3600)+(maxM*60)+maxS;
+            await saveMaxOnly(total);
+            await updateCapStatus();
+            var st = document.getElementById('maxSaveStatus');
+            if (st) { st.textContent = 'Saved'; setTimeout(function(){ st.textContent = ''; }, 2000); }
+          }, 800);
+        }
+        ['maxH','maxM','maxS'].forEach(function(id){
+          var el = document.getElementById(id);
+          if (el) { el.addEventListener('input', autoSaveMax); el.addEventListener('change', autoSaveMax); }
+        });
 
         // Cap message toggle
         var showCapCb = document.getElementById('showCapMessage');

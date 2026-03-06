@@ -232,8 +232,6 @@ export function renderOverlayPage(options = {}) {
             var fontVal = s.font || 'Inter,system-ui,Arial,sans-serif';
             loadGoogleFont(fontVal);
             clock.style.fontFamily = fontVal;
-            var wrap = document.querySelector('.wrap');
-            if (wrap) wrap.style.fontFamily = fontVal;
             clock.style.fontWeight = String(s.weight || 700);
             clock.style.textAlign = s.align || 'center';
             if (s.shadow) {
@@ -260,6 +258,7 @@ export function renderOverlayPage(options = {}) {
               label.style.textAlign = s.align || 'center';
             }
             const wrap = document.querySelector('.wrap');
+            wrap.style.fontFamily = fontVal;
             wrap.style.justifyContent = s.align === 'left' ? 'flex-start' : s.align === 'right' ? 'flex-end' : 'center';
 
             // thresholds

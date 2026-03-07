@@ -205,13 +205,10 @@ export function renderHomePage(options = {}) {
         </div>
         <div class="feature-screenshots">
           <div class="screenshot-card">
-            <img src="/assets/screenshots/timer-config.png" alt="Timer overlay configurator with live preview and style controls" loading="lazy" />
+            <img src="/assets/screenshots/new_timer_screenshot.png" alt="Timer overlay configurator with live preview and controls" loading="lazy" />
           </div>
           <div class="screenshot-card">
-            <img src="/assets/screenshots/timer-rules.png" alt="Timer rules configuration for bits, subs, gifts, follows" loading="lazy" />
-          </div>
-          <div class="screenshot-card">
-            <img src="/assets/screenshots/goal-bar-config.png" class="compact" alt="Goal bar configurator with live preview and appearance controls" loading="lazy" />
+            <img src="/assets/screenshots/newGoalbarScreenshot.png" alt="Goal bar configurator with live preview and appearance controls" loading="lazy" />
           </div>
         </div>
       </div>
@@ -239,13 +236,19 @@ export function renderHomePage(options = {}) {
         </div>
         <div class="feature-screenshots">
           <div class="screenshot-card">
-            <img src="/assets/componentScreeshot.png" alt="Bit Alerts component overlay on the video player — viewers browse and redeem sounds without scrolling away" loading="lazy" />
+            <img src="/assets/screenshots/new_bit_viewerOverlayScreenshot.png" alt="Bit Alerts component overlay — viewers browse and redeem sounds without leaving the video" loading="lazy" />
           </div>
           <div class="screenshot-card">
-            <img src="/assets/screenshots/bit-alerts-viewer.png" alt="Bit Alerts viewer panel showing sound alert cards" loading="lazy" />
+            <img src="/assets/screenshots/new_bitTTS_viewerOverlayscreenshot.png" alt="Text-to-Speech on the component overlay — viewers pick a voice and send a message" loading="lazy" />
           </div>
           <div class="screenshot-card">
-            <img src="/assets/screenshots/bit-alerts-streamer-config.png" class="compact" alt="Sound alerts configuration for uploading and managing sounds" loading="lazy" />
+            <img src="/assets/screenshots/new_bitSounds_viewerPanelScreenshot.png" alt="Bit Alerts panel view showing sound and video alert cards" loading="lazy" />
+          </div>
+          <div class="screenshot-card">
+            <img src="/assets/screenshots/new_bitTTS_viewerPanelScreenshot.png" alt="Text-to-Speech panel view with voice selection and message input" loading="lazy" />
+          </div>
+          <div class="screenshot-card">
+            <img src="/assets/screenshots/new_twitchConfig_tts_screenshot.png" class="compact" alt="TTS configuration — voices, moderation filters, banned words, and cooldowns" loading="lazy" />
           </div>
         </div>
       </div>

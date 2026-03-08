@@ -17,7 +17,10 @@
       "Bash(zip -r ../dist.zip . -x \".*\")",
       "Bash(zip -r ../dist.zip .)",
       "WebFetch(domain:driverjs.com)",
-      "WebFetch(domain:docs.inworld.ai)"
+      "WebFetch(domain:docs.inworld.ai)",
+      "Bash(node -c twitch_moderation.js)",
+      "Bash(node -c routes_tts.js)",
+      "Bash(node -c routes_auth.js)"
     ]
   }
 }

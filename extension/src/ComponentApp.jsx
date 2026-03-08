@@ -95,7 +95,7 @@ function SoundCard({
   sound,
   auth,
   disabled,
-  onBuy,
+  onRedeem,
   onPreview,
   isPreviewPlaying,
   getCost,
@@ -105,7 +105,7 @@ function SoundCard({
 
   return (
     <div
-      onClick={() => !disabled && onBuy(sound)}
+      onClick={() => !disabled && onRedeem(sound)}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
       style={{
@@ -260,6 +260,7 @@ function ComponentApp() {
   const [ttsError, setTtsError] = useState(null);
   const [ttsCooldown, setTtsCooldown] = useState(false);
   const [previewingVoice, setPreviewingVoice] = useState(null);
+  const [overlayConnected, setOverlayConnected] = useState(null);
   const gridRef = useRef(null);
   const [canScrollUp, setCanScrollUp] = useState(false);
   const [canScrollDown, setCanScrollDown] = useState(false);
@@ -325,6 +326,12 @@ function ComponentApp() {
             if (data.voices?.length > 0) setTtsVoice(data.voices[0].id);
           }
         })
+        .catch(() => {});
+
+      // Check overlay connection status
+      fetch(`${EBS_BASE}/api/overlay/status?channelId=${authData.channelId}`)
+        .then((r) => r.json())
+        .then((data) => setOverlayConnected(data.connected))
         .catch(() => {});
     });
 
@@ -657,6 +664,24 @@ function ComponentApp() {
         </div>
       )}
 
+      {/* Overlay disconnected warning */}
+      {overlayConnected === false && (
+        <div
+          style={{
+            padding: "4px 10px",
+            background: "#ef444422",
+            border: "1px solid #ef444444",
+            borderRadius: 6,
+            textAlign: "center",
+            margin: "0 10px 6px",
+            fontSize: 11,
+            color: "#fca5a5",
+          }}
+        >
+          The streamer's alert overlay is not currently active. Alerts may not play right now.
+        </div>
+      )}
+
       {/* Now playing banner */}
       {lastPlayed && (
         <div
@@ -714,7 +739,7 @@ function ComponentApp() {
                   sound={sound}
                   auth={auth}
                   disabled={disabled}
-                  onBuy={handleSoundClick}
+                  onRedeem={handleSoundClick}
                   onPreview={handlePreview}
                   isPreviewPlaying={previewing === sound.id}
                   getCost={getCost}
@@ -733,7 +758,7 @@ function ComponentApp() {
 
       {/* TTS tab */}
       {hasTts && (!hasSounds || activeTab === "tts") && (
-        <div style={{ flex: 1, overflowY: "auto", padding: "0 10px 10px", scrollbarWidth: "none", msOverflowStyle: "none" }}>
+        <div style={{ flex: 1, display: "flex", flexDirection: "column", padding: "0 10px 10px", overflow: "hidden" }}>
           {ttsError && (
             <div
               style={{
@@ -744,6 +769,7 @@ function ComponentApp() {
                 fontSize: "clamp(9px, 2.4vw, 12px)",
                 marginBottom: 6,
                 color: "#e74c3c",
+                flexShrink: 0,
               }}
             >
               {ttsError}
@@ -751,7 +777,7 @@ function ComponentApp() {
           )}
 
           {/* Voice selector */}
-          <div style={{ marginBottom: 6 }}>
+          <div style={{ marginBottom: 6, flexShrink: 0 }}>
             <label style={{ fontSize: "clamp(9px, 2.4vw, 11px)", opacity: 0.7, display: "block", marginBottom: 2 }}>
               Voice
             </label>
@@ -796,19 +822,20 @@ function ComponentApp() {
             </div>
           </div>
 
-          {/* Message input */}
-          <div style={{ marginBottom: 6 }}>
-            <label style={{ fontSize: "clamp(9px, 2.4vw, 11px)", opacity: 0.7, display: "block", marginBottom: 2 }}>
+          {/* Message input — grows to fill available space */}
+          <div style={{ marginBottom: 6, flex: 1, display: "flex", flexDirection: "column", minHeight: 0 }}>
+            <label style={{ fontSize: "clamp(9px, 2.4vw, 11px)", opacity: 0.7, display: "block", marginBottom: 2, flexShrink: 0 }}>
               Message ({ttsMessage.length}/{ttsConfig.maxMessageLength || 300})
             </label>
             <textarea
               value={ttsMessage}
               onChange={(e) => setTtsMessage(e.target.value.slice(0, (ttsConfig.maxMessageLength || 300)))}
               maxLength={ttsConfig.maxMessageLength || 300}
-              rows={2}
               placeholder="Type your message..."
               style={{
                 width: "100%",
+                flex: 1,
+                minHeight: 40,
                 padding: "4px 8px",
                 borderRadius: 6,
                 border: "1px solid rgba(48,48,56,0.6)",
@@ -816,8 +843,9 @@ function ComponentApp() {
                 color: "#efeff1",
                 fontSize: "clamp(10px, 2.6vw, 13px)",
                 outline: "none",
-                resize: "vertical",
+                resize: "none",
                 fontFamily: "inherit",
+                boxSizing: "border-box",
               }}
             />
           </div>
@@ -841,6 +869,7 @@ function ComponentApp() {
               alignItems: "center",
               justifyContent: "center",
               gap: 4,
+              flexShrink: 0,
             }}
           >
             <span

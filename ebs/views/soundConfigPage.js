@@ -62,6 +62,16 @@ export function renderSoundConfigPage(options = {}) {
       .type-badge { display:inline-block; padding:1px 6px; border-radius:4px; font-size:10px; font-weight:600; text-transform:uppercase; letter-spacing:0.04em; margin-left:6px; }
       .type-badge.clip { background:rgba(145,70,255,0.15); color:#bf94ff; }
       .type-badge.video { background:rgba(0,180,120,0.15); color:#00c882; }
+      .alert-row { display:flex; align-items:center; gap:10px; padding:8px 10px; border-bottom:1px solid var(--surface-border); font-size:13px; }
+      .alert-row:last-child { border-bottom:none; }
+      .alert-row .alert-time { color:var(--text-muted); font-size:11px; white-space:nowrap; min-width:60px; }
+      .alert-row .alert-info { flex:1; min-width:0; }
+      .alert-row .alert-name { font-weight:600; }
+      .alert-row .alert-viewer { font-size:11px; color:var(--text-muted); }
+      .alert-row .alert-msg { font-size:11px; color:var(--text-muted); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:300px; }
+      .alert-row button { font-size:11px; padding:3px 8px; white-space:nowrap; }
+      .overlay-online { color:#22c55e; }
+      .overlay-offline { color:#ef4444; }
       .tour-btn { position: fixed; bottom: 20px; right: 20px; background: #9146ff; color: #fff; border: none; padding: 8px 16px; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; z-index: 100; opacity: 0.85; transition: opacity 0.15s; }
       .tour-btn:hover { opacity: 1; }
       ${THEME_TOGGLE_STYLES}
@@ -149,7 +159,7 @@ export function renderSoundConfigPage(options = {}) {
 
     <main>
       <h1>Sound Alerts</h1>
-      <p class="subtitle" style="margin-bottom:12px;">Viewers spend Bits to trigger sound alerts on your stream.</p>
+      <p class="subtitle" style="margin-bottom:12px;">Viewers use Bits to trigger sound alerts on your stream.</p>
 
       <!-- Browser Source URL (pinned at top) -->
       <div class="card" style="padding:12px 16px;">
@@ -183,7 +193,7 @@ export function renderSoundConfigPage(options = {}) {
             </label>
             <label style="font-size:13px; display:flex; align-items:center; gap:8px;">
               Max Queue
-              <input type="number" id="soundMaxQueue" min="1" max="20" value="5" style="width:60px">
+              <input type="number" id="soundMaxQueue" min="1" max="200" value="200" style="width:60px">
             </label>
           </div>
           <div style="margin-top:10px;">
@@ -347,6 +357,7 @@ export function renderSoundConfigPage(options = {}) {
               <div style="display:flex; gap:6px; margin-top:6px; flex-wrap:wrap; align-items:center;">
                 <input type="text" id="ttsTestMessage" placeholder="Test message..." maxlength="300" style="flex:1; min-width:150px; max-width:300px;">
                 <button id="ttsTestBtn" style="font-size:12px; padding:4px 10px;">Send Test to Overlay</button>
+                <button id="skipAlertBtn" style="font-size:12px; padding:4px 10px; background:#c0392b; color:#fff; border:none; border-radius:6px; cursor:pointer;">Skip Alert</button>
               </div>
               <span id="ttsTestHint" class="hint" style="margin-top:4px; display:block;"></span>
             </div>
@@ -357,6 +368,18 @@ export function renderSoundConfigPage(options = {}) {
             </div>
           </div>
         </div>
+      </div>
+
+      <!-- Alert History -->
+      <div class="card" id="alertHistoryCard">
+        <h2>Alert History</h2>
+        <div style="display:flex; gap:8px; align-items:center; margin-bottom:10px; flex-wrap:wrap;">
+          <div id="overlayStatus" style="font-size:12px; color:var(--text-muted);">Overlay: checking...</div>
+          <button id="refreshHistory" class="secondary" style="font-size:12px; padding:4px 10px;">Refresh</button>
+        </div>
+        <p class="hint" style="margin-bottom:8px;">Recent alerts from viewers. Replay any alert that may not have played (e.g. overlay was closed).</p>
+        <div id="alertHistoryList" style="max-height:400px; overflow-y:auto;"></div>
+        <div id="alertHistoryEmpty" class="hint" style="display:none;">No alerts yet.</div>
       </div>
 
     </main>
@@ -1321,6 +1344,16 @@ export function renderSoundConfigPage(options = {}) {
           });
         }
 
+        // Skip alert (stops current playback on overlay)
+        var skipAlertBtnEl = document.getElementById('skipAlertBtn');
+        if (skipAlertBtnEl) {
+          skipAlertBtnEl.addEventListener('click', async function() {
+            try {
+              await fetch('/api/tts/skip', { method: 'POST' });
+            } catch {}
+          });
+        }
+
         // Save TTS settings
         if (saveTtsBtnEl) {
           saveTtsBtnEl.addEventListener('click', async function() {
@@ -1356,6 +1389,143 @@ export function renderSoundConfigPage(options = {}) {
           });
         }
 
+        // ===== Alert History & Overlay Status =====
+        var alertHistoryListEl = document.getElementById('alertHistoryList');
+        var alertHistoryEmptyEl = document.getElementById('alertHistoryEmpty');
+        var overlayStatusEl = document.getElementById('overlayStatus');
+        var refreshHistoryBtn = document.getElementById('refreshHistory');
+
+        async function fetchOverlayStatus() {
+          try {
+            var r = await fetch('/api/overlay/status');
+            var data = await r.json();
+            if (overlayStatusEl) {
+              overlayStatusEl.textContent = '';
+              var dot = document.createElement('span');
+              dot.className = data.connected ? 'overlay-online' : 'overlay-offline';
+              dot.textContent = '\\u25CF ';
+              overlayStatusEl.appendChild(dot);
+              var label = data.connected
+                ? 'Overlay connected' + (data.clients > 1 ? ' (' + data.clients + ' clients)' : '')
+                : 'Overlay not connected';
+              overlayStatusEl.appendChild(document.createTextNode(label));
+            }
+          } catch {
+            if (overlayStatusEl) overlayStatusEl.textContent = 'Status unknown';
+          }
+        }
+
+        function formatTime(ts) {
+          var d = new Date(ts);
+          var now = new Date();
+          var diff = now - d;
+          if (diff < 60000) return 'just now';
+          if (diff < 3600000) return Math.floor(diff / 60000) + 'm ago';
+          if (diff < 86400000) return Math.floor(diff / 3600000) + 'h ago';
+          return d.toLocaleDateString();
+        }
+
+        function buildAlertRow(e) {
+          var row = document.createElement('div');
+          row.className = 'alert-row';
+
+          var timeEl = document.createElement('span');
+          timeEl.className = 'alert-time';
+          timeEl.textContent = formatTime(e.ts);
+          row.appendChild(timeEl);
+
+          var iconEl = document.createElement('span');
+          iconEl.style.fontSize = '16px';
+          if (e.type === 'tts_alert') iconEl.textContent = '\\u{1F5E3}';
+          else if (e.alertType === 'clip') iconEl.textContent = '\\u{1F3AC}';
+          else if (e.alertType === 'video') iconEl.textContent = '\\u{1F4F9}';
+          else iconEl.textContent = '\\u{1F50A}';
+          row.appendChild(iconEl);
+
+          var info = document.createElement('div');
+          info.className = 'alert-info';
+
+          var nameEl = document.createElement('div');
+          nameEl.className = 'alert-name';
+          nameEl.textContent = e.type === 'tts_alert' ? (e.voiceName || 'TTS') : (e.soundName || 'Sound');
+          info.appendChild(nameEl);
+
+          if (e.viewerDisplayName || e.viewerUserId) {
+            var viewerEl = document.createElement('div');
+            viewerEl.className = 'alert-viewer';
+            viewerEl.textContent = 'by ' + (e.viewerDisplayName || 'user ' + e.viewerUserId);
+            info.appendChild(viewerEl);
+          }
+
+          if (e.type === 'tts_alert' && e.message) {
+            var msgEl = document.createElement('div');
+            msgEl.className = 'alert-msg';
+            msgEl.textContent = e.message;
+            info.appendChild(msgEl);
+          }
+
+          row.appendChild(info);
+
+          var replayBtn = document.createElement('button');
+          replayBtn.className = 'secondary';
+          replayBtn.textContent = 'Replay';
+          if (e.type === 'tts_alert' && !e.voiceId) {
+            replayBtn.disabled = true;
+            replayBtn.title = 'Missing voice data for replay';
+          }
+          replayBtn.addEventListener('click', async function() {
+            setBusy(replayBtn, true);
+            replayBtn.textContent = 'Sending...';
+            try {
+              var r2 = await fetch('/api/alerts/replay/' + encodeURIComponent(e.id), { method: 'POST' });
+              var result = await r2.json();
+              if (result.ok) {
+                replayBtn.textContent = result.sent > 0 ? 'Sent!' : 'No overlay';
+              } else {
+                replayBtn.textContent = result.error || 'Failed';
+              }
+            } catch {
+              replayBtn.textContent = 'Error';
+            }
+            setTimeout(function() { replayBtn.textContent = 'Replay'; setBusy(replayBtn, false); }, 2000);
+          });
+          row.appendChild(replayBtn);
+
+          return row;
+        }
+
+        async function fetchAlertHistory() {
+          try {
+            var r = await fetch('/api/events/log');
+            var data = await r.json();
+            var entries = (data.entries || []).filter(function(e) {
+              return e.type === 'sound_alert' || e.type === 'tts_alert';
+            });
+            entries.reverse();
+
+            if (!alertHistoryListEl) return;
+            alertHistoryListEl.textContent = '';
+
+            if (entries.length === 0) {
+              if (alertHistoryEmptyEl) alertHistoryEmptyEl.style.display = '';
+              return;
+            }
+            if (alertHistoryEmptyEl) alertHistoryEmptyEl.style.display = 'none';
+
+            entries.slice(0, 50).forEach(function(e) {
+              alertHistoryListEl.appendChild(buildAlertRow(e));
+            });
+          } catch {}
+        }
+
+        if (refreshHistoryBtn) {
+          refreshHistoryBtn.addEventListener('click', function() {
+            flashButton(refreshHistoryBtn);
+            fetchAlertHistory();
+            fetchOverlayStatus();
+          });
+        }
+
         // Logout handler
         var logoutBtn = document.getElementById('logout');
         if (logoutBtn) {
@@ -1367,6 +1537,8 @@ export function renderSoundConfigPage(options = {}) {
         // Initial load
         fetchSoundsAdmin();
         fetchTtsSettings();
+        fetchAlertHistory();
+        fetchOverlayStatus();
       })();
     </script>
     <button class="tour-btn" id="tourBtn" title="Show guided tour">Take A Tour</button>

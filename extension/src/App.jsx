@@ -61,7 +61,7 @@ function SoundCard({
   sound,
   auth,
   disabled,
-  onBuy,
+  onRedeem,
   onPreview,
   isPreviewPlaying,
   getCost,
@@ -71,7 +71,7 @@ function SoundCard({
 
   return (
     <div
-      onClick={() => !disabled && onBuy(sound)}
+      onClick={() => !disabled && onRedeem(sound)}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
       style={{
@@ -222,6 +222,7 @@ function App() {
   const [ttsError, setTtsError] = useState(null);
   const [ttsCooldown, setTtsCooldown] = useState(false);
   const [previewingVoice, setPreviewingVoice] = useState(null);
+  const [overlayConnected, setOverlayConnected] = useState(null); // null = unknown, true/false
 
   const fetchSounds = useCallback((token, channelId) => {
     fetch(`${EBS_BASE}/api/sounds/public?channelId=${channelId}`, {
@@ -271,6 +272,12 @@ function App() {
             if (data.voices?.length > 0) setTtsVoice(data.voices[0].id);
           }
         })
+        .catch(() => {});
+
+      // Check overlay connection status
+      fetch(`${EBS_BASE}/api/overlay/status?channelId=${authData.channelId}`)
+        .then((r) => r.json())
+        .then((data) => setOverlayConnected(data.connected))
         .catch(() => {});
     });
 
@@ -396,7 +403,7 @@ function App() {
         return;
       }
 
-      // Store approval token and trigger Bits purchase
+      // Store approval token and trigger Bits transaction
       pendingRef.current = {
         type: "tts",
         approvalToken: data.approvalToken,
@@ -625,6 +632,23 @@ function App() {
           </div>
         </div>
 
+        {overlayConnected === false && (
+          <div
+            style={{
+              padding: "6px 10px",
+              borderRadius: 8,
+              background: "#ef444422",
+              border: "1px solid #ef444444",
+              fontSize: 11,
+              marginBottom: 8,
+              textAlign: "center",
+              color: "#fca5a5",
+            }}
+          >
+            The streamer's alert overlay is not currently active. Alerts may not play right now.
+          </div>
+        )}
+
         {lastPlayed && (
           <div
             style={{
@@ -685,7 +709,7 @@ function App() {
                   sound={sound}
                   auth={auth}
                   disabled={disabled}
-                  onBuy={handleSoundClick}
+                  onRedeem={handleSoundClick}
                   onPreview={handlePreview}
                   isPreviewPlaying={previewing === sound.id}
                   getCost={getCost}

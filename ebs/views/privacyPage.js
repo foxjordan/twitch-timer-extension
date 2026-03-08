@@ -114,6 +114,7 @@ export function renderPrivacyPage(options = {}) {
         <li><code>channel:read:charity</code> — to read charity campaign data</li>
         <li><code>channel:read:hype_train</code> — to read hype train events</li>
         <li><code>moderator:read:followers</code> — to read follower events for timer rules</li>
+        <li><code>moderation:read</code> — to check channel banned users and blocked terms for content moderation</li>
       </ul>
       <p>We access this data only to power the timer, goal tracking, and overlay features you configure. We do not read chat messages, stream metadata, or VOD content.</p>
 

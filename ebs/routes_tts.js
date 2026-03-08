@@ -11,6 +11,7 @@ import { moderateMessage } from "./tts_moderation.js";
 import { createApprovalToken, consumeApprovalToken } from "./tts_tokens.js";
 import { synthesizeSpeech } from "./tts_provider.js";
 import { fetchUserDisplayName } from "./twitch_api.js";
+import { isViewerBanned, checkBlockedTerms } from "./twitch_moderation.js";
 import { VALID_TIERS } from "./tiers.js";
 
 const EXT_SECRET = process.env.EXTENSION_SECRET
@@ -53,6 +54,7 @@ export function mountTtsRoutes(app, deps = {}) {
     getSessionUserId,
     getUserIdForKey,
     onTtsAlert,
+    onSkipAlert,
     deduplicateTx,
   } = deps;
 
@@ -147,6 +149,7 @@ export function mountTtsRoutes(app, deps = {}) {
           channelId: uid,
           message: message.trim().slice(0, 300),
           voiceName: voice?.name || voiceId,
+          voiceId,
           fileId,
           volume: getTtsSettings(uid).volume,
           txId: null,
@@ -212,9 +215,14 @@ export function mountTtsRoutes(app, deps = {}) {
   });
 
   // Pre-charge validation
-  app.post("/api/tts/validate", (req, res) => {
+  app.post("/api/tts/validate", async (req, res) => {
     const claims = requireExtensionAuth(req, res);
     if (!claims) return;
+
+    // Twitch policy: user content requires a linked Twitch ID (not opaque)
+    if (!claims.user_id) {
+      return res.json({ approved: false, reason: "You must share your identity with the extension to use TTS. Click the extension settings gear and grant access." });
+    }
 
     const { message, voiceId, channelId } = req.body || {};
     if (!message || !voiceId || !channelId) {
@@ -235,6 +243,17 @@ export function mountTtsRoutes(app, deps = {}) {
       return res.json({ approved: false, reason: "TTS is not enabled on this channel" });
     }
 
+    // Check if viewer is banned/timed-out in this channel (Twitch Moderation API)
+    try {
+      const viewerBanned = await isViewerBanned(uid, claims.user_id);
+      if (viewerBanned) {
+        return res.json({ approved: false, reason: "You are currently banned or timed out in this channel" });
+      }
+    } catch (err) {
+      // Non-blocking: if the API call fails, continue with local moderation
+      logger.warn("twitch_ban_check_failed", { channelId: uid, viewerUserId: claims.user_id, message: err?.message });
+    }
+
     // Check voice allowed
     if (!settings.allowedVoices.includes(voiceId)) {
       return res.json({ approved: false, reason: "Selected voice is not available" });
@@ -251,15 +270,26 @@ export function mountTtsRoutes(app, deps = {}) {
       return res.json({ approved: false, reason: `Message must be between 1 and ${settings.maxMessageLength} characters` });
     }
 
-    // Run moderation (per-streamer + global admin config)
+    // Run local moderation (per-streamer + global admin config)
     const globalMod = getGlobalTtsConfig().moderation;
     const modResult = moderateMessage(trimmed, settings.bannedWords, settings.moderationEnabled, globalMod);
     if (!modResult.approved) {
       return res.json({ approved: false, reason: modResult.reason });
     }
 
+    // Check against broadcaster's Twitch blocked terms (Moderation API)
+    try {
+      const blockedResult = await checkBlockedTerms(uid, trimmed);
+      if (blockedResult.blocked) {
+        return res.json({ approved: false, reason: "Message contains a blocked word" });
+      }
+    } catch (err) {
+      // Non-blocking: if the API call fails, continue (local moderation already ran)
+      logger.warn("twitch_blocked_terms_check_failed", { channelId: uid, message: err?.message });
+    }
+
     // Create approval token
-    const approvalToken = createApprovalToken(uid, claims.user_id || claims.opaque_user_id, voiceId, trimmed);
+    const approvalToken = createApprovalToken(uid, claims.user_id, voiceId, trimmed);
     res.json({ approved: true, approvalToken });
   });
 
@@ -313,12 +343,21 @@ export function mountTtsRoutes(app, deps = {}) {
 
       const voice = getVoices().find((v) => v.id === tokenData.voiceId);
 
+      // Resolve viewer display name for overlay attribution (Twitch policy)
+      let viewerDisplayName = null;
+      if (claims.user_id) {
+        try {
+          viewerDisplayName = await fetchUserDisplayName(claims.user_id);
+        } catch {}
+      }
+
       logger.info("tts_redeemed", {
         channelId: uid,
         voiceId: tokenData.voiceId,
         messageLength: tokenData.message.length,
         txId,
         viewerUserId: claims.user_id,
+        viewerDisplayName,
       });
 
       // Notify overlay
@@ -327,10 +366,12 @@ export function mountTtsRoutes(app, deps = {}) {
           channelId: uid,
           message: tokenData.message,
           voiceName: voice?.name || tokenData.voiceId,
+          voiceId: tokenData.voiceId,
           fileId,
           volume: settings.volume,
           txId,
-          viewerUserId: claims.user_id || claims.opaque_user_id,
+          viewerUserId: claims.user_id,
+          viewerDisplayName,
           tier: settings.tier,
         });
       }
@@ -340,6 +381,18 @@ export function mountTtsRoutes(app, deps = {}) {
       logger.error("tts_redeem_failed", { channelId: uid, message: err?.message });
       res.status(500).json({ error: "TTS generation failed" });
     }
+  });
+
+  // Skip/stop current alert (broadcaster only)
+  app.post("/api/tts/skip", (req, res) => {
+    const uid = requireBroadcaster(req, res);
+    if (!uid) return;
+
+    logger.info("tts_skip", { userId: uid });
+    if (typeof onSkipAlert === "function") {
+      onSkipAlert({ channelId: uid });
+    }
+    res.json({ ok: true });
   });
 
   // ===== Overlay endpoints =====
@@ -368,4 +421,12 @@ async function ensureTtsAudioDir() {
   if (!existsSync(TTS_AUDIO_DIR)) {
     await mkdir(TTS_AUDIO_DIR, { recursive: true });
   }
+}
+
+/**
+ * Register an externally-created audio file so it can be served via /api/tts/audio/:fileId.
+ * Used by the alert replay system.
+ */
+export function registerAudioFile(fileId, filePath) {
+  audioFiles.set(fileId, { path: filePath, createdAt: Date.now() });
 }

@@ -66,7 +66,7 @@ const DEFAULT_SOUND_SETTINGS = {
   enabled: true,
   globalVolume: 100,
   globalCooldownMs: 3000,
-  maxQueueSize: 5,
+  maxQueueSize: 200,
   overlayDurationMs: 5000,
   videoClipsEnabled: false,
 };
@@ -175,7 +175,7 @@ function sanitizeSettings(raw = {}) {
   if (typeof raw.enabled === "boolean") next.enabled = raw.enabled;
   next.globalVolume = sanitizeNumber(raw.globalVolume, next.globalVolume, 0, 100);
   next.globalCooldownMs = sanitizeNumber(raw.globalCooldownMs, next.globalCooldownMs, 0, 60000);
-  next.maxQueueSize = sanitizeNumber(raw.maxQueueSize, next.maxQueueSize, 1, 20);
+  next.maxQueueSize = sanitizeNumber(raw.maxQueueSize, next.maxQueueSize, 1, 200);
   next.overlayDurationMs = sanitizeNumber(raw.overlayDurationMs, next.overlayDurationMs, 1000, 30000);
   if (typeof raw.videoClipsEnabled === "boolean") next.videoClipsEnabled = raw.videoClipsEnabled;
   return next;

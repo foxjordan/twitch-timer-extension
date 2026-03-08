@@ -821,12 +821,27 @@ function ConfigApp() {
               style={styles.numberInput}
             />
           </label>
-          <button
-            style={{ ...styles.btn, marginTop: 8 }}
-            onClick={handleTtsTest}
-          >
-            Test TTS
-          </button>
+          <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+            <button
+              style={styles.btn}
+              onClick={handleTtsTest}
+            >
+              Test TTS
+            </button>
+            <button
+              style={{ ...styles.btn, background: "#c0392b" }}
+              onClick={async () => {
+                try {
+                  await fetch(`${EBS_BASE}/api/tts/skip`, {
+                    method: "POST",
+                    headers: headers(),
+                  });
+                } catch {}
+              }}
+            >
+              Skip Alert
+            </button>
+          </div>
         </div>
       )}
 

@@ -218,7 +218,7 @@ export function renderHomePage(options = {}) {
         <div class="feature-text">
           <div class="tag-pill">Twitch Extension</div><span class="beta-badge">Beta</span>
           <h2>Live Bit Alerts for your stream</h2>
-          <p>A companion Twitch Extension that fires custom sound effects when viewers cheer Bits. Available as both a panel below the video and a component overlay on top of it &mdash; viewers never have to scroll away from the action.</p>
+          <p>A companion Twitch Extension that fires custom sound effects when viewers use Bits. Available as both a panel below the video and a component overlay on top of it &mdash; viewers never have to scroll away from the action.</p>
           <ul class="feature-bullets">
             <li>Component overlay lets viewers browse and redeem sounds without leaving the video</li>
             <li>Panel view also available below the stream for a traditional layout</li>

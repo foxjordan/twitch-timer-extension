@@ -9,7 +9,7 @@ import { fetchUserDisplayName } from "./twitch_api.js";
 import fetch from "node-fetch";
 import crypto from "crypto";
 import path from "path";
-import { readFile, writeFile } from "fs/promises";
+import { readFile, writeFile, mkdir } from "fs/promises";
 import { existsSync } from "fs";
 import {
   state,
@@ -56,6 +56,7 @@ import { getRules, setRules, loadRules } from "./rules_store.js";
 import {
   addLogEntry,
   getLogEntries,
+  getLogEntryById,
   clearLogEntries,
 } from "./event_log.js";
 import {
@@ -72,9 +73,10 @@ import { loadSoundAlerts, listSounds, getSoundSettings, setSoundSettings } from 
 import { loadBans, isBanned } from "./bans.js";
 import { loadSubscriptions } from "./subscription_store.js";
 import { mountStripeWebhookRoute, mountStripeRoutes } from "./routes_stripe.js";
-import { mountTtsRoutes } from "./routes_tts.js";
+import { mountTtsRoutes, registerAudioFile } from "./routes_tts.js";
+import { synthesizeSpeech } from "./tts_provider.js";
 import { loadTtsSettings, getTtsSettings } from "./tts_store.js";
-import { loadVoices } from "./tts_voices.js";
+import { loadVoices, getVoices } from "./tts_voices.js";
 import { persistTokens, loadTokens, getAllTokenUserIds, getUserAccessToken } from "./twitch_tokens.js";
 
 const app = express();
@@ -391,6 +393,105 @@ app.post("/api/events/log/clear", (req, res) => {
   const uid = req.session?.twitchUser?.id;
   clearLogEntries(uid ? String(uid) : null);
   res.json({ ok: true });
+});
+
+// Overlay connection status — lets broadcaster/viewers know if overlay can receive alerts
+app.get("/api/overlay/status", (req, res) => {
+  // Support both session auth (dashboard) and channelId query param (extension panel)
+  const uid = req.session?.twitchUser?.id || req.query.channelId;
+  if (!uid) return res.json({ connected: false, clients: 0 });
+  let count = 0;
+  for (const client of sseClients) {
+    if (String(client.timerUserId) === String(uid)) count++;
+  }
+  res.json({ connected: count > 0, clients: count });
+});
+
+// Replay a previous alert from the event log
+const TTS_AUDIO_DIR = path.resolve(process.env.DATA_DIR || process.cwd(), "tts_audio");
+
+app.post("/api/alerts/replay/:alertId", async (req, res) => {
+  if (!req?.session?.isAdmin)
+    return res.status(401).json({ error: "Admin login required" });
+  const uid = req.session?.twitchUser?.id;
+  if (!uid) return res.status(401).json({ error: "Not authenticated" });
+
+  const entry = getLogEntryById(req.params.alertId);
+  if (!entry) return res.status(404).json({ error: "Alert not found" });
+  if (entry.userId !== String(uid)) return res.status(403).json({ error: "Not your alert" });
+
+  try {
+    if (entry.type === "sound_alert") {
+      // Re-send the sound alert SSE event
+      const payload = JSON.stringify({
+        soundId: entry.soundId,
+        soundName: entry.soundName,
+        channelId: uid,
+        txId: null,
+        ts: Date.now(),
+        type: entry.alertType || "sound",
+        clipSlug: "",
+        volume: entry.volume || 80,
+        replay: true,
+      });
+      let sent = 0;
+      for (const client of Array.from(sseClients)) {
+        if (client.timerUserId && String(client.timerUserId) !== String(uid)) continue;
+        try {
+          client.res.write("event: sound_alert\n");
+          client.res.write(`data: ${payload}\n\n`);
+          sent++;
+        } catch { sseClients.delete(client); }
+      }
+      logger.info("alert_replayed", { type: "sound_alert", alertId: entry.id, userId: uid, sent });
+      return res.json({ ok: true, type: "sound_alert", sent });
+
+    } else if (entry.type === "tts_alert") {
+      // Re-synthesize TTS audio (original file will have expired)
+      const voiceId = entry.voiceId;
+      if (!voiceId || !entry.message) {
+        return res.status(400).json({ error: "Alert missing voice or message data for replay" });
+      }
+
+      const audioBuffer = await synthesizeSpeech(entry.message, voiceId);
+      const fileId = `tts_replay_${crypto.randomUUID().slice(0, 12)}`;
+      await mkdir(TTS_AUDIO_DIR, { recursive: true });
+      const filePath = path.resolve(TTS_AUDIO_DIR, `${fileId}.mp3`);
+      await writeFile(filePath, audioBuffer);
+      registerAudioFile(fileId, filePath);
+
+      const voice = getVoices().find((v) => v.id === voiceId);
+      const payload = JSON.stringify({
+        type: "tts",
+        message: entry.message,
+        voiceName: voice?.name || entry.voiceName || voiceId,
+        channelId: uid,
+        txId: null,
+        viewerDisplayName: entry.viewerDisplayName || null,
+        audioUrl: `/api/tts/audio/${fileId}`,
+        volume: entry.volume || 80,
+        ts: Date.now(),
+        replay: true,
+      });
+      let sent = 0;
+      for (const client of Array.from(sseClients)) {
+        if (client.timerUserId && String(client.timerUserId) !== String(uid)) continue;
+        try {
+          client.res.write("event: tts_alert\n");
+          client.res.write(`data: ${payload}\n\n`);
+          sent++;
+        } catch { sseClients.delete(client); }
+      }
+      logger.info("alert_replayed", { type: "tts_alert", alertId: entry.id, userId: uid, sent });
+      return res.json({ ok: true, type: "tts_alert", sent });
+
+    } else {
+      return res.status(400).json({ error: "Unknown alert type" });
+    }
+  } catch (err) {
+    logger.error("alert_replay_failed", { alertId: entry.id, userId: uid, message: err?.message });
+    return res.status(500).json({ error: "Replay failed" });
+  }
 });
 
 // Get/Set overlay style linked to overlay key
@@ -785,6 +886,8 @@ mountSoundRoutes(app, {
       userId: String(channelId),
       soundId,
       soundName,
+      alertType: type || "sound",
+      volume: volume || 80,
       viewerUserId: viewerUserId || undefined,
       txId: txId || undefined,
     });
@@ -842,13 +945,16 @@ mountTtsRoutes(app, {
   requireOverlayAuth,
   getSessionUserId: (req) => req.session?.twitchUser?.id,
   getUserIdForKey,
-  onTtsAlert: ({ channelId, message, voiceName, fileId, volume, txId, viewerUserId, tier }) => {
+  onTtsAlert: ({ channelId, message, voiceName, voiceId, fileId, volume, txId, viewerUserId, viewerDisplayName, tier }) => {
     addLogEntry({
       type: "tts_alert",
       userId: String(channelId),
       message,
       voiceName,
+      voiceId: voiceId || undefined,
+      volume: volume || 80,
       viewerUserId: viewerUserId || undefined,
+      viewerDisplayName: viewerDisplayName || undefined,
       txId: txId || undefined,
     });
     const payload = JSON.stringify({
@@ -857,6 +963,7 @@ mountTtsRoutes(app, {
       voiceName,
       channelId,
       txId,
+      viewerDisplayName: viewerDisplayName || null,
       audioUrl: `/api/tts/audio/${fileId}`,
       volume: volume || 80,
       ts: Date.now(),
@@ -892,6 +999,18 @@ mountTtsRoutes(app, {
           text: `${who} used ${bits} Bits to say${voice}: "${message}"`,
         });
       })().catch(() => {});
+    }
+  },
+  onSkipAlert: ({ channelId }) => {
+    const payload = JSON.stringify({ ts: Date.now() });
+    for (const client of Array.from(sseClients)) {
+      if (client.timerUserId && String(client.timerUserId) !== String(channelId)) continue;
+      try {
+        client.res.write("event: skip_alert\n");
+        client.res.write(`data: ${payload}\n\n`);
+      } catch {
+        sseClients.delete(client);
+      }
     }
   },
   deduplicateTx: (txId) => {
@@ -937,7 +1056,7 @@ mountAdminRoutes(app, {
   observability,
   getUserProfile,
   onSoundAlert: ({ channelId, soundId, soundName, tier, txId, viewerUserId, type, clipSlug, volume }) => {
-    addLogEntry({ type: "sound_alert", userId: String(channelId), soundId, soundName, txId: txId || undefined });
+    addLogEntry({ type: "sound_alert", userId: String(channelId), soundId, soundName, alertType: type || "sound", volume: volume || 80, txId: txId || undefined });
     const payload = JSON.stringify({ soundId, soundName, channelId, txId, ts: Date.now(), type: type || "sound", clipSlug: clipSlug || "", volume: volume || 80 });
     for (const client of Array.from(sseClients)) {
       if (client.timerUserId && String(client.timerUserId) !== String(channelId)) continue;
@@ -945,14 +1064,14 @@ mountAdminRoutes(app, {
     }
     broadcastToChannel({ broadcasterId: channelId, type: "sound_alert", payload: { soundId, soundName } }).catch(() => {});
   },
-  onTtsAlert: ({ channelId, message, voiceName, fileId, volume, txId }) => {
-    addLogEntry({ type: "tts_alert", userId: String(channelId), message, voiceName, txId: txId || undefined });
-    const payload = JSON.stringify({ type: "tts", message, voiceName, channelId, txId, audioUrl: `/api/tts/audio/${fileId}`, volume: volume || 80, ts: Date.now() });
+  onTtsAlert: ({ channelId, message, voiceName, voiceId, fileId, volume, txId, viewerDisplayName }) => {
+    addLogEntry({ type: "tts_alert", userId: String(channelId), message, voiceName, voiceId: voiceId || undefined, volume: volume || 80, viewerDisplayName: viewerDisplayName || undefined, txId: txId || undefined });
+    const payload = JSON.stringify({ type: "tts", message, voiceName, channelId, txId, viewerDisplayName: viewerDisplayName || null, audioUrl: `/api/tts/audio/${fileId}`, volume: volume || 80, ts: Date.now() });
     for (const client of Array.from(sseClients)) {
       if (client.timerUserId && String(client.timerUserId) !== String(channelId)) continue;
       try { client.res.write("event: tts_alert\n"); client.res.write(`data: ${payload}\n\n`); } catch { sseClients.delete(client); }
     }
-    broadcastToChannel({ broadcasterId: channelId, type: "tts_alert", payload: { message, voiceName } }).catch(() => {});
+    broadcastToChannel({ broadcasterId: channelId, type: "tts_alert", payload: { message, voiceName, viewerDisplayName: viewerDisplayName || null } }).catch(() => {});
   },
   onUserBanned: (uid) => {
     // Disconnect their EventSub WebSocket

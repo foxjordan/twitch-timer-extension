@@ -124,15 +124,40 @@ export function renderSoundAlertOverlayPage() {
           return;
         }
 
-        var maxQueue = 5;
+        var maxQueue = 200;
         var displayMs = 5000;
         var alertsEl = document.getElementById('alerts');
         var alertQueue = [];
         var isPlaying = false;
+        var currentAudio = null;
+        var currentMediaContainer = null;
 
         function advance() {
+          currentAudio = null;
+          currentMediaContainer = null;
           isPlaying = false;
           playNext();
+        }
+
+        function skipCurrent() {
+          if (currentAudio) {
+            try { currentAudio.pause(); } catch(e) {}
+            currentAudio = null;
+          }
+          if (currentMediaContainer && currentMediaContainer.parentNode) {
+            try {
+              var vid = currentMediaContainer.querySelector('video');
+              if (vid) vid.pause();
+            } catch(e) {}
+            currentMediaContainer.remove();
+            currentMediaContainer = null;
+          }
+          // Remove all alert popups
+          var popups = alertsEl.querySelectorAll('.alert-popup');
+          for (var i = 0; i < popups.length; i++) popups[i].remove();
+          // Clear the queue too
+          alertQueue.length = 0;
+          advance();
         }
 
         function playNext() {
@@ -157,6 +182,7 @@ export function renderSoundAlertOverlayPage() {
           var vol = Math.min(1, Math.max(0, (item.volume || 100) / 100));
           var audio = new Audio('/api/sounds/file/' + encodeURIComponent(item.soundId) + '?key=' + encodeURIComponent(overlayKey));
           audio.volume = vol;
+          currentAudio = audio;
           audio.onended = advance;
           audio.onerror = advance;
           audio.play().catch(advance);
@@ -169,6 +195,7 @@ export function renderSoundAlertOverlayPage() {
           // Play clip as a video file (downloaded at creation time)
           var container = document.createElement('div');
           container.className = 'media-container';
+          currentMediaContainer = container;
 
           var video = document.createElement('video');
           video.src = '/api/sounds/file/' + encodeURIComponent(item.soundId) + '?key=' + encodeURIComponent(overlayKey);
@@ -206,6 +233,7 @@ export function renderSoundAlertOverlayPage() {
 
           var container = document.createElement('div');
           container.className = 'media-container';
+          currentMediaContainer = container;
 
           var video = document.createElement('video');
           video.src = '/api/sounds/file/' + encodeURIComponent(item.soundId) + '?key=' + encodeURIComponent(overlayKey);
@@ -238,17 +266,18 @@ export function renderSoundAlertOverlayPage() {
         }
 
         function playTts(item) {
-          showTtsPopup(item.voiceName || 'TTS', item.message || '');
+          showTtsPopup(item.voiceName || 'TTS', item.message || '', item.viewerDisplayName || null);
           var vol = Math.min(1, Math.max(0, (item.volume || 100) / 100));
           var audioUrl = item.audioUrl + '?key=' + encodeURIComponent(overlayKey);
           var audio = new Audio(audioUrl);
           audio.volume = vol;
+          currentAudio = audio;
           audio.onended = advance;
           audio.onerror = advance;
           audio.play().catch(advance);
         }
 
-        function showTtsPopup(voiceName, message) {
+        function showTtsPopup(voiceName, message, viewerName) {
           var el = document.createElement('div');
           el.className = 'alert-popup';
 
@@ -260,7 +289,7 @@ export function renderSoundAlertOverlayPage() {
           var textWrap = document.createElement('div');
           var nameEl = document.createElement('div');
           nameEl.className = 'alert-text';
-          nameEl.textContent = voiceName;
+          nameEl.textContent = viewerName ? viewerName + ' \u2022 ' + voiceName : voiceName;
           textWrap.appendChild(nameEl);
 
           var subEl = document.createElement('div');
@@ -353,6 +382,10 @@ export function renderSoundAlertOverlayPage() {
               alertQueue.push(data);
               playNext();
             } catch (e) {}
+          });
+
+          es.addEventListener('skip_alert', function() {
+            skipCurrent();
           });
 
           es.addEventListener('sound_settings', function(ev) {

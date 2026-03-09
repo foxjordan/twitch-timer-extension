@@ -4,7 +4,7 @@ export function renderSoundAlertOverlayPage() {
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Sound Alert Overlay</title>
+    <title>Livestreamer Alerts Overlay</title>
     <style>
       :root { color-scheme: dark; }
       * { box-sizing: border-box; margin: 0; padding: 0; }

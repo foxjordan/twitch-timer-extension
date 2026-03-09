@@ -21,7 +21,7 @@ function ConfigApp() {
     enabled: true,
     globalVolume: 100,
     globalCooldownMs: 3000,
-    maxQueueSize: 5,
+    maxQueueSize: 200,
     overlayDurationMs: 5000,
   });
   const [tiers, setTiers] = useState([]);
@@ -375,294 +375,350 @@ function ConfigApp() {
 
   return (
     <div style={styles.container}>
-      <h2 style={styles.heading}>Alerts</h2>
+      <h2 style={styles.heading}>Livestreamer Alerts</h2>
+
+      <div style={styles.hubBanner}>
+        <span style={{ fontSize: 14 }}>
+          Unlock more features and manage everything in one place at{" "}
+          <a
+            href="https://livestreamerhub.com"
+            target="_blank"
+            rel="noopener noreferrer"
+            style={styles.hubLink}
+          >
+            livestreamerhub.com
+          </a>
+        </span>
+      </div>
 
       {error && <div style={styles.error}>{error}</div>}
       {success && <div style={styles.success}>{success}</div>}
 
-      {/* Global Settings */}
-      <div style={styles.card}>
-        <h3 style={styles.subHeading}>Settings</h3>
-        <label style={styles.row}>
-          <span>Enabled</span>
-          <input
-            type="checkbox"
-            checked={settings.enabled}
-            onChange={(e) =>
-              handleSettingsUpdate({ enabled: e.target.checked })
-            }
-          />
-        </label>
-        <label style={styles.row}>
-          <span>Global Volume</span>
-          <input
-            type="range"
-            min="0"
-            max="100"
-            value={settings.globalVolume}
-            onChange={(e) =>
-              handleSettingsUpdate({ globalVolume: Number(e.target.value) })
-            }
-            style={{ width: 120 }}
-          />
-          <span style={styles.muted}>{settings.globalVolume}%</span>
-        </label>
-        <label style={styles.row}>
-          <span>Cooldown (sec)</span>
-          <input
-            type="number"
-            min="0"
-            max="60"
-            value={Math.round(settings.globalCooldownMs / 1000)}
-            onChange={(e) =>
-              handleSettingsUpdate({
-                globalCooldownMs: Number(e.target.value) * 1000,
-              })
-            }
-            style={styles.numberInput}
-          />
-        </label>
-        <label style={styles.row}>
-          <span>Max Queue</span>
-          <input
-            type="number"
-            min="1"
-            max="20"
-            value={settings.maxQueueSize}
-            onChange={(e) =>
-              handleSettingsUpdate({ maxQueueSize: Number(e.target.value) })
-            }
-            style={styles.numberInput}
-          />
-        </label>
-      </div>
+      {/* Row 1: Settings + Create Alert side by side */}
+      <div style={styles.twoCol}>
+        {/* Global Settings */}
+        <div style={styles.card}>
+          <h3 style={styles.subHeading}>Settings</h3>
+          <label style={styles.row}>
+            <span>Enabled</span>
+            <input
+              type="checkbox"
+              checked={settings.enabled}
+              onChange={(e) =>
+                handleSettingsUpdate({ enabled: e.target.checked })
+              }
+            />
+          </label>
+          <label style={styles.row}>
+            <span>Global Volume</span>
+            <input
+              type="range"
+              min="0"
+              max="100"
+              value={settings.globalVolume}
+              onChange={(e) =>
+                handleSettingsUpdate({ globalVolume: Number(e.target.value) })
+              }
+              style={{ width: 120 }}
+            />
+            <span style={styles.muted}>{settings.globalVolume}%</span>
+          </label>
+          <label style={styles.row}>
+            <span>Cooldown (sec)</span>
+            <input
+              type="number"
+              min="0"
+              max="60"
+              value={Math.round(settings.globalCooldownMs / 1000)}
+              onChange={(e) =>
+                handleSettingsUpdate({
+                  globalCooldownMs: Number(e.target.value) * 1000,
+                })
+              }
+              style={styles.numberInput}
+            />
+          </label>
+          <label style={styles.row}>
+            <span>Max Queue</span>
+            <input
+              type="number"
+              min="1"
+              max="200"
+              value={settings.maxQueueSize}
+              onChange={(e) =>
+                handleSettingsUpdate({ maxQueueSize: Number(e.target.value) })
+              }
+              style={styles.numberInput}
+            />
+          </label>
 
-      {/* Create Alert */}
-      <div style={styles.card}>
-        <h3 style={styles.subHeading}>Create Alert</h3>
-        {/* Tabs */}
-        <div style={{ display: "flex", gap: 4, marginBottom: 10 }}>
-          {[
-            { key: "sound", label: "Sound" },
-            ...(settings.videoClipsEnabled
-              ? [
-                  { key: "clip", label: "Twitch Clip" },
-                  { key: "video", label: "Video" },
-                ]
-              : []),
-          ].map((tab) => (
-            <button
-              key={tab.key}
-              onClick={() => setCreateTab(tab.key)}
-              style={{
-                ...styles.btnSmall,
-                background: createTab === tab.key ? "#9146FF" : "#303038",
-                opacity: createTab === tab.key ? 1 : 0.7,
-              }}
-            >
-              {tab.label}
-            </button>
-          ))}
+          {/* OBS Overlay URL — nested inside Settings */}
+          {overlayUrl && (
+            <div style={{ marginTop: 12, paddingTop: 12, borderTop: "1px solid #303038" }}>
+              <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 6 }}>OBS Browser Source</div>
+              <p style={{ fontSize: 11, opacity: 0.6, marginBottom: 6 }}>
+                Add this URL as a Browser Source in OBS to play alerts on stream.
+              </p>
+              <div
+                style={{
+                  padding: "6px 8px",
+                  background: "#0e0e10",
+                  borderRadius: 6,
+                  border: "1px solid #303038",
+                  fontSize: 10,
+                  wordBreak: "break-all",
+                  fontFamily: "monospace",
+                  marginBottom: 8,
+                  lineHeight: 1.4,
+                }}
+              >
+                {overlayUrl}
+              </div>
+              <button
+                style={styles.btnSmall}
+                onClick={() => {
+                  navigator.clipboard
+                    .writeText(overlayUrl)
+                    .then(() => {
+                      setUrlCopied(true);
+                      setTimeout(() => setUrlCopied(false), 2000);
+                    })
+                    .catch(() => {});
+                }}
+              >
+                {urlCopied ? "Copied!" : "Copy URL"}
+              </button>
+            </div>
+          )}
         </div>
-        {!settings.videoClipsEnabled && (
-          <div style={{ fontSize: 11, opacity: 0.5, marginBottom: 8 }}>
-            Video &amp; clip alerts are a Pro feature.
+
+        {/* Create Alert */}
+        <div style={styles.card}>
+          <h3 style={styles.subHeading}>Create Alert</h3>
+          {/* Tabs */}
+          <div style={{ display: "flex", gap: 4, marginBottom: 10 }}>
+            {[
+              { key: "sound", label: "Sound" },
+              ...(settings.videoClipsEnabled
+                ? [
+                    { key: "clip", label: "Twitch Clip" },
+                    { key: "video", label: "Video" },
+                  ]
+                : []),
+            ].map((tab) => (
+              <button
+                key={tab.key}
+                onClick={() => setCreateTab(tab.key)}
+                style={{
+                  ...styles.btnSmall,
+                  background: createTab === tab.key ? "#9146FF" : "#303038",
+                  opacity: createTab === tab.key ? 1 : 0.7,
+                }}
+              >
+                {tab.label}
+              </button>
+            ))}
           </div>
-        )}
-
-        {/* Sound tab */}
-        {createTab === "sound" && (
-          <form onSubmit={handleUpload}>
+          {!settings.videoClipsEnabled && (
             <div style={{ fontSize: 11, opacity: 0.5, marginBottom: 8 }}>
-              Max 1 MB. Accepted: MP3, OGG, WAV, WebM, M4A.
+              Video &amp; clip alerts are a Pro feature.
             </div>
-            <div style={{ marginBottom: 8 }}>
-              <input
-                ref={fileRef}
-                type="file"
-                accept="audio/mpeg,audio/ogg,audio/wav,audio/webm,audio/mp4"
-                style={styles.fileInput}
-              />
-            </div>
-            <div style={{ marginBottom: 8 }}>
-              <input
-                type="text"
-                placeholder="Sound name"
-                value={newName}
-                onChange={(e) => setNewName(e.target.value)}
-                style={styles.textInput}
-                maxLength={100}
-              />
-            </div>
-            <div style={styles.row}>
-              <select
-                value={newTier}
-                onChange={(e) => setNewTier(e.target.value)}
-                style={styles.select}
-              >
-                {(tiers.length ? tiers : Object.keys(TIER_LABELS)).map((t) => (
-                  <option key={t} value={t}>
-                    {TIER_LABELS[t] || t}
-                  </option>
-                ))}
-              </select>
-              <label style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                Vol
-                <input
-                  type="range"
-                  min="0"
-                  max="100"
-                  value={newVolume}
-                  onChange={(e) => setNewVolume(Number(e.target.value))}
-                  style={{ width: 80 }}
-                />
-                <span style={styles.muted}>{newVolume}%</span>
-              </label>
-            </div>
-            <button
-              type="submit"
-              disabled={uploading}
-              style={{
-                ...styles.btn,
-                marginTop: 8,
-                opacity: uploading ? 0.6 : 1,
-              }}
-            >
-              {uploading ? "Uploading..." : "Upload Sound"}
-            </button>
-          </form>
-        )}
+          )}
 
-        {/* Clip tab */}
-        {createTab === "clip" && (
-          <form onSubmit={handleClipCreate}>
-            <div style={{ fontSize: 11, opacity: 0.5, marginBottom: 8 }}>
-              Paste a Twitch Clip URL. The clip will play in the OBS overlay
-              when redeemed.
-            </div>
-            <div style={{ marginBottom: 8 }}>
-              <input
-                type="text"
-                placeholder="https://clips.twitch.tv/..."
-                value={clipUrl}
-                onChange={(e) => setClipUrl(e.target.value)}
-                style={styles.textInput}
-              />
-            </div>
-            <div style={{ marginBottom: 8 }}>
-              <input
-                type="text"
-                placeholder="Alert name"
-                value={newName}
-                onChange={(e) => setNewName(e.target.value)}
-                style={styles.textInput}
-                maxLength={100}
-              />
-            </div>
-            <div style={styles.row}>
-              <select
-                value={newTier}
-                onChange={(e) => setNewTier(e.target.value)}
-                style={styles.select}
-              >
-                {(tiers.length ? tiers : Object.keys(TIER_LABELS)).map((t) => (
-                  <option key={t} value={t}>
-                    {TIER_LABELS[t] || t}
-                  </option>
-                ))}
-              </select>
-              <label style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                Vol
+          {/* Sound tab */}
+          {createTab === "sound" && (
+            <form onSubmit={handleUpload}>
+              <div style={{ fontSize: 11, opacity: 0.5, marginBottom: 8 }}>
+                Max 1 MB. Accepted: MP3, OGG, WAV, WebM, M4A.
+              </div>
+              <div style={{ marginBottom: 8 }}>
                 <input
-                  type="range"
-                  min="0"
-                  max="100"
-                  value={newVolume}
-                  onChange={(e) => setNewVolume(Number(e.target.value))}
-                  style={{ width: 80 }}
+                  ref={fileRef}
+                  type="file"
+                  accept="audio/mpeg,audio/ogg,audio/wav,audio/webm,audio/mp4"
+                  style={styles.fileInput}
                 />
-                <span style={styles.muted}>{newVolume}%</span>
-              </label>
-            </div>
-            <button
-              type="submit"
-              disabled={uploading}
-              style={{
-                ...styles.btn,
-                marginTop: 8,
-                opacity: uploading ? 0.6 : 1,
-              }}
-            >
-              {uploading ? "Creating..." : "Add Clip"}
-            </button>
-          </form>
-        )}
+              </div>
+              <div style={{ marginBottom: 8 }}>
+                <input
+                  type="text"
+                  placeholder="Sound name"
+                  value={newName}
+                  onChange={(e) => setNewName(e.target.value)}
+                  style={styles.textInput}
+                  maxLength={100}
+                />
+              </div>
+              <div style={styles.row}>
+                <select
+                  value={newTier}
+                  onChange={(e) => setNewTier(e.target.value)}
+                  style={styles.select}
+                >
+                  {(tiers.length ? tiers : Object.keys(TIER_LABELS)).map((t) => (
+                    <option key={t} value={t}>
+                      {TIER_LABELS[t] || t}
+                    </option>
+                  ))}
+                </select>
+                <label style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                  Vol
+                  <input
+                    type="range"
+                    min="0"
+                    max="100"
+                    value={newVolume}
+                    onChange={(e) => setNewVolume(Number(e.target.value))}
+                    style={{ width: 80 }}
+                  />
+                  <span style={styles.muted}>{newVolume}%</span>
+                </label>
+              </div>
+              <button
+                type="submit"
+                disabled={uploading}
+                style={{
+                  ...styles.btn,
+                  marginTop: 8,
+                  opacity: uploading ? 0.6 : 1,
+                }}
+              >
+                {uploading ? "Uploading..." : "Upload Sound"}
+              </button>
+            </form>
+          )}
 
-        {/* Video tab */}
-        {createTab === "video" && (
-          <form onSubmit={handleVideoUpload}>
-            <div style={{ fontSize: 11, opacity: 0.5, marginBottom: 8 }}>
-              Max 10 MB. Accepted: MP4, WebM.
-            </div>
-            <div style={{ marginBottom: 8 }}>
-              <input
-                ref={videoFileRef}
-                type="file"
-                accept="video/mp4,video/webm"
-                style={styles.fileInput}
-              />
-            </div>
-            <div style={{ marginBottom: 8 }}>
-              <input
-                type="text"
-                placeholder="Video name"
-                value={newName}
-                onChange={(e) => setNewName(e.target.value)}
-                style={styles.textInput}
-                maxLength={100}
-              />
-            </div>
-            <div style={styles.row}>
-              <select
-                value={newTier}
-                onChange={(e) => setNewTier(e.target.value)}
-                style={styles.select}
-              >
-                {(tiers.length ? tiers : Object.keys(TIER_LABELS)).map((t) => (
-                  <option key={t} value={t}>
-                    {TIER_LABELS[t] || t}
-                  </option>
-                ))}
-              </select>
-              <label style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                Vol
+          {/* Clip tab */}
+          {createTab === "clip" && (
+            <form onSubmit={handleClipCreate}>
+              <div style={{ fontSize: 11, opacity: 0.5, marginBottom: 8 }}>
+                Paste a Twitch Clip URL. The clip will play in the OBS overlay
+                when redeemed.
+              </div>
+              <div style={{ marginBottom: 8 }}>
                 <input
-                  type="range"
-                  min="0"
-                  max="100"
-                  value={newVolume}
-                  onChange={(e) => setNewVolume(Number(e.target.value))}
-                  style={{ width: 80 }}
+                  type="text"
+                  placeholder="https://clips.twitch.tv/..."
+                  value={clipUrl}
+                  onChange={(e) => setClipUrl(e.target.value)}
+                  style={styles.textInput}
                 />
-                <span style={styles.muted}>{newVolume}%</span>
-              </label>
-            </div>
-            <button
-              type="submit"
-              disabled={uploading}
-              style={{
-                ...styles.btn,
-                marginTop: 8,
-                opacity: uploading ? 0.6 : 1,
-              }}
-            >
-              {uploading ? "Uploading..." : "Upload Video"}
-            </button>
-          </form>
-        )}
+              </div>
+              <div style={{ marginBottom: 8 }}>
+                <input
+                  type="text"
+                  placeholder="Alert name"
+                  value={newName}
+                  onChange={(e) => setNewName(e.target.value)}
+                  style={styles.textInput}
+                  maxLength={100}
+                />
+              </div>
+              <div style={styles.row}>
+                <select
+                  value={newTier}
+                  onChange={(e) => setNewTier(e.target.value)}
+                  style={styles.select}
+                >
+                  {(tiers.length ? tiers : Object.keys(TIER_LABELS)).map((t) => (
+                    <option key={t} value={t}>
+                      {TIER_LABELS[t] || t}
+                    </option>
+                  ))}
+                </select>
+                <label style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                  Vol
+                  <input
+                    type="range"
+                    min="0"
+                    max="100"
+                    value={newVolume}
+                    onChange={(e) => setNewVolume(Number(e.target.value))}
+                    style={{ width: 80 }}
+                  />
+                  <span style={styles.muted}>{newVolume}%</span>
+                </label>
+              </div>
+              <button
+                type="submit"
+                disabled={uploading}
+                style={{
+                  ...styles.btn,
+                  marginTop: 8,
+                  opacity: uploading ? 0.6 : 1,
+                }}
+              >
+                {uploading ? "Creating..." : "Add Clip"}
+              </button>
+            </form>
+          )}
+
+          {/* Video tab */}
+          {createTab === "video" && (
+            <form onSubmit={handleVideoUpload}>
+              <div style={{ fontSize: 11, opacity: 0.5, marginBottom: 8 }}>
+                Max 10 MB. Accepted: MP4, WebM.
+              </div>
+              <div style={{ marginBottom: 8 }}>
+                <input
+                  ref={videoFileRef}
+                  type="file"
+                  accept="video/mp4,video/webm"
+                  style={styles.fileInput}
+                />
+              </div>
+              <div style={{ marginBottom: 8 }}>
+                <input
+                  type="text"
+                  placeholder="Video name"
+                  value={newName}
+                  onChange={(e) => setNewName(e.target.value)}
+                  style={styles.textInput}
+                  maxLength={100}
+                />
+              </div>
+              <div style={styles.row}>
+                <select
+                  value={newTier}
+                  onChange={(e) => setNewTier(e.target.value)}
+                  style={styles.select}
+                >
+                  {(tiers.length ? tiers : Object.keys(TIER_LABELS)).map((t) => (
+                    <option key={t} value={t}>
+                      {TIER_LABELS[t] || t}
+                    </option>
+                  ))}
+                </select>
+                <label style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                  Vol
+                  <input
+                    type="range"
+                    min="0"
+                    max="100"
+                    value={newVolume}
+                    onChange={(e) => setNewVolume(Number(e.target.value))}
+                    style={{ width: 80 }}
+                  />
+                  <span style={styles.muted}>{newVolume}%</span>
+                </label>
+              </div>
+              <button
+                type="submit"
+                disabled={uploading}
+                style={{
+                  ...styles.btn,
+                  marginTop: 8,
+                  opacity: uploading ? 0.6 : 1,
+                }}
+              >
+                {uploading ? "Uploading..." : "Upload Video"}
+              </button>
+            </form>
+          )}
+        </div>
       </div>
 
-      {/* Alert List */}
+      {/* Row 2: Alert List — full width */}
       <div style={styles.card}>
         <h3 style={styles.subHeading}>Alerts ({sounds.length}/20)</h3>
         {sounds.length === 0 && (
@@ -682,205 +738,175 @@ function ConfigApp() {
         ))}
       </div>
 
-      {/* TTS Settings */}
+      {/* Row 3: TTS Settings — full width */}
       {ttsSettings && (
         <div style={styles.card}>
           <h3 style={styles.subHeading}>Text-to-Speech</h3>
-          {!ttsProActive && !ttsSettings.enabled && (
+          {!ttsProActive && !ttsSettings.granted && (
             <div style={{ fontSize: 11, opacity: 0.5, marginBottom: 8 }}>
               TTS alerts require a Pro plan or admin grant.
             </div>
           )}
-          <label style={styles.row}>
-            <span>Enabled</span>
-            <input
-              type="checkbox"
-              checked={ttsSettings.enabled}
-              disabled={!ttsProActive && !ttsSettings.enabled}
-              onChange={(e) =>
-                handleTtsSettingsUpdate({ enabled: e.target.checked })
-              }
-            />
-          </label>
-          <label style={styles.row}>
-            <span>Bits Cost</span>
-            <select
-              value={ttsSettings.tier}
-              onChange={(e) => handleTtsSettingsUpdate({ tier: e.target.value })}
-              style={styles.select}
-            >
-              {getTtsTiers(ttsMinTier).map((t) => (
-                <option key={t.sku} value={t.sku}>
-                  {t.label}
-                </option>
-              ))}
-            </select>
-          </label>
-          <div style={{ marginBottom: 8 }}>
-            <div style={{ fontSize: 13, marginBottom: 4 }}>Allowed Voices</div>
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-              {ttsVoices.map((v) => (
-                <label
-                  key={v.id}
-                  style={{ fontSize: 12, display: "flex", alignItems: "center", gap: 4 }}
-                >
-                  <input
-                    type="checkbox"
-                    checked={ttsSettings.allowedVoices.includes(v.id)}
-                    onChange={(e) => {
-                      const next = e.target.checked
-                        ? [...ttsSettings.allowedVoices, v.id]
-                        : ttsSettings.allowedVoices.filter((x) => x !== v.id);
-                      if (next.length > 0) handleTtsSettingsUpdate({ allowedVoices: next });
-                    }}
-                  />
-                  {v.name}
-                  <button
-                    type="button"
-                    onClick={(e) => { e.preventDefault(); playVoicePreview(v.id); }}
-                    style={{ background: "none", border: "1px solid #555", borderRadius: 4, padding: "0 4px", fontSize: 10, cursor: "pointer", color: previewingVoice === v.id ? "#9146ff" : "#aaa", lineHeight: 1.4 }}
-                    title={`Preview ${v.name}`}
-                  >
-                    {previewingVoice === v.id ? "\u23F9" : "\u25B6"}
-                  </button>
-                </label>
-              ))}
-            </div>
-          </div>
-          <label style={{ display: "block", marginBottom: 8 }}>
-            <div style={{ fontSize: 13, marginBottom: 4 }}>Banned Words (one per line)</div>
-            <textarea
-              value={ttsBannedWordsText}
-              onChange={(e) => setTtsBannedWordsText(e.target.value)}
-              onBlur={() => {
-                const words = ttsBannedWordsText
-                  .split("\n")
-                  .map((w) => w.trim())
-                  .filter(Boolean);
-                handleTtsSettingsUpdate({ bannedWords: words });
-              }}
-              rows={3}
-              style={{ ...styles.textInput, resize: "vertical" }}
-              placeholder="badword1&#10;badword2"
-            />
-          </label>
-          <label style={styles.row}>
-            <span>Content Moderation</span>
-            <input
-              type="checkbox"
-              checked={ttsSettings.moderationEnabled}
-              onChange={(e) =>
-                handleTtsSettingsUpdate({ moderationEnabled: e.target.checked })
-              }
-            />
-          </label>
-          {!ttsSettings.moderationEnabled && (
-            <div style={{ fontSize: 11, color: "#e67e22", marginBottom: 6, marginTop: -4 }}>
-              Disabling moderation may allow offensive messages. Banned words are still checked.
-            </div>
-          )}
-          <label style={styles.row}>
-            <span>Volume</span>
-            <input
-              type="range"
-              min="0"
-              max="100"
-              value={ttsSettings.volume}
-              onChange={(e) =>
-                handleTtsSettingsUpdate({ volume: Number(e.target.value) })
-              }
-              style={{ width: 120 }}
-            />
-            <span style={styles.muted}>{ttsSettings.volume}%</span>
-          </label>
-          <label style={styles.row}>
-            <span>Cooldown (sec)</span>
-            <input
-              type="number"
-              min="0"
-              max="120"
-              value={Math.round(ttsSettings.cooldownMs / 1000)}
-              onChange={(e) =>
-                handleTtsSettingsUpdate({
-                  cooldownMs: Number(e.target.value) * 1000,
-                })
-              }
-              style={styles.numberInput}
-            />
-          </label>
-          <label style={styles.row}>
-            <span>Max Message Length</span>
-            <input
-              type="number"
-              min="1"
-              max="300"
-              value={ttsSettings.maxMessageLength}
-              onChange={(e) =>
-                handleTtsSettingsUpdate({ maxMessageLength: Number(e.target.value) })
-              }
-              style={styles.numberInput}
-            />
-          </label>
-          <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
-            <button
-              style={styles.btn}
-              onClick={handleTtsTest}
-            >
-              Test TTS
-            </button>
-            <button
-              style={{ ...styles.btn, background: "#c0392b" }}
-              onClick={async () => {
-                try {
-                  await fetch(`${EBS_BASE}/api/tts/skip`, {
-                    method: "POST",
-                    headers: headers(),
-                  });
-                } catch {}
-              }}
-            >
-              Skip Alert
-            </button>
-          </div>
-        </div>
-      )}
 
-      {/* OBS Overlay URL */}
-      {overlayUrl && (
-        <div style={styles.card}>
-          <h3 style={styles.subHeading}>OBS Browser Source</h3>
-          <p style={{ fontSize: 12, opacity: 0.7, marginBottom: 8 }}>
-            Add this URL as a Browser Source in OBS to play sound alerts on
-            stream.
-          </p>
-          <div
-            style={{
-              padding: "8px 10px",
-              background: "#0e0e10",
-              borderRadius: 6,
-              border: "1px solid #303038",
-              fontSize: 11,
-              wordBreak: "break-all",
-              fontFamily: "monospace",
-              marginBottom: 8,
-            }}
-          >
-            {overlayUrl}
+          {/* TTS two-column grid for controls */}
+          <div style={styles.ttsGrid}>
+            <div>
+              <label style={styles.row}>
+                <span>Enabled</span>
+                <input
+                  type="checkbox"
+                  checked={ttsSettings.enabled}
+                  disabled={!ttsProActive && !ttsSettings.granted}
+                  onChange={(e) =>
+                    handleTtsSettingsUpdate({ enabled: e.target.checked })
+                  }
+                />
+              </label>
+              <label style={styles.row}>
+                <span>Bits Cost</span>
+                <select
+                  value={ttsSettings.tier}
+                  onChange={(e) => handleTtsSettingsUpdate({ tier: e.target.value })}
+                  style={styles.select}
+                >
+                  {getTtsTiers(ttsMinTier).map((t) => (
+                    <option key={t.sku} value={t.sku}>
+                      {t.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label style={styles.row}>
+                <span>Volume</span>
+                <input
+                  type="range"
+                  min="0"
+                  max="100"
+                  value={ttsSettings.volume}
+                  onChange={(e) =>
+                    handleTtsSettingsUpdate({ volume: Number(e.target.value) })
+                  }
+                  style={{ width: 120 }}
+                />
+                <span style={styles.muted}>{ttsSettings.volume}%</span>
+              </label>
+              <label style={styles.row}>
+                <span>Cooldown (sec)</span>
+                <input
+                  type="number"
+                  min="0"
+                  max="120"
+                  value={Math.round(ttsSettings.cooldownMs / 1000)}
+                  onChange={(e) =>
+                    handleTtsSettingsUpdate({
+                      cooldownMs: Number(e.target.value) * 1000,
+                    })
+                  }
+                  style={styles.numberInput}
+                />
+              </label>
+              <label style={styles.row}>
+                <span>Max Message Length</span>
+                <input
+                  type="number"
+                  min="1"
+                  max="300"
+                  value={ttsSettings.maxMessageLength}
+                  onChange={(e) =>
+                    handleTtsSettingsUpdate({ maxMessageLength: Number(e.target.value) })
+                  }
+                  style={styles.numberInput}
+                />
+              </label>
+              <label style={styles.row}>
+                <span>Content Moderation</span>
+                <input
+                  type="checkbox"
+                  checked={ttsSettings.moderationEnabled}
+                  onChange={(e) =>
+                    handleTtsSettingsUpdate({ moderationEnabled: e.target.checked })
+                  }
+                />
+              </label>
+              {!ttsSettings.moderationEnabled && (
+                <div style={{ fontSize: 11, color: "#e67e22", marginBottom: 6, marginTop: -4 }}>
+                  Disabling moderation may allow offensive messages. Banned words are still checked.
+                </div>
+              )}
+              <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+                <button
+                  style={styles.btn}
+                  onClick={handleTtsTest}
+                >
+                  Test TTS
+                </button>
+                <button
+                  style={{ ...styles.btn, background: "#c0392b" }}
+                  onClick={async () => {
+                    try {
+                      await fetch(`${EBS_BASE}/api/tts/skip`, {
+                        method: "POST",
+                        headers: headers(),
+                      });
+                    } catch {}
+                  }}
+                >
+                  Skip Alert
+                </button>
+              </div>
+            </div>
+
+            <div>
+              <div style={{ marginBottom: 10 }}>
+                <div style={{ fontSize: 13, marginBottom: 6, fontWeight: 500 }}>Allowed Voices</div>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                  {ttsVoices.map((v) => (
+                    <label
+                      key={v.id}
+                      style={{ fontSize: 12, display: "flex", alignItems: "center", gap: 4 }}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={ttsSettings.allowedVoices.includes(v.id)}
+                        onChange={(e) => {
+                          const next = e.target.checked
+                            ? [...ttsSettings.allowedVoices, v.id]
+                            : ttsSettings.allowedVoices.filter((x) => x !== v.id);
+                          if (next.length > 0) handleTtsSettingsUpdate({ allowedVoices: next });
+                        }}
+                      />
+                      {v.name}
+                      <button
+                        type="button"
+                        onClick={(e) => { e.preventDefault(); playVoicePreview(v.id); }}
+                        style={{ background: "none", border: "1px solid #555", borderRadius: 4, padding: "0 4px", fontSize: 10, cursor: "pointer", color: previewingVoice === v.id ? "#9146ff" : "#aaa", lineHeight: 1.4 }}
+                        title={`Preview ${v.name}`}
+                      >
+                        {previewingVoice === v.id ? "\u23F9" : "\u25B6"}
+                      </button>
+                    </label>
+                  ))}
+                </div>
+              </div>
+              <label style={{ display: "block" }}>
+                <div style={{ fontSize: 13, marginBottom: 4, fontWeight: 500 }}>Banned Words (one per line)</div>
+                <textarea
+                  value={ttsBannedWordsText}
+                  onChange={(e) => setTtsBannedWordsText(e.target.value)}
+                  onBlur={() => {
+                    const words = ttsBannedWordsText
+                      .split("\n")
+                      .map((w) => w.trim())
+                      .filter(Boolean);
+                    handleTtsSettingsUpdate({ bannedWords: words });
+                  }}
+                  rows={4}
+                  style={{ ...styles.textInput, resize: "vertical" }}
+                  placeholder={"badword1\nbadword2"}
+                />
+              </label>
+            </div>
           </div>
-          <button
-            style={styles.btn}
-            onClick={() => {
-              navigator.clipboard
-                .writeText(overlayUrl)
-                .then(() => {
-                  setUrlCopied(true);
-                  setTimeout(() => setUrlCopied(false), 2000);
-                })
-                .catch(() => {});
-            }}
-          >
-            {urlCopied ? "Copied!" : "Copy URL"}
-          </button>
         </div>
       )}
     </div>
@@ -1196,25 +1222,49 @@ function SoundRow({
 
 const styles = {
   container: {
-    padding: 12,
-    maxWidth: 480,
+    padding: "16px 24px",
+    maxWidth: 900,
     margin: "0 auto",
   },
   heading: {
-    fontSize: 20,
+    fontSize: 22,
     fontWeight: 700,
-    marginBottom: 12,
+    marginBottom: 16,
+  },
+  hubBanner: {
+    background: "linear-gradient(135deg, rgba(145,70,255,0.15), rgba(145,70,255,0.05))",
+    border: "1px solid rgba(145,70,255,0.3)",
+    borderRadius: 10,
+    padding: "10px 16px",
+    marginBottom: 14,
+    textAlign: "center",
+  },
+  hubLink: {
+    color: "#bf94ff",
+    fontWeight: 600,
+    textDecoration: "none",
   },
   subHeading: {
     fontSize: 15,
     fontWeight: 600,
-    marginBottom: 8,
+    marginBottom: 10,
+  },
+  twoCol: {
+    display: "grid",
+    gridTemplateColumns: "1fr 1fr",
+    gap: 14,
+    marginBottom: 14,
+  },
+  ttsGrid: {
+    display: "grid",
+    gridTemplateColumns: "1fr 1fr",
+    gap: 20,
   },
   card: {
     background: "#1f1f23",
     borderRadius: 12,
-    padding: 14,
-    marginBottom: 12,
+    padding: 16,
+    marginBottom: 14,
     border: "1px solid #303038",
   },
   row: {
@@ -1240,7 +1290,7 @@ const styles = {
     border: "1px solid #c0392b",
     borderRadius: 8,
     padding: "8px 12px",
-    marginBottom: 10,
+    marginBottom: 12,
     fontSize: 13,
   },
   success: {
@@ -1248,7 +1298,7 @@ const styles = {
     border: "1px solid #27ae60",
     borderRadius: 8,
     padding: "8px 12px",
-    marginBottom: 10,
+    marginBottom: 12,
     fontSize: 13,
   },
   textInput: {
@@ -1260,6 +1310,7 @@ const styles = {
     color: "#efeff1",
     fontSize: 13,
     outline: "none",
+    boxSizing: "border-box",
   },
   numberInput: {
     width: 60,

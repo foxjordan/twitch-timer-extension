@@ -12,6 +12,7 @@ const ttsSettingsByUser = new Map();
 
 const DEFAULT_TTS_SETTINGS = {
   enabled: false,
+  granted: false,
   tier: "sound_300",
   allowedVoices: [...DEFAULT_ALLOWED_VOICES],
   maxMessageLength: 300,
@@ -69,7 +70,10 @@ export async function loadTtsSettings() {
     const raw = await readFile(TTS_PATH, "utf-8");
     const obj = JSON.parse(raw);
     for (const [uid, val] of Object.entries(obj)) {
-      ttsSettingsByUser.set(String(uid), { ...cloneSettings(DEFAULT_TTS_SETTINGS), ...val });
+      const settings = { ...cloneSettings(DEFAULT_TTS_SETTINGS), ...val };
+      // Migrate: users who had enabled=true before the granted field existed
+      if (settings.enabled && !settings.granted) settings.granted = true;
+      ttsSettingsByUser.set(String(uid), settings);
     }
   } catch {}
 }
@@ -101,6 +105,11 @@ export function setTtsSettings(uid, patch) {
 
   if (typeof patch.enabled === "boolean") {
     curr.enabled = patch.enabled;
+    // Once enabled, mark as granted so they can toggle on/off freely
+    if (patch.enabled) curr.granted = true;
+  }
+  if (typeof patch.granted === "boolean") {
+    curr.granted = patch.granted;
   }
 
   if (typeof patch.tier === "string" && VALID_TIERS.includes(patch.tier)) {

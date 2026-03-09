@@ -237,7 +237,7 @@ export function mountAdminRoutes(app, ctx) {
     if (!userId) return res.status(400).json({ error: "userId required" });
 
     const uid = String(userId);
-    setTtsSettings(uid, { enabled: Boolean(enabled) });
+    setTtsSettings(uid, { enabled: Boolean(enabled), granted: Boolean(enabled) });
 
     res.json({ ok: true, userId: uid, ttsEnabled: Boolean(enabled) });
   });

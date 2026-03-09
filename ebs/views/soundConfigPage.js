@@ -1190,7 +1190,7 @@ export function renderSoundConfigPage(options = {}) {
             ttsVoicesCache = voices;
 
             // Show/hide access hint
-            if (!proActive && !s.enabled) {
+            if (!proActive && !s.granted) {
               if (ttsAccessHintEl) ttsAccessHintEl.style.display = '';
             } else {
               if (ttsAccessHintEl) ttsAccessHintEl.style.display = 'none';

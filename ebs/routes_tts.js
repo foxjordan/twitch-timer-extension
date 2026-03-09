@@ -82,7 +82,7 @@ export function mountTtsRoutes(app, deps = {}) {
 
   // Check if TTS is accessible for this broadcaster (Pro or admin-granted)
   function isTtsAccessible(uid) {
-    return isPro(uid) || getTtsSettings(uid).enabled;
+    return isPro(uid) || getTtsSettings(uid).granted;
   }
 
   // ===== Broadcaster endpoints =====

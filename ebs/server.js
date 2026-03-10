@@ -1213,9 +1213,12 @@ function secondsFromEvent(notification, uid = "default") {
         typeof e.total !== "undefined" ? e.total : e.total_count ?? 1
       );
       if (!Number.isFinite(count) || count <= 0) count = 1;
+      const giftTier = e.tier || "1000";
+      // When matchSubTiers is on, use regular sub tier values for gift subs
+      const giftSource = RULES.gift_sub?.matchSubTiers ? RULES.sub : RULES.gift_sub;
       const perGift = Math.max(
         0,
-        Number(RULES.gift_sub?.per_sub_seconds || 0)
+        Number(giftSource?.[giftTier] || giftSource?.["1000"] || 0)
       );
       return count * perGift;
     }

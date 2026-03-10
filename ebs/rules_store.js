@@ -28,7 +28,18 @@ function mergeRules(base, patch = {}) {
     next.resub = { base_seconds: numberOr(next.resub.base_seconds, patch.resub.base_seconds) };
   }
   if (patch.gift_sub) {
-    next.gift_sub = { per_sub_seconds: numberOr(next.gift_sub.per_sub_seconds, patch.gift_sub.per_sub_seconds) };
+    // Backward compat: if the patch uses the old flat per_sub_seconds, spread it to all tiers
+    if ('per_sub_seconds' in patch.gift_sub && !('1000' in patch.gift_sub)) {
+      const flat = numberOr(next.gift_sub['1000'], patch.gift_sub.per_sub_seconds);
+      next.gift_sub = { '1000': flat, '2000': flat, '3000': flat, matchSubTiers: false };
+    } else {
+      next.gift_sub = {
+        '1000': numberOr(next.gift_sub['1000'], patch.gift_sub['1000']),
+        '2000': numberOr(next.gift_sub['2000'], patch.gift_sub['2000']),
+        '3000': numberOr(next.gift_sub['3000'], patch.gift_sub['3000']),
+        matchSubTiers: (typeof patch.gift_sub.matchSubTiers === 'boolean') ? patch.gift_sub.matchSubTiers : (next.gift_sub?.matchSubTiers ?? true)
+      };
+    }
   }
   if (patch.charity) {
     next.charity = { per_usd: numberOr(next.charity.per_usd, patch.charity.per_usd) };

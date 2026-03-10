@@ -444,7 +444,14 @@ export function renderOverlayConfigPage(options = {}) {
                 <div class="control"><label>T2 Subs add (sec)</label><input id="r_sub_2000" type="number" min="0" step="1" value="600"></div>
                 <div class="control"><label>T3 Subs add (sec)</label><input id="r_sub_3000" type="number" min="0" step="1" value="900"></div>
                 <div class="control"><label>Resub base (sec)</label><input id="r_resub_base" type="number" min="0" step="1" value="300"></div>
-                <div class="control"><label>Gift sub per-sub (sec)</label><input id="r_gift_per" type="number" min="0" step="1" value="300"></div>
+                <div class="control"><label style="display:flex; gap:6px; align-items:center;"><input id="r_gift_match" type="checkbox" checked /> Gift subs match sub tiers</label>
+                  <div class="hint" style="margin-top:2px;">When enabled, gift subs use the same per-tier values as regular subs above.</div>
+                </div>
+                <div id="giftTierOverrides" style="display:none;">
+                  <div class="control"><label>T1 Gift Subs add (sec)</label><input id="r_gift_1000" type="number" min="0" step="1" value="300"></div>
+                  <div class="control"><label>T2 Gift Subs add (sec)</label><input id="r_gift_2000" type="number" min="0" step="1" value="600"></div>
+                  <div class="control"><label>T3 Gift Subs add (sec)</label><input id="r_gift_3000" type="number" min="0" step="1" value="900"></div>
+                </div>
                 <div class="control"><label>Charity per $1 (sec)</label><input id="r_charity_per_usd" type="number" min="0" step="1" value="60"></div>
                 <div class="control"><label>3rd Party Tip/Gift add (sec)</label><input id="r_tip_per_unit" type="number" min="0" step="1" value="60"></div>
                 <div class="control"><label>Min. 3rd party tip to trigger</label><input id="r_tip_min" type="number" min="0" step="0.01" value="1"></div>
@@ -533,6 +540,11 @@ export function renderOverlayConfigPage(options = {}) {
                   </div>
                   <div class="row2" id="devCustomGifts">
                     <input id="devGiftCount" type="number" min="1" step="1" value="1" style="max-width:100px" />
+                    <select id="devGiftTier" style="max-width:160px">
+                      <option value="1000">Tier 1</option>
+                      <option value="2000">Tier 2</option>
+                      <option value="3000">Tier 3</option>
+                    </select>
                     <button class="secondary" id="devApplyGifts" title="Apply N gift subs">Apply Gift Subs</button>
                   </div>
                   <div class="row2" id="devHypeControls">
@@ -1098,10 +1110,13 @@ export function renderOverlayConfigPage(options = {}) {
           if (giftsBtn) giftsBtn.addEventListener('click', async function(e){
             e.preventDefault();
             const count = Math.max(1, num(document.getElementById('devGiftCount')?.value, 1));
+            const giftTier = document.getElementById('devGiftTier')?.value || '1000';
             if (!window.DEV_RULES) return;
-            let secs = Math.floor(count * (Number(window.DEV_RULES.gift_sub?.per_sub_seconds)||0));
+            var giftSrc = window.DEV_RULES.gift_sub?.matchSubTiers ? window.DEV_RULES.sub : window.DEV_RULES.gift_sub;
+            const perGift = Number(giftSrc?.[giftTier] || giftSrc?.['1000'] || 0);
+            let secs = Math.floor(count * perGift);
             const m = await getTestMultiplier();
-            const meta = { source: 'dev_custom_gifts', label: 'Custom Gift Subs', giftCount: count, requestedSeconds: secs };
+            const meta = { source: 'dev_custom_gifts', label: 'Custom Gift Subs', giftCount: count, giftTier: giftTier, requestedSeconds: secs };
             if (m.multiplier > 1) {
               meta.hypeMultiplier = m.hypeMultiplier;
               meta.bonusMultiplier = m.bonusMultiplier;
@@ -1114,6 +1129,15 @@ export function renderOverlayConfigPage(options = {}) {
         const hypeOffBtn = document.getElementById('testHypeOff');
         if (hypeOnBtn) hypeOnBtn.addEventListener('click', async function(e){ e.preventDefault(); flashButton(hypeOnBtn); setBusy(hypeOnBtn,true); await setHypeActive(true); await updateCapStatus(); setBusy(hypeOnBtn,false); });
         if (hypeOffBtn) hypeOffBtn.addEventListener('click', async function(e){ e.preventDefault(); flashButton(hypeOffBtn); setBusy(hypeOffBtn,true); await setHypeActive(false); await updateCapStatus(); setBusy(hypeOffBtn,false); });
+
+        // Gift sub tier toggle
+        var giftMatchCb = document.getElementById('r_gift_match');
+        var giftOverrides = document.getElementById('giftTierOverrides');
+        function syncGiftVisibility() {
+          if (giftOverrides) giftOverrides.style.display = giftMatchCb && giftMatchCb.checked ? 'none' : '';
+        }
+        if (giftMatchCb) giftMatchCb.addEventListener('change', syncGiftVisibility);
+        syncGiftVisibility();
 
         // Load current user settings into inputs in case server changed
         fetch('/api/user/settings').then(function(r){return r.json();}).then(function(j){
@@ -1216,7 +1240,11 @@ export function renderOverlayConfigPage(options = {}) {
               if (document.getElementById('r_resub_base')) document.getElementById('r_resub_base').value = rr.resub.base_seconds ?? 300;
             }
             if (rr && rr.gift_sub) {
-              if (document.getElementById('r_gift_per')) document.getElementById('r_gift_per').value = rr.gift_sub.per_sub_seconds ?? 300;
+              if (document.getElementById('r_gift_1000')) document.getElementById('r_gift_1000').value = rr.gift_sub['1000'] ?? 300;
+              if (document.getElementById('r_gift_2000')) document.getElementById('r_gift_2000').value = rr.gift_sub['2000'] ?? 600;
+              if (document.getElementById('r_gift_3000')) document.getElementById('r_gift_3000').value = rr.gift_sub['3000'] ?? 900;
+              var matchCb = document.getElementById('r_gift_match');
+              if (matchCb) { matchCb.checked = rr.gift_sub.matchSubTiers !== false; syncGiftVisibility(); }
             }
             if (rr && rr.charity) {
               if (document.getElementById('r_charity_per_usd')) document.getElementById('r_charity_per_usd').value = rr.charity.per_usd ?? 60;
@@ -1252,7 +1280,12 @@ export function renderOverlayConfigPage(options = {}) {
               '3000': Number((document.getElementById('r_sub_3000')||{}).value||900)
             },
             resub: { base_seconds: Number((document.getElementById('r_resub_base')||{}).value||300) },
-            gift_sub: { per_sub_seconds: Number((document.getElementById('r_gift_per')||{}).value||300) },
+            gift_sub: {
+              '1000': Number((document.getElementById('r_gift_1000')||{}).value||300),
+              '2000': Number((document.getElementById('r_gift_2000')||{}).value||600),
+              '3000': Number((document.getElementById('r_gift_3000')||{}).value||900),
+              matchSubTiers: Boolean((document.getElementById('r_gift_match')||{}).checked)
+            },
             charity: { per_usd: Number((document.getElementById('r_charity_per_usd')||{}).value||60) },
             thirdPartyTip: { per_unit: Number((document.getElementById('r_tip_per_unit')||{}).value||60), min_amount: Number((document.getElementById('r_tip_min')||{}).value||1) },
             follow: { enabled: Boolean((document.getElementById('r_follow_enabled')||{}).checked), add_seconds: Number((document.getElementById('r_follow_add')||{}).value||600) },

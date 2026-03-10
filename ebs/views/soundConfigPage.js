@@ -11,6 +11,9 @@ export function renderSoundConfigPage(options = {}) {
   const base = String(options.base || "");
   const adminName = String(options.adminName || "");
   const userKey = String(options.userKey || "");
+  const apiBase = String(options.apiBase || "/api/sounds");
+  const isAdminMode = Boolean(options.isAdminMode);
+  const managedUserName = String(options.managedUserName || "");
   const termsUrl = `${base}/terms`;
   const privacyUrl = `${base}/privacy`;
   const gdprUrl = `${base}/gdpr`;
@@ -27,7 +30,7 @@ export function renderSoundConfigPage(options = {}) {
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="robots" content="noindex, nofollow" />
-    <title>Sound Alerts – Livestreamer Hub</title>
+    <title>${isAdminMode ? `Admin: ${managedUserName} Sounds` : 'Sound Alerts'} – Livestreamer Hub</title>
     <link rel="icon" type="image/png" href="/assets/convertico-coin_24x24.png">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/driver.js@1.3.1/dist/driver.css"/>
     ${renderThemeBootstrapScript()}
@@ -164,6 +167,15 @@ export function renderSoundConfigPage(options = {}) {
     </aside>
 
     <main>
+      ${isAdminMode ? `
+      <div style="background:#9146ff22; border:1px solid #9146ff55; border-radius:10px; padding:10px 16px; margin-bottom:16px; display:flex; align-items:center; gap:10px; font-size:13px;">
+        <a href="/admin" style="color:#9146ff; text-decoration:none; font-weight:600;">&larr; Back to Dashboard</a>
+        <span style="color:var(--text-muted);">|</span>
+        <span>Managing sounds for <strong>${managedUserName}</strong></span>
+      </div>
+      <h1>Sound Alerts</h1>
+      <p class="subtitle" style="margin-bottom:12px;">Admin: manage this broadcaster's sound alerts.</p>
+      ` : `
       <h1>Sound Alerts</h1>
       <p class="subtitle" style="margin-bottom:12px;">Viewers use Bits to trigger sound alerts on your stream.</p>
 
@@ -175,6 +187,7 @@ export function renderSoundConfigPage(options = {}) {
         </div>
         <div class="hint" style="margin-top:4px;">Add as a Browser Source</div>
       </div>
+      `}
 
       <!-- Settings (collapsible, collapsed by default) -->
       <div class="card" id="settingsCard">
@@ -399,6 +412,8 @@ export function renderSoundConfigPage(options = {}) {
     <script>
       (function() {
         var USER_KEY = ${JSON.stringify(userKey)};
+        var API_BASE = ${JSON.stringify(apiBase)};
+        var IS_ADMIN_MODE = ${JSON.stringify(isAdminMode)};
 
         function setBusy(btn, busy) { if (!btn) return; btn.disabled = !!busy; }
         function flashButton(btn) { if (!btn) return; btn.classList.add('btn-click'); setTimeout(function() { btn.classList.remove('btn-click'); }, 160); }
@@ -500,7 +515,7 @@ export function renderSoundConfigPage(options = {}) {
 
         async function fetchSoundsAdmin() {
           try {
-            var r = await fetch('/api/sounds', { cache: 'no-store' });
+            var r = await fetch(API_BASE, { cache: 'no-store' });
             var data = await r.json();
             soundsCache = data.sounds || [];
             var settings = data.settings || {};
@@ -617,7 +632,7 @@ export function renderSoundConfigPage(options = {}) {
             testBtn.addEventListener('click', async function() {
               flashButton(testBtn);
               setBusy(testBtn, true);
-              try { await fetch('/api/sounds/test/' + encodeURIComponent(s.id), { method: 'POST' }); } catch(e) {}
+              try { await fetch(API_BASE + '/test/' + encodeURIComponent(s.id), { method: 'POST' }); } catch(e) {}
               setBusy(testBtn, false);
             });
 
@@ -723,7 +738,7 @@ export function renderSoundConfigPage(options = {}) {
             try {
               var fd = new FormData();
               fd.append('image', file);
-              var r = await fetch('/api/sounds/' + encodeURIComponent(s.id) + '/image', { method: 'POST', body: fd });
+              var r = await fetch(API_BASE + '/' + encodeURIComponent(s.id) + '/image', { method: 'POST', body: fd });
               if (!r.ok) throw new Error('Upload failed');
               imageHint.textContent = 'Image uploaded!';
               setTimeout(function() { imageHint.textContent = ''; }, 2500);
@@ -746,7 +761,7 @@ export function renderSoundConfigPage(options = {}) {
               flashButton(removeImgBtn);
               setBusy(removeImgBtn, true);
               try {
-                await fetch('/api/sounds/' + encodeURIComponent(s.id) + '/image', { method: 'DELETE' });
+                await fetch(API_BASE + '/' + encodeURIComponent(s.id) + '/image', { method: 'DELETE' });
                 await fetchSoundsAdmin();
               } catch(e) {}
               setBusy(removeImgBtn, false);
@@ -794,7 +809,7 @@ export function renderSoundConfigPage(options = {}) {
             loadHint.textContent = 'Loading audio info…';
             trimControls.appendChild(loadHint);
             try {
-              var dr = await fetch('/api/sounds/' + encodeURIComponent(s.id) + '/duration');
+              var dr = await fetch(API_BASE + '/' + encodeURIComponent(s.id) + '/duration');
               var dd = await dr.json();
               trimDuration = dd.duration || 0;
               if (trimDuration < 0.5) { loadHint.textContent = 'Clip too short to trim'; return; }
@@ -858,7 +873,7 @@ export function renderSoundConfigPage(options = {}) {
               else {
                 try {
                   if (!trimAudioUrl) {
-                    var ar = await fetch('/api/sounds/' + encodeURIComponent(sound.id) + '/audio');
+                    var ar = await fetch(API_BASE + '/' + encodeURIComponent(sound.id) + '/audio');
                     if (!ar.ok) throw new Error('Could not load audio');
                     var blob = await ar.blob();
                     trimAudioUrl = URL.createObjectURL(blob);
@@ -891,7 +906,7 @@ export function renderSoundConfigPage(options = {}) {
               setBusy(applyBtn, true);
               trimHint.textContent = 'Trimming…';
               try {
-                var r = await fetch('/api/sounds/' + encodeURIComponent(sound.id) + '/trim', {
+                var r = await fetch(API_BASE + '/' + encodeURIComponent(sound.id) + '/trim', {
                   method: 'POST',
                   headers: { 'Content-Type': 'application/json' },
                   body: JSON.stringify({ trimStart: ts, trimEnd: te })
@@ -991,7 +1006,7 @@ export function renderSoundConfigPage(options = {}) {
 
         async function updateSoundAdmin(soundId, patch) {
           try {
-            await fetch('/api/sounds/' + encodeURIComponent(soundId), {
+            await fetch(API_BASE + '/' + encodeURIComponent(soundId), {
               method: 'PUT',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify(patch)
@@ -1005,7 +1020,7 @@ export function renderSoundConfigPage(options = {}) {
           flashButton(btn);
           setBusy(btn, true);
           try {
-            await fetch('/api/sounds/' + encodeURIComponent(soundId), { method: 'DELETE' });
+            await fetch(API_BASE + '/' + encodeURIComponent(soundId), { method: 'DELETE' });
             await fetchSoundsAdmin();
           } catch (err) {}
           setBusy(btn, false);
@@ -1023,7 +1038,7 @@ export function renderSoundConfigPage(options = {}) {
                 globalCooldownMs: soundGlobalCooldownEl ? Number(soundGlobalCooldownEl.value) * 1000 : 3000,
                 maxQueueSize: soundMaxQueueEl ? Number(soundMaxQueueEl.value) : 5
               };
-              await fetch('/api/sounds/settings', {
+              await fetch(API_BASE + '/settings', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(payload)
@@ -1054,7 +1069,7 @@ export function renderSoundConfigPage(options = {}) {
               fd.append('name', (soundNameEl ? soundNameEl.value : '') || file.name.replace(/\\.[^.]+$/, ''));
               fd.append('tier', soundTierEl ? soundTierEl.value : '${DEFAULT_TIER}');
               fd.append('volume', soundUploadVolumeEl ? soundUploadVolumeEl.value : '80');
-              var r = await fetch('/api/sounds', { method: 'POST', body: fd });
+              var r = await fetch(API_BASE, { method: 'POST', body: fd });
               if (!r.ok) {
                 var body = await r.json().catch(function() { return {}; });
                 throw new Error(body.error || 'Upload failed');
@@ -1091,7 +1106,7 @@ export function renderSoundConfigPage(options = {}) {
             setBusy(clipUploadBtn, true);
             if (clipUploadHintEl) clipUploadHintEl.textContent = clipAudioOnlyEl && clipAudioOnlyEl.checked ? 'Extracting audio…' : 'Creating…';
             try {
-              var r = await fetch('/api/sounds/clip', {
+              var r = await fetch(API_BASE + '/clip', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -1143,7 +1158,7 @@ export function renderSoundConfigPage(options = {}) {
               fd.append('name', (videoNameEl ? videoNameEl.value : '') || file.name.replace(/\\.[^.]+$/, ''));
               fd.append('tier', videoTierEl ? videoTierEl.value : '${DEFAULT_TIER}');
               fd.append('volume', videoVolumeEl ? videoVolumeEl.value : '80');
-              var r = await fetch('/api/sounds/video', { method: 'POST', body: fd });
+              var r = await fetch(API_BASE + '/video', { method: 'POST', body: fd });
               if (!r.ok) {
                 var body = await r.json().catch(function() { return {}; });
                 throw new Error(body.error || 'Upload failed');

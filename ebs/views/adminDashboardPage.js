@@ -404,6 +404,11 @@ export function renderAdminDashboardPage(options = {}) {
 
             // Actions
             var tdActions = document.createElement('td');
+            var manageLink = document.createElement('a');
+            manageLink.href = '/admin/broadcaster/' + encodeURIComponent(u.userId);
+            manageLink.textContent = 'Manage';
+            manageLink.style.cssText = 'font-size:12px; color:#9146ff; font-weight:600; margin-right:6px; text-decoration:none;';
+            tdActions.appendChild(manageLink);
             if (u.banned) {
               var unbanBtn = document.createElement('button');
               unbanBtn.className = 'btn-unban';

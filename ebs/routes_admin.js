@@ -1,4 +1,5 @@
 import { renderAdminDashboardPage } from "./views/adminDashboardPage.js";
+import { renderSoundConfigPage } from "./views/soundConfigPage.js";
 import { getBan, banUser, unbanUser } from "./bans.js";
 import { getSubscription, isPro } from "./subscription_store.js";
 import { getTtsSettings, setTtsSettings, getGlobalTtsConfig, setGlobalTtsConfig } from "./tts_store.js";
@@ -62,6 +63,38 @@ export function mountAdminRoutes(app, ctx) {
       "Admin";
 
     const html = renderAdminDashboardPage({ base: "", adminName });
+    res.setHeader("Content-Type", "text/html; charset=utf-8");
+    res.setHeader("Cache-Control", "no-store");
+    res.send(html);
+  });
+
+  // Admin broadcaster detail page (sound management)
+  app.get("/admin/broadcaster/:userId", (req, res) => {
+    if (!req.session?.isAdmin) {
+      return res.redirect(`/auth/login?next=${encodeURIComponent(req.originalUrl)}`);
+    }
+    if (!isSuperAdmin(req)) {
+      return res.status(403).send("Access denied");
+    }
+
+    const uid = String(req.params.userId);
+    const adminName =
+      req.session?.twitchUser?.display_name ||
+      req.session?.twitchUser?.login ||
+      "Admin";
+    const profile = getUserProfile ? getUserProfile(uid) : null;
+    const conn = getBroadcasterConnection(uid);
+    const managedUserName = conn?.broadcasterLogin || profile?.displayName || profile?.login || uid;
+
+    const html = renderSoundConfigPage({
+      base: "",
+      adminName,
+      userKey: "",
+      apiBase: `/api/admin/sounds/${uid}`,
+      isAdminMode: true,
+      managedUserName,
+      showAdminLink: true,
+    });
     res.setHeader("Content-Type", "text/html; charset=utf-8");
     res.setHeader("Cache-Control", "no-store");
     res.send(html);

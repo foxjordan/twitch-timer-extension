@@ -69,6 +69,7 @@ import {
 import { fetchActiveSubscriberCount } from "./twitch_api.js";
 import { mountSoundRoutes } from "./routes_sounds.js";
 import { mountAdminRoutes } from "./routes_admin.js";
+import { mountAdminSoundRoutes } from "./routes_admin_sounds.js";
 import { loadSoundAlerts, listSounds, getSoundSettings, setSoundSettings } from "./sounds_store.js";
 import { loadBans, isBanned } from "./bans.js";
 import { loadSubscriptions } from "./subscription_store.js";
@@ -1115,6 +1116,18 @@ mountAdminRoutes(app, {
     broadcasterConnections,
     sseClients,
     closeEventSubForUser,
+  },
+});
+
+mountAdminSoundRoutes(app, {
+  onSoundAlert: ({ channelId, soundId, soundName, tier, txId, type, clipSlug, volume }) => {
+    addLogEntry({ type: "sound_alert", userId: String(channelId), soundId, soundName, alertType: type || "sound", volume: volume || 80, txId: txId || undefined });
+    const payload = JSON.stringify({ soundId, soundName, channelId, txId, ts: Date.now(), type: type || "sound", clipSlug: clipSlug || "", volume: volume || 80 });
+    for (const client of Array.from(sseClients)) {
+      if (client.timerUserId && String(client.timerUserId) !== String(channelId)) continue;
+      try { client.res.write("event: sound_alert\n"); client.res.write(`data: ${payload}\n\n`); } catch { sseClients.delete(client); }
+    }
+    broadcastToChannel({ broadcasterId: channelId, type: "sound_alert", payload: { soundId, soundName } }).catch(() => {});
   },
 });
 

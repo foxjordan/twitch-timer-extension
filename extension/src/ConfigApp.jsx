@@ -62,7 +62,7 @@ function ConfigApp() {
         if (!res.ok) throw new Error("Failed to fetch sounds");
         const data = await res.json();
         setSounds(data.sounds || []);
-        setSettings(data.settings || settings);
+        if (data.settings) setSettings(data.settings);
         setTiers(data.tiers || []);
       } catch (e) {
         setError(e.message);
@@ -70,7 +70,7 @@ function ConfigApp() {
         setLoading(false);
       }
     },
-    [settings],
+    [],
   );
 
   useEffect(() => {

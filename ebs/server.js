@@ -78,6 +78,13 @@ import { synthesizeSpeech } from "./tts_provider.js";
 import { loadTtsSettings, getTtsSettings } from "./tts_store.js";
 import { loadVoices, getVoices } from "./tts_voices.js";
 import { persistTokens, loadTokens, getAllTokenUserIds, getUserAccessToken } from "./twitch_tokens.js";
+import { mountStreamElementsRoutes } from "./routes_streamelements.js";
+import {
+  connectStreamElements,
+  disconnectStreamElements,
+  disconnectAllStreamElements,
+  getStreamElementsStatus,
+} from "./streamelements.js";
 
 const app = express();
 // honor X-Forwarded-* so req.protocol resolves to https behind Fly
@@ -297,6 +304,9 @@ function setUserSettings(uid, patch) {
   if (patch && typeof patch.capMessageSize !== "undefined") {
     const sz = String(patch.capMessageSize);
     if (sz === "larger" || sz === "smaller" || sz === "same") next.capMessageSize = sz;
+  }
+  if (patch && typeof patch.seJwtToken !== "undefined") {
+    next.seJwtToken = String(patch.seJwtToken || "").slice(0, 2000);
   }
   if (
     patch &&
@@ -775,6 +785,19 @@ mountAuthRoutes(app, {
       if (accessToken && process.env.TWITCH_CLIENT_ID) {
         startEventSubForUser(userId);
       }
+
+      // Auto-reconnect StreamElements if user has a stored JWT token
+      try {
+        const us = getUserSettings(userId);
+        if (us.seJwtToken) {
+          connectStreamElements(userId, us.seJwtToken, (tip) => {
+            handleStreamElementsTip(userId, tip);
+          });
+          logger.info("se_auto_reconnect_on_login", { userId });
+        }
+      } catch (seErr) {
+        logger.error("se_auto_reconnect_failed", { userId, message: seErr?.message });
+      }
     } catch (e) {
       logger.error("admin_login_handler_failed", { message: e?.message });
     }
@@ -783,6 +806,7 @@ mountAuthRoutes(app, {
     try {
       logger.info("user_logout", { userId });
       closeEventSubForUser(userId);
+      disconnectStreamElements(userId);
     } catch (e) {
       logger.error("logout_handler_failed", { userId, message: e?.message });
     }
@@ -1096,6 +1120,12 @@ mountAdminRoutes(app, {
 
 mountStripeRoutes(app);
 
+mountStreamElementsRoutes(app, {
+  getUserSettings,
+  setUserSettings,
+  handleStreamElementsTip,
+});
+
 // ---- Self-service account deletion ----
 import { deleteAllUserData } from "./user_data_deletion.js";
 
@@ -1348,6 +1378,90 @@ async function handleEventSub(notification, expectedUserId = null) {
   }
 }
 
+// ---- StreamElements tip handler ----
+function handleStreamElementsTip(uid, tip) {
+  const timerUid = String(uid);
+  const R = getRules(timerUid);
+  const tipRules = R.thirdPartyTip || {};
+  const minAmount = Number(tipRules.min_amount || 1);
+  const perUnit = Number(tipRules.per_unit || 60);
+
+  if (tip.amount < minAmount) {
+    logger.info("se_tip_below_minimum", { userId: timerUid, amount: tip.amount, min: minAmount });
+    return;
+  }
+
+  let baseSeconds = Math.floor(tip.amount * perUnit);
+  let appliedSeconds = baseSeconds;
+  let hypeMultiplier = 1;
+  let bonusMultiplier = 1;
+
+  const userState = state.users.get(timerUid);
+  if (userState?.hypeActive) {
+    hypeMultiplier = Number(R.hypeTrain?.multiplier || 1);
+  }
+  if (userState?.bonusActive) {
+    bonusMultiplier = Number(R.bonusTime?.multiplier || 1);
+  }
+  let totalMultiplier;
+  if (R.bonusTime?.stackWithHype) {
+    totalMultiplier = hypeMultiplier * bonusMultiplier;
+  } else {
+    totalMultiplier = Math.max(hypeMultiplier, bonusMultiplier);
+  }
+  appliedSeconds = Math.floor(baseSeconds * totalMultiplier);
+
+  if (appliedSeconds > 0) {
+    const before = getRemainingSeconds(timerUid);
+    const remaining = addSeconds(timerUid, appliedSeconds);
+    const actual = Math.max(0, remaining - before);
+    observability.lastTimerMutationAt = new Date().toISOString();
+
+    addLogEntry({
+      type: "streamelements_tip",
+      baseSeconds,
+      hypeMultiplier,
+      bonusMultiplier,
+      appliedSeconds,
+      actualSeconds: actual,
+      tipAmount: tip.amount,
+      tipCurrency: tip.currency,
+      tipUsername: tip.username,
+      tipMessage: tip.message,
+      userId: timerUid,
+    });
+
+    broadcastToChannel({
+      broadcasterId: timerUid,
+      type: "timer_add",
+      payload: {
+        userId: timerUid,
+        secondsAdded: actual,
+        newRemaining: remaining,
+        hype: userState?.hypeActive,
+      },
+    }).catch((err) => {
+      observability.lastBroadcastErrorAt = new Date().toISOString();
+      logger.error("broadcast_failed", { reason: err?.message, type: "timer_add" });
+    });
+  }
+
+  // Apply to goals
+  try {
+    const applied = applyGoalAutoContribution({
+      uid: timerUid,
+      type: "streamelements.tip",
+      event: { amount: { value: Math.round(tip.amount * 100), decimal_places: 2 }, currency: tip.currency },
+      timestamp: Date.now(),
+    });
+    if (applied && applied.length) {
+      broadcastGoalSnapshot(timerUid);
+    }
+  } catch (err) {
+    logger.error("goal_auto_apply_failed", { message: err?.message, source: "streamelements" });
+  }
+}
+
 function startEventSubWS(broadcasterId, accessToken, onNotification, urlOverride = null) {
   const clientId = process.env.TWITCH_CLIENT_ID;
   if (!accessToken || !clientId || !broadcasterId) {
@@ -1521,12 +1635,24 @@ setTimeout(async () => {
     });
     startEventSubForUser(uid);
     logger.info("eventsub_restored_from_token", { userId: uid, login: profile?.login });
+
+    // Also restore StreamElements connection if user has a stored token
+    try {
+      const us = getUserSettings(uid);
+      if (us.seJwtToken) {
+        connectStreamElements(uid, us.seJwtToken, (tip) => {
+          handleStreamElementsTip(uid, tip);
+        });
+        logger.info("se_restored_from_settings", { userId: uid });
+      }
+    } catch {}
   }
 }, 2000);
 
 // Graceful shutdown – persist all state before Fly.io kills the process
 async function gracefulShutdown(signal) {
   logger.info("shutdown_signal", { signal, bootId: SERVER_BOOT_ID });
+  disconnectAllStreamElements();
   try {
     await Promise.all([
       persistTimerState(),

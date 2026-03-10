@@ -465,6 +465,33 @@ export function renderOverlayConfigPage(options = {}) {
           </div>
 
           <div class="panel" style="margin-top:16px;">
+            <div class="${sectionClass("streamelements")}" data-section="streamelements">
+              <button class="section-toggle" data-section-toggle="streamelements" aria-expanded="${sectionExpandedAttr(
+                "streamelements",
+              )}">
+                <span>StreamElements Tips</span>
+                <span class="section-arrow">▾</span>
+              </button>
+              <div class="section-body" ${sectionBodyAttr("streamelements")}>
+                <p class="hint" style="margin-bottom:12px;">Connect your StreamElements account to automatically add time when viewers tip. Your JWT token is found in your <a href="https://streamelements.com/dashboard/account/channels" target="_blank" rel="noopener noreferrer">SE Dashboard</a> under Account &rarr; Channels &rarr; Show secrets.</p>
+                <div class="control">
+                  <label>StreamElements JWT Token</label>
+                  <div style="display:flex; gap:8px; align-items:center;">
+                    <input id="seJwtToken" type="password" placeholder="Paste your SE JWT token" style="flex:1" autocomplete="off" />
+                    <button class="secondary" id="seToggleShow" title="Show/hide token" style="min-width:60px">Show</button>
+                  </div>
+                </div>
+                <div class="row2" style="gap:8px; display:flex; align-items:center; margin-top:8px;">
+                  <button id="seConnect">Connect</button>
+                  <button class="secondary" id="seDisconnect">Disconnect</button>
+                  <span id="seStatus" style="opacity:.7; font-size:13px;"></span>
+                </div>
+                <div class="hint" style="margin-top:6px;">Tip time is calculated using your 3rd Party Tip rules above (per-unit seconds and minimum amount).</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="panel" style="margin-top:16px;">
               <div class="${sectionClass("events")}" data-section="events">
                 <button class="section-toggle" data-section-toggle="events" aria-expanded="${sectionExpandedAttr(
                   "events",
@@ -679,6 +706,10 @@ export function renderOverlayConfigPage(options = {}) {
               var amt = Number(e.charityAmount || 0);
               var dec = Number(e.charityDecimals || 2);
               if (amt > 0) detail = '$' + (amt / Math.pow(10, dec)).toFixed(dec);
+            } else if (src === 'streamelements_tip') {
+              var tipAmt = Number(e.tipAmount || 0);
+              if (tipAmt > 0) detail = (e.tipUsername || 'Anon') + ' tipped $' + tipAmt.toFixed(2);
+              else detail = 'SE Tip';
             } else if (src === 'channel.follow') {
               detail = 'Follow';
             } else if (src === 'channel.hype_train.begin') {
@@ -1234,6 +1265,84 @@ export function renderOverlayConfigPage(options = {}) {
 
         // (rules UI removed)
 
+        // ---- StreamElements connection UI ----
+        (function initSE() {
+          var seTokenInput = document.getElementById('seJwtToken');
+          var seToggle = document.getElementById('seToggleShow');
+          var seConnectBtn = document.getElementById('seConnect');
+          var seDisconnectBtn = document.getElementById('seDisconnect');
+          var seStatusEl = document.getElementById('seStatus');
+          if (!seTokenInput) return;
+
+          // Toggle show/hide token
+          if (seToggle) seToggle.addEventListener('click', function() {
+            var isPassword = seTokenInput.type === 'password';
+            seTokenInput.type = isPassword ? 'text' : 'password';
+            seToggle.textContent = isPassword ? 'Hide' : 'Show';
+          });
+
+          function updateSeStatusUI(data) {
+            if (!seStatusEl) return;
+            if (data.connected) {
+              seStatusEl.textContent = 'Connected' + (data.tipCount ? ' (' + data.tipCount + ' tips)' : '');
+              seStatusEl.style.color = '#22c55e';
+            } else if (data.status === 'connecting') {
+              seStatusEl.textContent = 'Connecting...';
+              seStatusEl.style.color = '#facc15';
+            } else if (data.status === 'auth_failed') {
+              seStatusEl.textContent = 'Auth failed \u2013 check your token';
+              seStatusEl.style.color = '#ef4444';
+            } else if (data.status === 'error') {
+              seStatusEl.textContent = 'Error: ' + (data.error || 'unknown');
+              seStatusEl.style.color = '#ef4444';
+            } else {
+              seStatusEl.textContent = data.hasToken ? 'Disconnected (token saved)' : 'Not connected';
+              seStatusEl.style.color = '';
+            }
+          }
+
+          // Load initial status
+          fetch('/api/streamelements/status').then(function(r) { return r.json(); }).then(function(data) {
+            updateSeStatusUI(data);
+          }).catch(function() {});
+
+          if (seConnectBtn) seConnectBtn.addEventListener('click', async function(e) {
+            e.preventDefault();
+            var token = seTokenInput.value.trim();
+            if (!token || token.length < 10) { seStatusEl.textContent = 'Please enter a valid JWT token'; seStatusEl.style.color = '#ef4444'; return; }
+            flashButton(seConnectBtn);
+            setBusy(seConnectBtn, true);
+            try {
+              var r = await fetch('/api/streamelements/connect', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ jwtToken: token }) });
+              var j = await r.json();
+              if (j.ok) {
+                updateSeStatusUI({ status: 'connecting' });
+                // Poll status after a short delay for auth result
+                setTimeout(function() {
+                  fetch('/api/streamelements/status').then(function(r2) { return r2.json(); }).then(updateSeStatusUI).catch(function() {});
+                }, 3000);
+              } else {
+                updateSeStatusUI({ status: 'error', error: j.error || 'Failed' });
+              }
+            } catch(err) {
+              updateSeStatusUI({ status: 'error', error: 'Network error' });
+            }
+            setBusy(seConnectBtn, false);
+          });
+
+          if (seDisconnectBtn) seDisconnectBtn.addEventListener('click', async function(e) {
+            e.preventDefault();
+            flashButton(seDisconnectBtn);
+            setBusy(seDisconnectBtn, true);
+            try {
+              await fetch('/api/streamelements/disconnect', { method: 'POST' });
+              seTokenInput.value = '';
+              updateSeStatusUI({ connected: false, status: 'disconnected', hasToken: false });
+            } catch(err) {}
+            setBusy(seDisconnectBtn, false);
+          });
+        })();
+
         const clearLogBtn = document.getElementById('clearLog');
         if (clearLogBtn) {
           clearLogBtn.addEventListener('click', async function(e) {
@@ -1374,6 +1483,14 @@ export function renderOverlayConfigPage(options = {}) {
             popover: {
               title: 'Rules',
               description: 'Define how viewer events add time: Bits, subs (per tier), gift subs, charity donations, tips, and follows. Set the Hype Train and Bonus Time multipliers here too.',
+              side: 'left', align: 'start'
+            }
+          },
+          {
+            element: '[data-section="streamelements"]',
+            popover: {
+              title: 'StreamElements Tips',
+              description: 'Connect your StreamElements account to automatically add time when viewers send tips. Paste your JWT token from the SE dashboard to get started.',
               side: 'left', align: 'start'
             }
           },

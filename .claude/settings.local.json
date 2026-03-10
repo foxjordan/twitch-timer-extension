@@ -20,7 +20,10 @@
       "WebFetch(domain:docs.inworld.ai)",
       "Bash(node -c twitch_moderation.js)",
       "Bash(node -c routes_tts.js)",
-      "Bash(node -c routes_auth.js)"
+      "Bash(node -c routes_auth.js)",
+      "WebFetch(domain:dev.streamelements.com)",
+      "WebFetch(domain:api.streamelements.com)",
+      "Bash(npm install socket.io-client)"
     ]
   }
 }

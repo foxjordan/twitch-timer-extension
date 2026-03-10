@@ -670,6 +670,18 @@ function mapEventToDelta(goal, type, event = {}) {
       if (!value) return null;
       return { value, segmentKey: "follows" };
     }
+    case "streamelements.tip": {
+      if (!rules.autoTrackTips) return null;
+      const amount = e.amount?.value ?? 0;
+      const decimals = e.amount?.decimal_places ?? 2;
+      const usd = amount / Math.pow(10, decimals);
+      const per = Math.max(0, rules.tipsPerUsd || 0);
+      if (!per || !usd) return null;
+      return {
+        value: usd * per,
+        segmentKey: "tips",
+      };
+    }
     default:
       return null;
   }

@@ -797,6 +797,7 @@ function App() {
                 placeholder="Type your message..."
                 style={{
                   width: "100%",
+                  boxSizing: "border-box",
                   padding: "6px 10px",
                   borderRadius: 6,
                   border: "1px solid #303038",

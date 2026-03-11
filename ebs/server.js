@@ -946,6 +946,29 @@ mountSoundRoutes(app, {
       payload: { soundId, soundName },
     }).catch(() => {});
 
+    // Add timer time for Bits-in-Extensions usage (same rules as cheers)
+    if (tier) {
+      const bits = Number(tier.replace("sound_", "")) || 0;
+      if (bits > 0) {
+        const timerUid = String(channelId);
+        const RULES = getRules(timerUid);
+        const per = Math.max(1, Number(RULES.bits?.per || 0));
+        const addSec = Math.max(0, Number(RULES.bits?.add_seconds || 0));
+        if (addSec > 0) {
+          const userState = state.users.get(timerUid) || { bitsCarry: 0 };
+          userState.bitsCarry = Math.max(0, Math.floor((userState.bitsCarry || 0) + bits));
+          state.users.set(timerUid, userState);
+          const units = Math.floor(userState.bitsCarry / per);
+          userState.bitsCarry = userState.bitsCarry % per;
+          if (units > 0) {
+            const secs = units * addSec;
+            addSeconds(timerUid, secs);
+            logger.info("bits_in_ext_timer_add", { userId: timerUid, bits, seconds: secs, source: "sound_alert" });
+          }
+        }
+      }
+    }
+
     // Post to chat (async, best-effort)
     if (viewerUserId && tier) {
       const bits = tier.replace("sound_", "");
@@ -1012,6 +1035,29 @@ mountTtsRoutes(app, {
       type: "tts_alert",
       payload: { message, voiceName },
     }).catch(() => {});
+
+    // Add timer time for Bits-in-Extensions usage (same rules as cheers)
+    if (tier) {
+      const bits = Number(tier.replace("sound_", "")) || 0;
+      if (bits > 0) {
+        const timerUid = String(channelId);
+        const RULES = getRules(timerUid);
+        const per = Math.max(1, Number(RULES.bits?.per || 0));
+        const addSec = Math.max(0, Number(RULES.bits?.add_seconds || 0));
+        if (addSec > 0) {
+          const userState = state.users.get(timerUid) || { bitsCarry: 0 };
+          userState.bitsCarry = Math.max(0, Math.floor((userState.bitsCarry || 0) + bits));
+          state.users.set(timerUid, userState);
+          const units = Math.floor(userState.bitsCarry / per);
+          userState.bitsCarry = userState.bitsCarry % per;
+          if (units > 0) {
+            const secs = units * addSec;
+            addSeconds(timerUid, secs);
+            logger.info("bits_in_ext_timer_add", { userId: timerUid, bits, seconds: secs, source: "tts_alert" });
+          }
+        }
+      }
+    }
 
     // Post to chat (async, best-effort)
     if (viewerUserId && tier) {
@@ -1170,24 +1216,14 @@ function secondsFromEvent(notification, uid = "default") {
   const RULES = getRules(uid);
   const userState = state.users.get(String(uid)) || { bitsCarry: 0 };
   switch (subType) {
-    case "channel.bits.use": {
-      // Bits in Extensions (disabled by default to avoid double-counting cheers)
-      // If enabled later, de-dupe by transaction id.
-      const tx =
-        e.transaction_id ||
-        e.transactionId ||
-        e.message_id ||
-        e.id ||
-        null;
-      if (tx) {
-        const k = `bitstx:${tx}`;
-        if (state.seen.has(k)) return 0;
-        state.seen.set(k, Date.now() + 24 * 3600 * 1000);
-      }
-      // fallthrough to cheer math
-    }
-    case "channel.cheer": {  // Standard Bits cheers
-      const bits = e.bits ?? e.total_bits_used ?? e.total_bits ?? 0;
+    case "channel.bits.use":
+      // Bits-in-Extensions fires alongside channel.cheer for standard cheers,
+      // causing double-counting. Ignore it for timer math; channel.cheer alone
+      // handles all standard bit cheers reliably with no overlap.
+      return 0;
+    case "channel.cheer": {
+      const bits = e.bits ?? 0;
+      if (!bits) return 0;
       const per = Math.max(1, Number(RULES.bits?.per || 0));
       const addSec = Math.max(0, Number(RULES.bits?.add_seconds || 0));
       // Pool partial bits across events

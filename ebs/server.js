@@ -78,7 +78,7 @@ import { mountTtsRoutes, registerAudioFile } from "./routes_tts.js";
 import { synthesizeSpeech } from "./tts_provider.js";
 import { loadTtsSettings, getTtsSettings } from "./tts_store.js";
 import { loadVoices, getVoices } from "./tts_voices.js";
-import { persistTokens, loadTokens, getAllTokenUserIds, getUserAccessToken } from "./twitch_tokens.js";
+import { persistTokens, loadTokens, getAllTokenUserIds, getUserAccessToken, refreshAccessToken } from "./twitch_tokens.js";
 import { mountStreamElementsRoutes } from "./routes_streamelements.js";
 import {
   connectStreamElements,
@@ -1720,7 +1720,15 @@ setTimeout(async () => {
     if (isBanned(uid)) continue;
     if (broadcasterConnections.has(uid)) continue;
 
-    const token = getUserAccessToken(uid);
+    let token = getUserAccessToken(uid);
+    // If token is expired, try to refresh it
+    if (!token) {
+      try {
+        token = await refreshAccessToken(uid);
+      } catch (e) {
+        logger.error("token_refresh_on_startup_failed", { userId: uid, message: e?.message });
+      }
+    }
     if (!token) continue;
 
     const profile = getUserProfile(uid);

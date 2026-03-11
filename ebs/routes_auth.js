@@ -133,6 +133,7 @@ export function mountAuthRoutes(app, opts = {}) {
       const tokenJson = await tokenRes.json();
       const accessToken = tokenJson.access_token;
       const expiresIn = tokenJson.expires_in;
+      const refreshToken = tokenJson.refresh_token || null;
       if (!accessToken) {
         logger.error('oauth_token_exchange_failed', { error: tokenJson.error, message: tokenJson.message });
         return res.status(400).send('OAuth token exchange failed');
@@ -154,7 +155,7 @@ export function mountAuthRoutes(app, opts = {}) {
       req.session.twitchUser = { id: user.id, login: user.login, display_name: user.display_name };
       // ensure a per-user overlay key exists and store in session for convenience
       try { req.session.userOverlayKey = getOrCreateUserKey(user.id); } catch {}
-      try { storeUserAccessToken(user.id, accessToken, expiresIn); } catch {}
+      try { storeUserAccessToken(user.id, accessToken, expiresIn, refreshToken); } catch {}
       // notify host (server) of admin login for dynamic broadcaster/eventsub wiring
       try { if (opts && typeof opts.onAdminLogin === 'function') opts.onAdminLogin({ user, accessToken }); } catch {}
       // Sync Stripe subscription state on login (fire-and-forget)

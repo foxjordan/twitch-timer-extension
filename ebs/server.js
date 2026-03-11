@@ -774,6 +774,7 @@ mountAuthRoutes(app, {
           ws: null,
           reconnectTimer: null,
           lastEventAt: null,
+          lastWsMessageAt: null,
         };
         broadcasterConnections.set(userId, connection);
       } else {
@@ -1484,30 +1485,69 @@ function startEventSubWS(broadcasterId, accessToken, onNotification, urlOverride
     return Promise.reject(new Error("Missing required parameters"));
   }
 
+  // Find the userId key for this broadcaster so we can trigger reconnection
+  let ownerUserId = null;
+  for (const [uid, conn] of broadcasterConnections) {
+    if (conn.broadcasterId === broadcasterId) { ownerUserId = uid; break; }
+  }
+
+  // Track last message time on the connection object for the keepalive watchdog
+  const ownerConn = ownerUserId ? broadcasterConnections.get(ownerUserId) : null;
+
   return connectEventSubWS({
     userAccessToken: accessToken,
     clientId,
     broadcasterId,
     url: urlOverride || undefined,
-    onEvent: onNotification,
+    onEvent: (msg) => {
+      if (ownerConn) ownerConn.lastWsMessageAt = Date.now();
+      onNotification(msg);
+    },
     onStatus: (status = {}) => {
       const nowIso = new Date().toISOString();
       switch (status.type) {
         case "keepalive":
+          if (ownerConn) ownerConn.lastWsMessageAt = Date.now();
           observability.lastEventSubKeepaliveAt = nowIso;
           break;
         case "welcome":
+          if (ownerConn) ownerConn.lastWsMessageAt = Date.now();
           observability.lastEventSubSessionId = status.sessionId || null;
           observability.lastEventSubConnectedAt = nowIso;
           break;
         case "open":
           observability.lastEventSubConnectedAt = nowIso;
           break;
-        case "session_reconnect":
-          observability.lastEventSubErrorAt = nowIso;
-          observability.lastEventSubErrorMessage = "session_reconnect_requested";
+        case "session_reconnect": {
+          // Twitch is telling us to move to a new URL before killing this session
+          observability.lastEventSubReconnectAt = nowIso;
+          observability.lastEventSubReconnectUrl = status.reconnectUrl || null;
+          observability.totalEventSubReconnects++;
           logger.warn("eventsub_reconnect_requested", { broadcasterId, reconnectUrl: status.reconnectUrl });
+
+          if (ownerUserId && status.reconnectUrl) {
+            // Connect to the new URL provided by Twitch. The old socket stays open
+            // until the new one sends session_welcome, then Twitch closes the old one.
+            const conn = broadcasterConnections.get(ownerUserId);
+            if (conn) {
+              logger.info("eventsub_reconnecting_to_new_url", { userId: ownerUserId, reconnectUrl: status.reconnectUrl });
+              startEventSubWS(broadcasterId, accessToken, onNotification, status.reconnectUrl)
+                .then((newWs) => {
+                  // Swap to new socket first, so old socket's 'close' handler
+                  // sees conn.ws !== oldWs and skips redundant reconnect
+                  const oldWs = conn.ws;
+                  conn.ws = newWs;
+                  try { oldWs?.close(); } catch {}
+                  logger.info("eventsub_reconnect_success", { userId: ownerUserId });
+                })
+                .catch((err) => {
+                  logger.error("eventsub_reconnect_to_url_failed", { userId: ownerUserId, message: err?.message });
+                  // The old socket will close soon; the 'closed' handler below will retry
+                });
+            }
+          }
           break;
+        }
         case "revocation":
           observability.lastEventSubErrorAt = nowIso;
           observability.lastEventSubErrorMessage = "subscription_revoked";
@@ -1528,17 +1568,49 @@ function startEventSubWS(broadcasterId, accessToken, onNotification, urlOverride
             status.message || "socket_error";
           logger.error("eventsub_socket_error", { broadcasterId, message: status.message });
           break;
-        case "closed":
+        case "closed": {
           observability.lastEventSubErrorAt = nowIso;
           observability.lastEventSubErrorMessage = "socket_closed";
-          logger.warn("eventsub_socket_closed", { broadcasterId });
+          logger.warn("eventsub_socket_closed", { broadcasterId, code: status.code });
+
+          // AUTO-RECONNECT: Schedule reconnection with jittered delay.
+          // Skip if the connection already has a newer working WS (session_reconnect swap).
+          if (ownerUserId) {
+            const conn = broadcasterConnections.get(ownerUserId);
+            const alreadyReplaced = conn?.ws && conn.ws.readyState === 1;
+            if (conn && !conn.reconnectTimer && !alreadyReplaced) {
+              const delay = 5000 + Math.random() * 5000; // 5-10s jittered initial delay
+              logger.info("eventsub_scheduling_reconnect", { userId: ownerUserId, delayMs: Math.round(delay) });
+              conn.reconnectTimer = setTimeout(() => {
+                conn.reconnectTimer = null;
+                startEventSubForUser(ownerUserId);
+              }, delay);
+            }
+          }
           break;
+        }
         default:
           break;
       }
     },
   });
 }
+
+// Keepalive watchdog: if no message received within 60s (2x the 30s keepalive),
+// the connection is likely dead. Force-close it so the 'closed' handler reconnects.
+const EVENTSUB_WATCHDOG_INTERVAL_MS = 30_000;
+const EVENTSUB_WATCHDOG_TIMEOUT_MS = 60_000;
+setInterval(() => {
+  for (const [userId, conn] of broadcasterConnections) {
+    if (!conn.ws || conn.ws.readyState !== 1 /* WebSocket.OPEN */) continue;
+    if (!conn.lastWsMessageAt) continue;
+    const elapsed = Date.now() - conn.lastWsMessageAt;
+    if (elapsed > EVENTSUB_WATCHDOG_TIMEOUT_MS) {
+      logger.warn("eventsub_watchdog_timeout", { userId, elapsedMs: elapsed });
+      try { conn.ws.close(); } catch {}
+    }
+  }
+}, EVENTSUB_WATCHDOG_INTERVAL_MS);
 
 // Server tick → broadcast remaining once per second per user/key
 setInterval(async () => {
@@ -1611,6 +1683,16 @@ setInterval(async () => {
 
 setInterval(refreshSubGoalCounts, 60 * 1000);
 
+// Periodic state persistence every 5 minutes (crash protection)
+setInterval(async () => {
+  try {
+    await Promise.all([persistTimerState(), persistUserSettings(), persistTokens()]);
+    if (process.env.DEBUG) logger.debug("periodic_state_persisted");
+  } catch (e) {
+    logger.error("periodic_persist_failed", { message: e?.message });
+  }
+}, 5 * 60 * 1000);
+
 // Initialize environment broadcaster on startup if configured
 if (ENV_BROADCASTER_ID && ENV_BROADCASTER_TOKEN) {
   logger.info("initializing_env_broadcaster", { broadcasterId: ENV_BROADCASTER_ID });
@@ -1622,6 +1704,7 @@ if (ENV_BROADCASTER_ID && ENV_BROADCASTER_TOKEN) {
     ws: null,
     reconnectTimer: null,
     lastEventAt: null,
+    lastWsMessageAt: null,
   });
 
   startEventSubForUser(ENV_BROADCASTER_ID);
@@ -1648,6 +1731,7 @@ setTimeout(async () => {
       ws: null,
       reconnectTimer: null,
       lastEventAt: null,
+      lastWsMessageAt: null,
     });
     startEventSubForUser(uid);
     logger.info("eventsub_restored_from_token", { userId: uid, login: profile?.login });

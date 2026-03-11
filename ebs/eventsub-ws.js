@@ -117,9 +117,9 @@ export async function connectEventSubWS({
     emitStatus({ type: 'socket_error', message: err?.message });
   });
 
-  ws.on('close', () => {
-    logger.warn('eventsub_ws_closed');
-    emitStatus({ type: 'closed' });
+  ws.on('close', (code) => {
+    logger.warn('eventsub_ws_closed', { code });
+    emitStatus({ type: 'closed', code });
   });
 
   return ws;

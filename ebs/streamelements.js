@@ -22,8 +22,10 @@ export function connectStreamElements(userId, jwtToken, onTip) {
   const socket = io(SE_REALTIME_URL, {
     transports: ["websocket"],
     reconnection: true,
-    reconnectionAttempts: 10,
+    reconnectionAttempts: Infinity,
     reconnectionDelay: 5000,
+    reconnectionDelayMax: 60000,
+    randomizationFactor: 0.3,
   });
 
   const conn = {
@@ -85,6 +87,15 @@ export function connectStreamElements(userId, jwtToken, onTip) {
     conn.status = "error";
     conn.error = err?.message || "Connection error";
     logger.error("se_socket_error", { userId: uid, error: conn.error });
+  });
+
+  socket.on("reconnect_attempt", (attempt) => {
+    logger.info("se_reconnect_attempt", { userId: uid, attempt });
+  });
+
+  socket.on("reconnect_failed", () => {
+    conn.status = "reconnect_failed";
+    logger.error("se_reconnect_exhausted", { userId: uid });
   });
 
   return { status: "connecting" };

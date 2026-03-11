@@ -91,6 +91,7 @@ export function mountAdminRoutes(app, ctx) {
       adminName,
       userKey: "",
       apiBase: `/api/admin/sounds/${uid}`,
+      ttsApiBase: `/api/admin/tts/settings/${uid}`,
       isAdminMode: true,
       managedUserName,
       showAdminLink: true,
@@ -273,6 +274,32 @@ export function mountAdminRoutes(app, ctx) {
     setTtsSettings(uid, { enabled: Boolean(enabled), granted: Boolean(enabled) });
 
     res.json({ ok: true, userId: uid, ttsEnabled: Boolean(enabled) });
+  });
+
+  // Get TTS settings for a specific broadcaster (admin view)
+  app.get("/api/admin/tts/settings/:userId", (req, res) => {
+    if (!req.session?.isAdmin || !isSuperAdmin(req)) {
+      return res.status(403).json({ error: "Access denied" });
+    }
+    const uid = String(req.params.userId);
+    const settings = getTtsSettings(uid);
+    const globalConfig = getGlobalTtsConfig();
+    let voices = getVoices();
+    if (globalConfig.availableVoices.length > 0) {
+      voices = voices.filter((v) => globalConfig.availableVoices.includes(v.id));
+    }
+    const proActive = isPro(uid);
+    res.json({ settings, voices, proActive, minTier: globalConfig.minTier });
+  });
+
+  // Update TTS settings for a specific broadcaster (admin view)
+  app.post("/api/admin/tts/settings/:userId", (req, res) => {
+    if (!req.session?.isAdmin || !isSuperAdmin(req)) {
+      return res.status(403).json({ error: "Access denied" });
+    }
+    const uid = String(req.params.userId);
+    const updated = setTtsSettings(uid, req.body || {});
+    res.json({ settings: updated });
   });
 
   // Get global TTS admin config

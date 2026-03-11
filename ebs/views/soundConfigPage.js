@@ -12,6 +12,7 @@ export function renderSoundConfigPage(options = {}) {
   const adminName = String(options.adminName || "");
   const userKey = String(options.userKey || "");
   const apiBase = String(options.apiBase || "/api/sounds");
+  const ttsApiBase = String(options.ttsApiBase || "/api/tts/settings");
   const isAdminMode = Boolean(options.isAdminMode);
   const managedUserName = String(options.managedUserName || "");
   const termsUrl = `${base}/terms`;
@@ -413,6 +414,7 @@ export function renderSoundConfigPage(options = {}) {
       (function() {
         var USER_KEY = ${JSON.stringify(userKey)};
         var API_BASE = ${JSON.stringify(apiBase)};
+        var TTS_API_BASE = ${JSON.stringify(ttsApiBase)};
         var IS_ADMIN_MODE = ${JSON.stringify(isAdminMode)};
 
         function setBusy(btn, busy) { if (!btn) return; btn.disabled = !!busy; }
@@ -1208,7 +1210,7 @@ export function renderSoundConfigPage(options = {}) {
 
         async function fetchTtsSettings() {
           try {
-            var r = await fetch('/api/tts/settings', { cache: 'no-store' });
+            var r = await fetch(TTS_API_BASE, { cache: 'no-store' });
             var data = await r.json();
             var s = data.settings || {};
             var voices = data.voices || [];
@@ -1399,7 +1401,7 @@ export function renderSoundConfigPage(options = {}) {
                 bannedWords: bannedWords,
                 allowedVoices: Array.from(ttsAllowedSet)
               };
-              var r = await fetch('/api/tts/settings', {
+              var r = await fetch(TTS_API_BASE, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(payload)

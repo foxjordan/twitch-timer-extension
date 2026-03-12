@@ -1,7 +1,7 @@
 import fetch from "node-fetch";
 import { pipeline } from "stream/promises";
 import { createWriteStream } from "fs";
-import { getUserAccessToken } from "./twitch_tokens.js";
+import { getValidAccessToken } from "./twitch_tokens.js";
 import { logger } from "./logger.js";
 
 // Simple in-memory cache for display names (5 min TTL)
@@ -50,7 +50,7 @@ async function getAppAccessToken() {
  */
 async function resolveHelixToken(userId) {
   const uid = userId || process.env.BROADCASTER_USER_ID;
-  const userToken = uid ? getUserAccessToken(String(uid)) : null;
+  const userToken = uid ? await getValidAccessToken(String(uid)) : null;
   if (userToken) return userToken;
   if (process.env.BROADCASTER_USER_TOKEN) return process.env.BROADCASTER_USER_TOKEN;
   return getAppAccessToken();
@@ -68,7 +68,7 @@ export async function fetchUserDisplayName(userId) {
   // Use broadcaster token or any available app token
   const broadcasterId = process.env.BROADCASTER_USER_ID;
   const token =
-    (broadcasterId && getUserAccessToken(broadcasterId)) ||
+    (broadcasterId && await getValidAccessToken(broadcasterId)) ||
     process.env.BROADCASTER_USER_TOKEN ||
     null;
   if (!clientId || !token) return null;
@@ -102,7 +102,7 @@ export async function fetchActiveSubscriberCount({ broadcasterId }) {
   const clientId = process.env.TWITCH_CLIENT_ID;
   if (!clientId) return null;
   const token =
-    getUserAccessToken(id) || process.env.BROADCASTER_USER_TOKEN || null;
+    await getValidAccessToken(id) || process.env.BROADCASTER_USER_TOKEN || null;
   if (!token) return null;
   const url = new URL("https://api.twitch.tv/helix/subscriptions");
   url.searchParams.set("broadcaster_id", id);
@@ -137,7 +137,7 @@ export async function fetchFollowerCount({ broadcasterId }) {
   const clientId = process.env.TWITCH_CLIENT_ID;
   if (!clientId) return null;
   const token =
-    getUserAccessToken(id) || process.env.BROADCASTER_USER_TOKEN || null;
+    await getValidAccessToken(id) || process.env.BROADCASTER_USER_TOKEN || null;
   if (!token) return null;
   const url = new URL("https://api.twitch.tv/helix/channels/followers");
   url.searchParams.set("broadcaster_id", id);

@@ -1,4 +1,4 @@
-import { getUserAccessToken } from "./twitch_tokens.js";
+import { getValidAccessToken } from "./twitch_tokens.js";
 import { logger } from "./logger.js";
 
 const TWITCH_CLIENT_ID = () => process.env.TWITCH_CLIENT_ID;
@@ -28,8 +28,8 @@ setInterval(() => {
  * Resolve a broadcaster's user access token for moderation API calls.
  * Requires `moderation:read` scope.
  */
-function getToken(broadcasterId) {
-  return getUserAccessToken(String(broadcasterId));
+async function getToken(broadcasterId) {
+  return getValidAccessToken(String(broadcasterId));
 }
 
 /**
@@ -44,7 +44,7 @@ export async function getBlockedTerms(broadcasterId) {
     return cached.terms;
   }
 
-  const token = getToken(uid);
+  const token = await getToken(uid);
   const clientId = TWITCH_CLIENT_ID();
   if (!token || !clientId) {
     // Can't fetch — return cached if available, otherwise empty
@@ -104,7 +104,7 @@ export async function getBannedUserIds(broadcasterId) {
     return cached.bannedIds;
   }
 
-  const token = getToken(uid);
+  const token = await getToken(uid);
   const clientId = TWITCH_CLIENT_ID();
   if (!token || !clientId) {
     return cached?.bannedIds || new Set();

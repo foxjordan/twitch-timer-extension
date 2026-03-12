@@ -66,6 +66,23 @@ export function getUserAccessToken(uid) {
 }
 
 /**
+ * Async version that awaits a token refresh if the current token is expired.
+ * Use this in any async code path that needs a guaranteed-valid token.
+ */
+export async function getValidAccessToken(uid) {
+  uid = String(uid);
+  const entry = accessTokens.get(uid);
+  if (!entry) return null;
+  if (entry.expiresAt && Date.now() >= entry.expiresAt - 60000) {
+    if (entry.refreshToken) {
+      return await refreshAccessToken(uid);
+    }
+    return null;
+  }
+  return entry.token;
+}
+
+/**
  * Refresh a user's access token using their stored refresh token.
  * Returns the new access token, or null on failure.
  */

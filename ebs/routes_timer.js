@@ -28,7 +28,7 @@ export function mountTimerRoutes(app, ctx) {
   const resolveUid = (req) =>
     (typeof resolveTimerUserId === 'function' && resolveTimerUserId(req)) ||
     req.session?.twitchUser?.id ||
-    'default';
+    null;
 
   const markTimerMutation = () => {
     if (typeof onTimerMutation === 'function') onTimerMutation();
@@ -53,6 +53,7 @@ export function mountTimerRoutes(app, ctx) {
 
   app.post('/api/timer/start', async (req, res) => {
     const uid = resolveUid(req);
+    if (!uid) return res.status(401).json({ error: 'Session expired — please log in again' });
     let seconds = Number(req.body?.seconds ?? 300);
     const meta = (req.body && typeof req.body.meta === 'object' && req.body.meta) || {};
     // Pull current user's max setting, if available
@@ -94,6 +95,7 @@ export function mountTimerRoutes(app, ctx) {
 
   app.post('/api/timer/add', async (req, res) => {
     const uid = resolveUid(req);
+    if (!uid) return res.status(401).json({ error: 'Session expired — please log in again' });
     const seconds = Number(req.body?.seconds ?? 60);
     const meta = (req.body && typeof req.body.meta === 'object' && req.body.meta) || {};
     const before = getRemainingSeconds(uid);
@@ -142,6 +144,7 @@ export function mountTimerRoutes(app, ctx) {
   app.post('/api/timer/pause', (req, res) => {
     if (!req?.session?.isAdmin) return res.status(401).json({ error: 'Admin login required' });
     const uid = resolveUid(req);
+    if (!uid) return res.status(401).json({ error: 'Session expired — please log in again' });
     const remaining = pauseTimer(uid);
     const payload = JSON.stringify({
       userId: String(uid),
@@ -171,6 +174,7 @@ export function mountTimerRoutes(app, ctx) {
   app.post('/api/timer/clear', async (req, res) => {
     if (!req?.session?.isAdmin) return res.status(401).json({ error: 'Admin login required' });
     const uid = resolveUid(req);
+    if (!uid) return res.status(401).json({ error: 'Session expired — please log in again' });
     if (typeof clearTimer === 'function') clearTimer(uid);
     const remaining = getRemainingSeconds(uid);
     addLogEntry({
@@ -209,6 +213,7 @@ export function mountTimerRoutes(app, ctx) {
   app.post('/api/timer/restart', async (req, res) => {
     if (!req?.session?.isAdmin) return res.status(401).json({ error: 'Admin login required' });
     const uid = resolveUid(req);
+    if (!uid) return res.status(401).json({ error: 'Session expired — please log in again' });
     const userState = state.users.get(String(uid)) || {};
     const secs = Math.max(0, Math.floor(Number(userState.initialSeconds || 0)));
     if (secs <= 0) {
@@ -292,6 +297,7 @@ export function mountTimerRoutes(app, ctx) {
   app.post('/api/timer/resume', (req, res) => {
     if (!req?.session?.isAdmin) return res.status(401).json({ error: 'Admin login required' });
     const uid = resolveUid(req);
+    if (!uid) return res.status(401).json({ error: 'Session expired — please log in again' });
     const remaining = resumeTimer(uid);
     const payload = JSON.stringify({
       userId: String(uid),
@@ -325,6 +331,7 @@ export function mountTimerRoutes(app, ctx) {
 
   app.post('/api/hype', async (req, res) => {
     const uid = resolveUid(req);
+    if (!uid) return res.status(401).json({ error: 'Session expired — please log in again' });
     const active = Boolean(req.body?.active);
     setHype(uid, active);
     const remaining = getRemainingSeconds(uid);
@@ -366,6 +373,7 @@ export function mountTimerRoutes(app, ctx) {
   app.post('/api/timer/bonus', async (req, res) => {
     if (!req?.session?.isAdmin) return res.status(401).json({ error: 'Admin login required' });
     const uid = resolveUid(req);
+    if (!uid) return res.status(401).json({ error: 'Session expired — please log in again' });
     const body = req.body || {};
     const opts = {};
     if (typeof body.active === 'boolean') opts.active = body.active;
@@ -427,6 +435,7 @@ export function mountTimerRoutes(app, ctx) {
   app.post('/api/timer/force-cap', (req, res) => {
     if (!req?.session?.isAdmin) return res.status(401).json({ error: 'Admin login required' });
     const uid = resolveUid(req);
+    if (!uid) return res.status(401).json({ error: 'Session expired — please log in again' });
     const forced = Boolean(req.body?.forced);
     if (typeof setCapForcedOn === 'function') setCapForcedOn(uid, forced);
     const cap = typeof capReached === 'function' ? capReached(uid) : forced;

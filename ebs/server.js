@@ -625,9 +625,7 @@ function resolveGoalUserIdFromRequest(req) {
     const owner = getUserIdForKey(key);
     if (owner) return String(owner);
   }
-  // Fallback to environment broadcaster if configured
-  if (ENV_BROADCASTER_ID) return String(ENV_BROADCASTER_ID);
-  return "default";
+  return null;
 }
 
 function resolveTimerUserIdFromRequest(req) {
@@ -640,9 +638,9 @@ function resolveTimerUserIdFromRequest(req) {
     const owner = getUserIdForKey(key);
     if (owner) return String(owner);
   }
-  // Fallback to environment broadcaster if configured
-  if (ENV_BROADCASTER_ID) return String(ENV_BROADCASTER_ID);
-  return "default";
+  // No fallback — without a session or valid key, return null so callers
+  // can reject the request instead of silently routing to the wrong timer.
+  return null;
 }
 
 function broadcastGoalSnapshot(userId, specificClients = null) {

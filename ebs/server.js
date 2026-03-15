@@ -1388,6 +1388,8 @@ async function handleEventSub(notification, expectedUserId = null) {
       charityAmount: e.amount?.value,
       charityDecimals: e.amount?.decimal_places,
       userId: timerUid,
+      userName: e.is_anonymous ? "Anonymous" : (e.user_name || e.user_login || undefined),
+      isAnonymous: e.is_anonymous || false,
     });
 
     if (appliedSeconds > 0) {

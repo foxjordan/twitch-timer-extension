@@ -1017,35 +1017,39 @@ export function renderAdminDashboardPage(options = {}) {
           var actual = Number(e.actualSeconds || applied);
           var hype = Number(e.hypeMultiplier || 1);
           var capNote = (applied > 0 && actual < applied) ? ' (capped)' : '';
+          var who = e.userName || '';
 
           if (src === 'sound_alert') {
             var snd = e.soundName || 'Sound';
-            var viewer = e.viewerUserId ? ' (user ' + e.viewerUserId + ')' : '';
+            var viewer = e.viewerUserId ? ' by ' + e.viewerUserId : '';
             return { type: 'Sound Alert', detail: snd + viewer, color: '#9146ff', seconds: null };
           }
           if (src === 'tts_alert') {
-            return { type: 'TTS Alert', detail: e.message || 'TTS', color: '#9146ff', seconds: null };
+            var ttsBy = e.viewerDisplayName || '';
+            return { type: 'TTS Alert', detail: (ttsBy ? ttsBy + ': ' : '') + (e.message || 'TTS'), color: '#9146ff', seconds: null };
           }
 
           var detail = '';
           if (src === 'channel.cheer' || src === 'channel.bits.use') {
             var bits = Number(e.bits || 0);
-            if (bits > 0) detail = bits + ' bits';
+            detail = (who || 'Someone') + ' cheered' + (bits > 0 ? ' ' + bits + ' bits' : '');
           } else if (src === 'channel.subscribe' || src === 'channel.subscription.message') {
-            if (e.subTier) detail = 'Tier ' + String(e.subTier).replace(/^0+/, '');
+            var tierLabel = e.subTier ? ' Tier ' + String(e.subTier).replace(/^0+/, '') : '';
+            detail = (who || 'Someone') + ' subscribed' + tierLabel;
           } else if (src === 'channel.subscription.gift') {
             var gifts = Number(e.giftCount || 0);
-            if (gifts > 0) detail = gifts + ' gift sub' + (gifts === 1 ? '' : 's');
+            detail = (who || 'Someone') + ' gifted ' + gifts + ' sub' + (gifts === 1 ? '' : 's');
           } else if (src === 'channel.charity_campaign.donate') {
             var amt = Number(e.charityAmount || 0);
             var dec = Number(e.charityDecimals || 2);
-            if (amt > 0) detail = '$' + (amt / Math.pow(10, dec)).toFixed(dec);
+            var amtStr = amt > 0 ? ' $' + (amt / Math.pow(10, dec)).toFixed(dec) : '';
+            detail = (who || 'Someone') + ' donated' + amtStr;
           } else if (src === 'streamelements_tip') {
             var tipAmt = Number(e.tipAmount || 0);
             if (tipAmt > 0) detail = (e.tipUsername || 'Anon') + ' tipped $' + tipAmt.toFixed(2);
             else detail = 'SE Tip';
           } else if (src === 'channel.follow') {
-            detail = 'Follow';
+            detail = (who || 'Someone') + ' followed';
           } else if (src === 'channel.hype_train.begin') {
             detail = 'Hype Train started';
           } else if (src === 'channel.hype_train.progress') {

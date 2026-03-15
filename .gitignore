@@ -3,14 +3,19 @@
 .env.local
 .env.*.local
 
-# Sensitive keys and tokens
-overlay-keys.json
-overlay-user-settings.json
-overlay-rules.json
-overlay-goals.json
-overlay-timer-state.json
-overlay-styles.json
-overlay-sound-alerts.json
+# Sensitive keys, tokens, and local data
+ebs/twitch-tokens.enc.json
+ebs/user-profiles.json
+ebs/overlay-keys.json
+ebs/overlay-user-settings.json
+ebs/overlay-rules.json
+ebs/overlay-goals.json
+ebs/overlay-timer-state.json
+ebs/overlay-styles.json
+ebs/overlay-sound-alerts.json
+
+# Catch-all for any encrypted tokens or session data
+*.enc.json
 
 # Dependencies
 node_modules/

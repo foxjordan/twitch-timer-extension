@@ -640,7 +640,7 @@ export function mountSoundRoutes(app, deps = {}) {
       return res.status(403).json({ error: "Super admin access required" });
     }
     const { ownerUserId, soundId } = req.params;
-    if (!/^\w+$/.test(ownerUserId) || !/^\w+$/.test(soundId)) {
+    if (!/^[\w-]+$/.test(ownerUserId) || !/^[\w-]+$/.test(soundId)) {
       return res.status(400).json({ error: "Invalid parameters" });
     }
     const ok = await deleteSound(ownerUserId, soundId);

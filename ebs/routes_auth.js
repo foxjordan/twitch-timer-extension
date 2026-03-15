@@ -6,6 +6,7 @@ import { logger } from './logger.js';
 import { storeUserAccessToken } from './twitch_tokens.js';
 import { getBaseUrl } from './base_url.js';
 import { syncSubscriptionFromStripe } from './routes_stripe.js';
+import { setUserProfile } from './user_profiles.js';
 
 /**
  * Build a signed OAuth state value that encodes the origin so the callback
@@ -153,6 +154,7 @@ export function mountAuthRoutes(app, opts = {}) {
       // Their channel ID is used for broadcasts + EventSub wiring.
       req.session.isAdmin = true;
       req.session.twitchUser = { id: user.id, login: user.login, display_name: user.display_name };
+      try { setUserProfile(user.id, user.login, user.display_name || user.login); } catch {}
       // ensure a per-user overlay key exists and store in session for convenience
       try { req.session.userOverlayKey = getOrCreateUserKey(user.id); } catch {}
       try { storeUserAccessToken(user.id, accessToken, expiresIn, refreshToken); } catch {}

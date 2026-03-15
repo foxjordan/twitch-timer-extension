@@ -389,10 +389,21 @@ export function getSharedLibrary(requestingUserId = null) {
   }
 
   const results = [];
+  const seenSources = new Set(); // deduplicate copies of the same original
   for (const [uid, user] of soundAlertsByUser.entries()) {
     for (const sound of user.sounds.values()) {
       if (!sound.shared) continue;
       if (sound.type !== "sound") continue; // v1: audio only
+
+      // If this is a copy of another sound, use the source as the dedup key
+      const sourceKey = sound.sourceUserId && sound.sourceSoundId
+        ? `${sound.sourceUserId}:${sound.sourceSoundId}`
+        : `${uid}:${sound.id}`;
+      if (seenSources.has(sourceKey)) continue;
+      seenSources.add(sourceKey);
+      // Also mark the canonical key so originals don't duplicate copies
+      seenSources.add(`${uid}:${sound.id}`);
+
       const profile = getUserProfile(uid);
       results.push({
         id: sound.id,

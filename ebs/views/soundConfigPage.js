@@ -894,13 +894,20 @@ export function renderSoundConfigPage(options = {}) {
                 flashButton(delBtn);
                 setBusy(delBtn, true);
                 try {
-                  var r = await fetch('/api/sounds/library/' + encodeURIComponent(s.ownerUserId) + '/' + encodeURIComponent(s.id), { method: 'DELETE' });
-                  if (!r.ok) throw new Error('Delete failed');
+                  var r = await fetch('/api/sounds/library/' + encodeURIComponent(s.ownerUserId) + '/' + encodeURIComponent(s.id), {
+                    method: 'DELETE',
+                    credentials: 'same-origin'
+                  });
+                  if (!r.ok) {
+                    var errData = {};
+                    try { errData = await r.json(); } catch(e) {}
+                    throw new Error(errData.error || 'Delete failed (' + r.status + ')');
+                  }
                   card.remove();
                   librarySounds = librarySounds.filter(function(x) { return !(x.ownerUserId === s.ownerUserId && x.id === s.id); });
                 } catch (err) {
-                  delBtn.textContent = 'Error';
-                  setTimeout(function() { delBtn.textContent = 'Delete'; }, 2000);
+                  delBtn.textContent = err.message || 'Error';
+                  setTimeout(function() { delBtn.textContent = 'Delete'; }, 3000);
                 }
                 setBusy(delBtn, false);
               });

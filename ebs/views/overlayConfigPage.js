@@ -60,13 +60,6 @@ export function renderOverlayConfigPage(options = {}) {
     hypeLabel: String(initialQuery.hypeLabel ?? "\ud83d\udd25 Hype Train active"),
     key: String(initialQuery.key ?? ""),
   };
-  const collapsedSections = (settings && settings.panelCollapsedSections) || {};
-  const isCollapsed = (id) =>
-    Boolean(collapsedSections && collapsedSections[id]);
-  const sectionClass = (id) => `section${isCollapsed(id) ? " collapsed" : ""}`;
-  const sectionBodyAttr = (id) =>
-    isCollapsed(id) ? 'style="display:none"' : "";
-  const sectionExpandedAttr = (id) => (isCollapsed(id) ? "false" : "true");
   const privacyUrl = `/privacy`;
   const gdprUrl = `/gdpr`;
   const termsUrl = `/terms`;
@@ -87,6 +80,21 @@ export function renderOverlayConfigPage(options = {}) {
       ${THEME_CSS_VARS}
       body { margin: 0; font-family: Inter, system-ui, Arial, sans-serif; background: var(--page-bg); color: var(--text-color); min-height: 100vh; display: flex; flex-direction: column; }
       .page-content { flex: 1; width: min(1100px, 100%); margin: 0 auto; padding: 24px 20px 48px; }
+      main { display: flex; gap: 24px; }
+      .sidebar { width: 200px; flex-shrink: 0; position: sticky; top: 32px; align-self: flex-start; }
+      .sidebar-nav { display: flex; flex-direction: column; gap: 2px; }
+      .sidebar-nav-item { display: flex; align-items: center; gap: 8px; padding: 10px 14px; border-radius: 8px; font-size: 14px; font-weight: 500; cursor: pointer; color: var(--text-muted); background: transparent; border: none; text-align: left; width: 100%; transition: background .15s, color .15s; font-family: inherit; }
+      .sidebar-nav-item:hover { background: var(--surface-color); color: var(--text-color); box-shadow: none; filter: none; }
+      .sidebar-nav-item.active { background: var(--accent-color); color: #fff; }
+      .content-area { flex: 1; min-width: 0; }
+      .section-page { display: none; }
+      .section-page.active { display: block; }
+      @media (max-width: 768px) {
+        main { flex-direction: column; gap: 12px; }
+        .sidebar { width: 100%; position: static; }
+        .sidebar-nav { flex-direction: row; overflow-x: auto; gap: 4px; padding-bottom: 4px; }
+        .sidebar-nav-item { white-space: nowrap; padding: 8px 12px; font-size: 13px; }
+      }
       .page-header { margin-bottom: 20px; }
       .page-header h1 { margin: 0 0 4px; font-size: 26px; }
       .page-header .subtitle { margin: 0; color: var(--text-muted); font-size: 14px; }
@@ -111,7 +119,7 @@ export function renderOverlayConfigPage(options = {}) {
       .timer-actions { display: flex; gap: 8px; flex-wrap: wrap; padding-top: 12px; border-top: 1px solid var(--section-border, #303038); }
       .timer-addons { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-top: 10px; }
       @media (max-width: 600px) { .timer-top { grid-template-columns: 1fr; } }
-      .bottom-grid { display: grid; grid-template-columns: 1fr 2fr; gap: 16px; margin-top: 16px; }
+      .bottom-grid { display: grid; grid-template-columns: 1fr 2fr; gap: 16px; }
       @media (max-width: 900px) {
         .bottom-grid { grid-template-columns: 1fr; }
       }
@@ -143,13 +151,6 @@ export function renderOverlayConfigPage(options = {}) {
       .log-line { margin-bottom: 4px; white-space: nowrap; text-overflow: ellipsis; overflow: hidden; }
       .log-time { color: var(--text-muted); margin-right: 6px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
       .log-text { color: var(--text-color); opacity: 0.9; }
-      .section { border: 1px solid var(--section-border); border-radius: 12px; margin-bottom: 16px; background: var(--section-bg); }
-      .section-toggle { width: 100%; background: none; border: 0; padding: 12px; color: var(--text-color); font-size: 15px; font-weight: 600; display: flex; align-items: center; justify-content: space-between; cursor: pointer; }
-      .section-toggle:hover { background: var(--surface-muted); }
-      .section-body { padding: 0 12px 12px; }
-      .section-arrow { transition: transform .2s ease; font-size: 12px; color: var(--text-muted); }
-      .section.collapsed .section-arrow { transform: rotate(-90deg); }
-      .section.collapsed .section-body { display: none; }
       .global-footer { margin: 24px 16px 24px; padding: 12px 0; border-top: 1px solid var(--surface-border); text-align: center; font-size: 13px; color: var(--text-muted); }
       .global-footer a { color: var(--text-muted); text-decoration: none; margin: 0 10px; }
       .global-footer a:hover { color: var(--accent-color); }
@@ -192,16 +193,19 @@ export function renderOverlayConfigPage(options = {}) {
         <div class="hint">Pause/Resume and Start actions update the live overlay immediately.</div>
       </div>
 
-      <!-- Timer Controls + Bonus Time -->
-      <div class="panel">
-        <div class="${sectionClass("timer")}" data-section="timer">
-          <button class="section-toggle" data-section-toggle="timer" aria-expanded="${sectionExpandedAttr(
-            "timer",
-          )}">
-            <span>Timer Controls</span>
-            <span class="section-arrow">▾</span>
-          </button>
-          <div class="section-body" ${sectionBodyAttr("timer")}>
+      <main>
+      <nav class="sidebar">
+        <div class="sidebar-nav">
+          <button class="sidebar-nav-item active" data-section="controls">Controls</button>
+          <button class="sidebar-nav-item" data-section="styles">Styles</button>
+          <button class="sidebar-nav-item" data-section="rules">Rules</button>
+          <button class="sidebar-nav-item" data-section="log-debug">Log & Debug</button>
+        </div>
+      </nav>
+      <div class="content-area">
+
+      <div class="section-page active" data-section="controls">
+      <div class="panel" style="padding: 16px;">
             <div class="timer-top">
               <div class="timer-col">
                 <h3>Starting Time</h3>
@@ -299,22 +303,11 @@ export function renderOverlayConfigPage(options = {}) {
                 <button class="secondary" id="forceCapBtn" title="Manually force cap-reached state">Force Max Reached</button>
               </div>
             </div>
-          </div>
-        </div>
-      </div>
+      </div><!-- end controls panel -->
+      </div><!-- end controls section-page -->
 
-      <!-- Bottom Grid: Styles (1/3) | Rules + Event Log + Testing (2/3) -->
-      <div class="bottom-grid">
-        <!-- Left column: Countdown Styles -->
-        <div class="panel">
-          <div class="${sectionClass("style")}" data-section="style">
-            <button class="section-toggle" data-section-toggle="style" aria-expanded="${sectionExpandedAttr(
-              "style",
-            )}">
-              <span>Countdown Styles</span>
-            <span class="section-arrow">▾</span>
-          </button>
-          <div class="section-body" ${sectionBodyAttr("style")}>
+      <div class="section-page" data-section="styles">
+      <div class="panel" style="padding: 16px;">
             <div class="control"><label>Font Size</label><input id="fontSize" type="number" min="10" max="300" step="1" value="${
               initial.fontSize
             }"></div>
@@ -423,21 +416,11 @@ export function renderOverlayConfigPage(options = {}) {
                 </select>
               </div>
             </div>
-          </div>
-        </div>
-        </div><!-- end left column (Countdown Styles) -->
+      </div><!-- end styles panel -->
+      </div><!-- end styles section-page -->
 
-        <!-- Right column: Rules, then Event Log + Testing side by side -->
-        <div>
-          <div class="panel" style="margin-bottom:16px;">
-            <div class="${sectionClass("rules")}" data-section="rules">
-              <button class="section-toggle" data-section-toggle="rules" aria-expanded="${sectionExpandedAttr(
-                "rules",
-              )}">
-                <span>Rules</span>
-                <span class="section-arrow">▾</span>
-              </button>
-              <div class="section-body" ${sectionBodyAttr("rules")}>
+      <div class="section-page" data-section="rules">
+      <div class="panel" style="margin-bottom:16px; padding: 16px;">
                 <div class="control"><label>Min. Bits to Trigger</label><input id="r_bits_per" type="number" min="1" step="1" value="100"></div>
                 <div class="control"><label>Bits add (sec)</label><input id="r_bits_add" type="number" min="0" step="1" value="60"></div>
                 <div class="control"><label>T1 Subs add (sec)</label><input id="r_sub_1000" type="number" min="0" step="1" value="300"></div>
@@ -467,19 +450,11 @@ export function renderOverlayConfigPage(options = {}) {
                   <div class="hint" style="margin-top:2px;">When enabled, multipliers multiply together. When disabled, only the higher multiplier applies.</div>
                 </div>
                 <div class="row2"><button id="saveRules">Save Rules</button></div>
-              </div>
-            </div>
-          </div>
+      </div><!-- end rules panel -->
 
-          <div class="panel" style="margin-top:16px;">
-            <div class="${sectionClass("streamelements")}" data-section="streamelements">
-              <button class="section-toggle" data-section-toggle="streamelements" aria-expanded="${sectionExpandedAttr(
-                "streamelements",
-              )}">
-                <span>StreamElements Tips</span>
-                <span class="section-arrow">▾</span>
-              </button>
-              <div class="section-body" ${sectionBodyAttr("streamelements")}>
+      <div class="panel" style="margin-top:16px;">
+        <div style="padding: 12px; font-size: 15px; font-weight: 600;">StreamElements Tips</div>
+        <div style="padding: 0 12px 12px;">
                 <p class="hint" style="margin-bottom:12px;">Connect your StreamElements account to automatically add time when viewers tip. Your JWT token is found in your <a href="https://streamelements.com/dashboard/account/channels" target="_blank" rel="noopener noreferrer">SE Dashboard</a> under Account &rarr; Channels &rarr; Show secrets.</p>
                 <div class="control">
                   <label>StreamElements JWT Token</label>
@@ -494,35 +469,23 @@ export function renderOverlayConfigPage(options = {}) {
                   <span id="seStatus" style="opacity:.7; font-size:13px;"></span>
                 </div>
                 <div class="hint" style="margin-top:6px;">Tip time is calculated using your 3rd Party Tip rules above (per-unit seconds and minimum amount).</div>
-              </div>
-            </div>
-          </div>
+        </div>
+      </div><!-- end streamelements panel -->
+      </div><!-- end rules section-page -->
 
-          <div class="panel" style="margin-top:16px;">
-              <div class="${sectionClass("events")}" data-section="events">
-                <button class="section-toggle" data-section-toggle="events" aria-expanded="${sectionExpandedAttr(
-                  "events",
-                )}">
-                  <span>Event Log</span>
-                  <span class="section-arrow">▾</span>
-                </button>
-                <div class="section-body" ${sectionBodyAttr("events")}>
-                  <div id="eventLog" class="log-box"></div>
-                  <div class="row2" style="margin-top:8px;">
-                    <button class="secondary" id="clearLog">Clear Log</button>
-                  </div>
-                </div>
-              </div>
+      <div class="section-page" data-section="log-debug">
+      <div class="panel">
+        <div style="padding: 12px; font-size: 15px; font-weight: 600;">Event Log</div>
+        <div style="padding: 0 12px 12px;">
+          <div id="eventLog" class="log-box"></div>
+          <div class="row2" style="margin-top:8px;">
+            <button class="secondary" id="clearLog">Clear Log</button>
           </div>
-          <div class="panel" style="margin-top:16px;">
-              <div class="${sectionClass("testing")}" data-section="testing">
-                <button class="section-toggle" data-section-toggle="testing" aria-expanded="${sectionExpandedAttr(
-                  "testing",
-                )}">
-                  <span>Debug Utils</span>
-                  <span class="section-arrow">▾</span>
-                </button>
-                <div class="section-body" ${sectionBodyAttr("testing")}>
+        </div>
+      </div>
+      <div class="panel" style="margin-top:16px;">
+        <div style="padding: 12px; font-size: 15px; font-weight: 600;">Debug Utils</div>
+        <div style="padding: 0 12px 12px;">
                   <div class="control"><label>Overlay Key</label>
                     <div style="display:flex; gap:8px; align-items:center;">
                       <input id="key" type="text" value="${userKey}" readonly>
@@ -554,11 +517,12 @@ export function renderOverlayConfigPage(options = {}) {
                   <div style="margin-top:10px; padding-top:10px; border-top:1px solid var(--section-border,#303038)">
                     <div class="hint">Sound Alert management and testing has moved to the <a href="/sounds/config" style="color:var(--accent-color)">Sound Alerts</a> page.</div>
                   </div>
-                </div>
-              </div>
-          </div>
-        </div><!-- end right column -->
-      </div><!-- end bottom-grid -->
+        </div>
+      </div><!-- end debug panel -->
+      </div><!-- end log-debug section-page -->
+
+      </div><!-- end content-area -->
+      </main>
     </div><!-- end page-content -->
     <footer class="global-footer">
       <a href="${termsUrl}">Terms of Service</a>
@@ -571,42 +535,19 @@ export function renderOverlayConfigPage(options = {}) {
         'key','fontSize','color','transparent','bg','font','label','title','align','weight','shadow','shadowColor','shadowBlur','stroke','strokeColor','timeFormat',
         'h','m','s','addEffectEnabled','addEffectMode','hypeLabelEnabled','hypeLabel'
       ].reduce((acc, id) => (acc[id] = document.getElementById(id), acc), {});
-      const sectionState = ${JSON.stringify(collapsedSections || {})};
-
-      function applySectionState(section, collapsed) {
-        if (!section) return;
-        section.classList.toggle('collapsed', collapsed);
-        const body = section.querySelector('.section-body');
-        if (body) body.style.display = collapsed ? 'none' : '';
-        const toggle = section.querySelector('.section-toggle');
-        if (toggle) toggle.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
-      }
-
-      async function persistSectionState(id, collapsed) {
-        try {
-          await fetch('/api/user/settings', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ panelCollapsedSections: { [id]: collapsed } })
-          });
-        } catch (e) {}
-      }
-
-      function initSections() {
-        document.querySelectorAll('[data-section]').forEach((section) => {
-          const id = section.getAttribute('data-section');
-          const collapsed = !!sectionState[id];
-          applySectionState(section, collapsed);
-          const toggle = section.querySelector('.section-toggle');
-          if (!toggle) return;
-          toggle.addEventListener('click', () => {
-            const next = !section.classList.contains('collapsed');
-            applySectionState(section, next);
-            sectionState[id] = next;
-            persistSectionState(id, next);
-          });
+      function switchSection(sectionId) {
+        document.querySelectorAll('.section-page').forEach(function(el) {
+          el.classList.toggle('active', el.getAttribute('data-section') === sectionId);
+        });
+        document.querySelectorAll('.sidebar-nav-item').forEach(function(el) {
+          el.classList.toggle('active', el.getAttribute('data-section') === sectionId);
         });
       }
+      document.querySelectorAll('.sidebar-nav-item').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+          switchSection(btn.getAttribute('data-section'));
+        });
+      });
 
       function overlayUrl() {
         const p = new URLSearchParams();
@@ -862,14 +803,7 @@ export function renderOverlayConfigPage(options = {}) {
           el.addEventListener('change', () => { saveStyle(); });
         });
         document.getElementById('editStyleBtn').addEventListener('click', function() {
-          var section = document.querySelector('[data-section="style"]');
-          if (section) {
-            if (section.classList.contains('collapsed')) {
-              var toggle = section.querySelector('.section-toggle');
-              if (toggle) toggle.click();
-            }
-            section.scrollIntoView({ behavior: 'smooth', block: 'start' });
-          }
+          switchSection('styles');
         });
         document.getElementById('logout').addEventListener('click', (e) => {
           e.preventDefault();
@@ -1437,7 +1371,6 @@ export function renderOverlayConfigPage(options = {}) {
         setInterval(fetchLog, 5000);
       }
 
-      initSections();
       bind();
       refresh();
       saveStyle();
@@ -1446,6 +1379,11 @@ export function renderOverlayConfigPage(options = {}) {
     <script src="https://cdn.jsdelivr.net/npm/driver.js@1.3.1/dist/driver.js.iife.js"></script>
     <script>
       (function() {
+        function tourSwitchSection(s) {
+          document.querySelectorAll('.section-page').forEach(function(el) { el.classList.toggle('active', el.getAttribute('data-section') === s); });
+          document.querySelectorAll('.sidebar-nav-item').forEach(function(el) { el.classList.toggle('active', el.getAttribute('data-section') === s); });
+        }
+
         var tourSteps = [
           {
             element: '.source-bar',
@@ -1464,26 +1402,27 @@ export function renderOverlayConfigPage(options = {}) {
             }
           },
           {
+            element: '.sidebar-nav',
+            popover: {
+              title: 'Sidebar Navigation',
+              description: 'Use the sidebar to switch between sections: Controls, Styles, Rules, and Log & Debug.',
+              side: 'right', align: 'start'
+            }
+          },
+          {
             element: '.timer-top',
             popover: {
               title: 'Starting & Maximum Time',
               description: 'Set the initial countdown duration on the left. On the right, set a maximum cap — the timer can never exceed this, no matter how much time viewers add.',
               side: 'bottom', align: 'center'
-            }
+            },
+            onHighlightStarted: function() { tourSwitchSection('controls'); }
           },
           {
             element: '.timer-actions',
             popover: {
               title: 'Timer Actions',
               description: 'Start, Pause, Resume, End, or Restart your countdown. "Save Default" stores the current Starting Time so it\\'s remembered next time you start.',
-              side: 'bottom', align: 'center'
-            }
-          },
-          {
-            element: '.timer-addons',
-            popover: {
-              title: 'Quick Add & Testing',
-              description: 'Quickly add time with the preset buttons, enter a custom amount in seconds, or simulate Bits/Tips to test how your rules add time.',
               side: 'bottom', align: 'center'
             }
           },
@@ -1496,51 +1435,46 @@ export function renderOverlayConfigPage(options = {}) {
             }
           },
           {
-            element: '#showCapMessage',
+            element: '#fontSize',
             popover: {
-              title: 'Max Time Reached Message',
-              description: 'When the timer hits the maximum cap, you can display a custom message on the overlay — useful for letting viewers know the goal has been reached.',
+              title: 'Countdown Styles',
+              description: 'Customize the look of your overlay — font, colors, size, text shadow, outline, alignment, and threshold colors that change as time runs low.',
+              side: 'bottom', align: 'start'
+            },
+            onHighlightStarted: function() { tourSwitchSection('styles'); }
+          },
+          {
+            element: '#saveRules',
+            popover: {
+              title: 'Rules',
+              description: 'Define how viewer events add time: Bits, subs (per tier), gift subs, charity donations, tips, and follows. Set the Hype Train and Bonus Time multipliers here too.',
+              side: 'top', align: 'start'
+            },
+            onHighlightStarted: function() { tourSwitchSection('rules'); }
+          },
+          {
+            element: '#seConnect',
+            popover: {
+              title: 'StreamElements Tips',
+              description: 'Connect your StreamElements account to automatically add time when viewers send tips. Paste your JWT token from the SE dashboard to get started.',
               side: 'top', align: 'start'
             }
           },
           {
-            element: '[data-section="style"]',
-            popover: {
-              title: 'Countdown Styles',
-              description: 'Customize the look of your overlay — font, colors, size, text shadow, outline, alignment, and threshold colors that change as time runs low.',
-              side: 'right', align: 'start'
-            }
-          },
-          {
-            element: '[data-section="rules"]',
-            popover: {
-              title: 'Rules',
-              description: 'Define how viewer events add time: Bits, subs (per tier), gift subs, charity donations, tips, and follows. Set the Hype Train and Bonus Time multipliers here too.',
-              side: 'left', align: 'start'
-            }
-          },
-          {
-            element: '[data-section="streamelements"]',
-            popover: {
-              title: 'StreamElements Tips',
-              description: 'Connect your StreamElements account to automatically add time when viewers send tips. Paste your JWT token from the SE dashboard to get started.',
-              side: 'left', align: 'start'
-            }
-          },
-          {
-            element: '[data-section="events"]',
+            element: '#eventLog',
             popover: {
               title: 'Event Log',
               description: 'A live feed of every event that modifies your timer — subs, bits, gifts, and more. Helpful for verifying your rules are working correctly.',
-              side: 'left', align: 'start'
-            }
+              side: 'bottom', align: 'start'
+            },
+            onHighlightStarted: function() { tourSwitchSection('log-debug'); }
           },
           {
-            element: '[data-section="testing"]',
+            element: '#devTests',
             popover: {
               title: 'Debug & Testing',
               description: 'Simulate subscriptions, gift subs, and hype trains to test your setup without real events. Also shows your overlay key for the browser source.',
-              side: 'left', align: 'start'
+              side: 'top', align: 'start'
             }
           }
         ];
@@ -1550,7 +1484,8 @@ export function renderOverlayConfigPage(options = {}) {
             showProgress: true,
             progressText: '{{current}} of {{total}}',
             allowClose: true,
-            steps: tourSteps
+            steps: tourSteps,
+            onDestroyed: function() { tourSwitchSection('controls'); }
           });
           driverObj.drive();
         }

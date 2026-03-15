@@ -1,5 +1,6 @@
 import { logger } from "./logger.js";
 import { isPro } from "./subscription_store.js";
+import { isSuperAdmin } from "./routes_admin.js";
 import jwt from "jsonwebtoken";
 import multer from "multer";
 import { rename, stat as fsStat, unlink as fsUnlink } from "fs/promises";
@@ -92,6 +93,8 @@ import {
   DEFAULT_TIER,
   SOUNDS_FILE_DIR,
   seedDefaultSounds,
+  getSharedLibrary,
+  copySoundToUser,
 } from "./sounds_store.js";
 
 const EXT_SECRET = process.env.EXTENSION_SECRET
@@ -236,6 +239,7 @@ export function mountSoundRoutes(app, deps = {}) {
         volume: req.body.volume ? Number(req.body.volume) : 80,
         cooldownMs: req.body.cooldownMs ? Number(req.body.cooldownMs) : 5000,
         enabled: req.body.enabled !== "false",
+        shared: req.body.shared === true || req.body.shared === "true",
       });
 
       if (result.error) {
@@ -411,6 +415,7 @@ export function mountSoundRoutes(app, deps = {}) {
         volume: volume ? Number(volume) : 80,
         cooldownMs: cooldownMs ? Number(cooldownMs) : 5000,
         enabled: true,
+        shared: req.body.shared === true || req.body.shared === "true",
       });
 
       if (result.error) return res.status(400).json(result);
@@ -547,6 +552,7 @@ export function mountSoundRoutes(app, deps = {}) {
         volume: req.body.volume ? Number(req.body.volume) : 80,
         cooldownMs: req.body.cooldownMs ? Number(req.body.cooldownMs) : 5000,
         enabled: true,
+        shared: req.body.shared === true || req.body.shared === "true",
       });
 
       if (result.error) {
@@ -560,6 +566,91 @@ export function mountSoundRoutes(app, deps = {}) {
       logger.error("video_upload_failed", { userId: uid, message: err?.message });
       res.status(500).json({ error: "Failed to upload video" });
     }
+  });
+
+  // ===== Community Library =====
+
+  // Browse shared sounds from all users
+  app.get("/api/sounds/library", (req, res) => {
+    const uid = requireBroadcaster(req, res);
+    if (!uid) return;
+    const library = getSharedLibrary(uid);
+    res.json({ sounds: library });
+  });
+
+  // Serve image for a library sound (from original owner's directory)
+  app.get("/api/sounds/library/:ownerUserId/:soundId/image", (req, res) => {
+    const uid = requireBroadcaster(req, res);
+    if (!uid) return;
+    if (!/^\w+$/.test(req.params.ownerUserId) || !/^\w+$/.test(req.params.soundId)) {
+      return res.status(400).json({ error: "Invalid parameters" });
+    }
+    const sound = getSound(req.params.ownerUserId, req.params.soundId);
+    if (!sound || !sound.shared || !sound.imageFilename) {
+      return res.status(404).json({ error: "Image not found" });
+    }
+    const filePath = path.resolve(SOUNDS_FILE_DIR, String(req.params.ownerUserId), sound.imageFilename);
+    res.setHeader("Cache-Control", "public, max-age=3600");
+    res.sendFile(filePath, (err) => {
+      if (err && !res.headersSent) res.status(404).json({ error: "Image file not found" });
+    });
+  });
+
+  // Serve audio preview for a library sound (from original owner's directory)
+  app.get("/api/sounds/library/:ownerUserId/:soundId/preview", (req, res) => {
+    const uid = requireBroadcaster(req, res);
+    if (!uid) return;
+    if (!/^\w+$/.test(req.params.ownerUserId) || !/^\w+$/.test(req.params.soundId)) {
+      return res.status(400).json({ error: "Invalid parameters" });
+    }
+    const sound = getSound(req.params.ownerUserId, req.params.soundId);
+    if (!sound || !sound.shared) {
+      return res.status(404).json({ error: "Sound not found or not shared" });
+    }
+    const filePath = getSoundFilePath(req.params.ownerUserId, sound);
+    res.setHeader("Content-Type", sound.mimeType || "audio/mpeg");
+    res.setHeader("Cache-Control", "public, max-age=3600");
+    res.sendFile(filePath, (err) => {
+      if (err && !res.headersSent) res.status(404).json({ error: "File not found" });
+    });
+  });
+
+  // Add a library sound to your own alerts (copies the file)
+  app.post("/api/sounds/library/add", async (req, res) => {
+    const uid = requireBroadcaster(req, res);
+    if (!uid) return;
+    const { ownerUserId, soundId } = req.body || {};
+    if (!ownerUserId || !soundId) {
+      return res.status(400).json({ error: "ownerUserId and soundId are required" });
+    }
+    try {
+      const result = await copySoundToUser(ownerUserId, soundId, uid);
+      if (result.error) return res.status(400).json(result);
+      logger.info("library_sound_added", { userId: uid, sourceUserId: ownerUserId, sourceSoundId: soundId, newSoundId: result.id });
+      res.status(201).json({ sound: result });
+    } catch (err) {
+      logger.error("library_add_failed", { userId: uid, message: err?.message });
+      res.status(500).json({ error: "Failed to add sound from library" });
+    }
+  });
+
+  // Super admin: delete any sound from the library
+  app.delete("/api/sounds/library/:ownerUserId/:soundId", async (req, res) => {
+    if (!isSuperAdmin(req)) {
+      return res.status(403).json({ error: "Super admin access required" });
+    }
+    const { ownerUserId, soundId } = req.params;
+    if (!/^\w+$/.test(ownerUserId) || !/^\w+$/.test(soundId)) {
+      return res.status(400).json({ error: "Invalid parameters" });
+    }
+    const ok = await deleteSound(ownerUserId, soundId);
+    if (!ok) return res.status(404).json({ error: "Sound not found" });
+    logger.info("library_sound_admin_deleted", {
+      adminUserId: req.session?.twitchUser?.id,
+      ownerUserId,
+      soundId,
+    });
+    res.json({ ok: true });
   });
 
   // Update sound metadata

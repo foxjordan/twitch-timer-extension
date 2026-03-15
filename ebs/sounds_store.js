@@ -4,6 +4,7 @@ import path from "path";
 import { fileURLToPath } from "url";
 import crypto from "crypto";
 import { VALID_TIERS, DEFAULT_TIER } from "./tiers.js";
+import { getUserProfile } from "./user_profiles.js";
 
 const DATA_DIR = process.env.DATA_DIR || process.cwd();
 export const SOUNDS_PATH = path.resolve(DATA_DIR, "overlay-sound-alerts.json");
@@ -165,6 +166,9 @@ function normalizeSound(raw = {}) {
     enabled: typeof raw.enabled === "boolean" ? raw.enabled : true,
     volume: sanitizeNumber(raw.volume, 80, 0, 100),
     cooldownMs: sanitizeNumber(raw.cooldownMs, 5000, 0, 60000),
+    shared: typeof raw.shared === "boolean" ? raw.shared : true,
+    sourceUserId: sanitizeString(raw.sourceUserId, ""),
+    sourceSoundId: sanitizeString(raw.sourceSoundId, ""),
     createdAt: raw.createdAt || now,
     updatedAt: raw.updatedAt || now,
   };
@@ -227,6 +231,7 @@ export function updateSound(uid, soundId, patch = {}) {
   if ("imageFilename" in patch) sound.imageFilename = sanitizeString(patch.imageFilename, sound.imageFilename);
   if ("clipUrl" in patch) sound.clipUrl = sanitizeString(patch.clipUrl, sound.clipUrl);
   if ("clipSlug" in patch) sound.clipSlug = sanitizeString(patch.clipSlug, sound.clipSlug);
+  if ("shared" in patch) sound.shared = Boolean(patch.shared);
   sound.updatedAt = nowIso();
   persistSoundAlerts().catch(() => {});
   return deepClone(sound);
@@ -361,6 +366,103 @@ export async function seedDefaultSounds(uid) {
       });
     } catch {}
   }
+}
+
+// ===== Public API (for viewers) =====
+
+// ===== Community Library =====
+
+export function getSharedLibrary(requestingUserId = null) {
+  // Collect sounds the requesting user already has (by sourceUserId+sourceSoundId)
+  const ownedSet = new Set();
+  if (requestingUserId) {
+    const reqUser = soundAlertsByUser.get(String(requestingUserId));
+    if (reqUser) {
+      // Mark own uploads as owned
+      for (const sound of reqUser.sounds.values()) {
+        if (sound.shared) ownedSet.add(`${requestingUserId}:${sound.id}`);
+        if (sound.sourceUserId && sound.sourceSoundId) {
+          ownedSet.add(`${sound.sourceUserId}:${sound.sourceSoundId}`);
+        }
+      }
+    }
+  }
+
+  const results = [];
+  for (const [uid, user] of soundAlertsByUser.entries()) {
+    for (const sound of user.sounds.values()) {
+      if (!sound.shared) continue;
+      if (sound.type !== "sound") continue; // v1: audio only
+      const profile = getUserProfile(uid);
+      results.push({
+        id: sound.id,
+        name: sound.name,
+        type: sound.type,
+        hasImage: Boolean(sound.imageFilename),
+        ownerUserId: uid,
+        ownerDisplayName: profile?.displayName || profile?.login || null,
+        owned: ownedSet.has(`${uid}:${sound.id}`),
+        createdAt: sound.createdAt,
+      });
+    }
+  }
+  return results.sort((a, b) => {
+    const aDate = Date.parse(a.createdAt || "") || 0;
+    const bDate = Date.parse(b.createdAt || "") || 0;
+    return bDate - aDate; // newest first
+  });
+}
+
+export async function copySoundToUser(sourceUid, sourceSoundId, destUid) {
+  const sourceUser = soundAlertsByUser.get(String(sourceUid));
+  if (!sourceUser) return { error: "Source user not found" };
+  const sourceSound = sourceUser.sounds.get(String(sourceSoundId));
+  if (!sourceSound || !sourceSound.shared) return { error: "Sound not found or not shared" };
+  if (sourceSound.type !== "sound") return { error: "Only audio sounds can be added from the library" };
+
+  const destUser = ensureUser(destUid);
+  if (destUser.sounds.size >= MAX_SOUNDS_PER_USER) {
+    return { error: `Maximum of ${MAX_SOUNDS_PER_USER} sounds reached` };
+  }
+
+  const newSoundId = `snd_${crypto.randomUUID().slice(0, 12)}`;
+  const ext = path.extname(sourceSound.filename) || ".mp3";
+  const newFilename = `${newSoundId}${ext}`;
+
+  const srcPath = path.resolve(SOUNDS_FILE_DIR, String(sourceUid), sourceSound.filename);
+  const destDir = await ensureSoundDir(destUid);
+  const destPath = path.resolve(destDir, newFilename);
+
+  let fileStat;
+  try {
+    await copyFile(srcPath, destPath);
+    fileStat = await stat(destPath);
+  } catch (err) {
+    try { await unlink(destPath); } catch {}
+    throw err;
+  }
+
+  const newSound = normalizeSound({
+    id: newSoundId,
+    type: sourceSound.type,
+    name: sourceSound.name,
+    filename: newFilename,
+    originalFilename: sourceSound.originalFilename,
+    mimeType: sourceSound.mimeType,
+    sizeBytes: fileStat.size,
+    imageFilename: "", // not copied — streamer uploads their own
+    tier: DEFAULT_TIER,
+    enabled: true,
+    volume: sourceSound.volume,
+    cooldownMs: sourceSound.cooldownMs,
+    shared: false, // copies are not shared by default
+    sourceUserId: String(sourceUid),
+    sourceSoundId: String(sourceSoundId),
+  });
+
+  destUser.sounds.set(newSound.id, newSound);
+  persistSoundAlerts().catch(() => {});
+  return deepClone(newSound);
 }
 
 // ===== Public API (for viewers) =====

@@ -8,8 +8,16 @@ import {
   findUserByCustomerId,
 } from "./subscription_store.js";
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
+const stripe = process.env.STRIPE_SECRET_KEY
+  ? new Stripe(process.env.STRIPE_SECRET_KEY)
+  : null;
 const WEBHOOK_SECRET = process.env.STRIPE_WEBHOOK_SECRET;
+
+if (!stripe) {
+  logger.warn("stripe_not_configured", {
+    message: "STRIPE_SECRET_KEY not set — Stripe routes will be disabled",
+  });
+}
 
 const PRO_PRICES = {
   monthly:   "price_1T6ZmcB5ZaYWBgZ8WfbZorXC",
@@ -29,6 +37,9 @@ export function mountStripeWebhookRoute(app) {
     "/api/stripe/webhook",
     express.raw({ type: "application/json" }),
     async (req, res) => {
+      if (!stripe) {
+        return res.status(503).json({ error: "Stripe is not configured" });
+      }
       let event;
       try {
         event = stripe.webhooks.constructEvent(
@@ -58,6 +69,9 @@ export function mountStripeWebhookRoute(app) {
 export function mountStripeRoutes(app) {
   // Create a Stripe Checkout session and redirect
   app.post("/api/stripe/checkout", async (req, res) => {
+    if (!stripe) {
+      return res.status(503).json({ error: "Stripe is not configured" });
+    }
     if (!req.session?.isAdmin || !req.session?.twitchUser?.id) {
       return res.status(401).json({ error: "Not authenticated" });
     }
@@ -92,6 +106,9 @@ export function mountStripeRoutes(app) {
 
   // Redirect to Stripe Customer Portal
   app.get("/api/stripe/portal", async (req, res) => {
+    if (!stripe) {
+      return res.status(503).json({ error: "Stripe is not configured" });
+    }
     if (!req.session?.isAdmin || !req.session?.twitchUser?.id) {
       return res.status(401).json({ error: "Not authenticated" });
     }
@@ -240,6 +257,7 @@ async function resolveUserId(stripeCustomerId) {
  * Called on login to reconcile local cache with Stripe.
  */
 export async function syncSubscriptionFromStripe(userId) {
+  if (!stripe) return;
   const uid = String(userId);
   const sub = getSubscription(uid);
   if (!sub?.stripeCustomerId) return;

@@ -1,6 +1,7 @@
 import { renderAdminDashboardPage } from "./views/adminDashboardPage.js";
 import { renderSoundConfigPage } from "./views/soundConfigPage.js";
 import { getBan, banUser, unbanUser } from "./bans.js";
+import { getLogEntries } from "./event_log.js";
 import { getSubscription, isPro } from "./subscription_store.js";
 import { getTtsSettings, setTtsSettings, getGlobalTtsConfig, setGlobalTtsConfig } from "./tts_store.js";
 import { deleteAllUserData } from "./user_data_deletion.js";
@@ -95,6 +96,7 @@ export function mountAdminRoutes(app, ctx) {
       isAdminMode: true,
       managedUserName,
       showAdminLink: true,
+      isSuperAdmin: true,
     });
     res.setHeader("Content-Type", "text/html; charset=utf-8");
     res.setHeader("Cache-Control", "no-store");
@@ -207,6 +209,18 @@ export function mountAdminRoutes(app, ctx) {
       },
       users,
     });
+  });
+
+  // Fetch event log for a specific broadcaster
+  app.get("/api/admin/events/log/:userId", (req, res) => {
+    if (!req.session?.isAdmin || !isSuperAdmin(req)) {
+      return res.status(403).json({ error: "Access denied" });
+    }
+    const uid = String(req.params.userId);
+    if (!/^\w+$/.test(uid)) {
+      return res.status(400).json({ error: "Invalid userId" });
+    }
+    res.json({ entries: getLogEntries(uid) });
   });
 
   // Ban a user

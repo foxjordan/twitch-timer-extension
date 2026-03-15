@@ -23,7 +23,11 @@
       "Bash(node -c routes_auth.js)",
       "WebFetch(domain:dev.streamelements.com)",
       "WebFetch(domain:api.streamelements.com)",
-      "Bash(npm install socket.io-client)"
+      "Bash(npm install socket.io-client)",
+      "Bash(node -e \"require\\(''./ebs/views/soundConfigPage.js''\\)\")",
+      "Bash(node -e \"require\\(''./ebs/routes_sounds.js''\\)\")",
+      "Bash(node -e \"require\\(''./ebs/routes_overlay_page.js''\\)\")",
+      "Bash(node -e \"require\\(''./ebs/routes_admin.js''\\)\")"
     ]
   }
 }

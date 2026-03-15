@@ -24,7 +24,21 @@ export function renderAdminDashboardPage(options = {}) {
     <style>
       ${THEME_CSS_VARS}
       body { margin: 0; font-family: Inter, system-ui, Arial, sans-serif; background: var(--page-bg); color: var(--text-color); min-height: 100vh; display: flex; flex-direction: column; }
-      main { flex: 1; width: min(1200px, 100%); margin: 32px auto 48px; padding: 0 20px; }
+      main { flex: 1; width: min(1200px, 100%); margin: 32px auto 48px; padding: 0 20px; display: flex; gap: 24px; }
+      .sidebar { width: 200px; flex-shrink: 0; position: sticky; top: 32px; align-self: flex-start; }
+      .sidebar-nav { display: flex; flex-direction: column; gap: 2px; }
+      .sidebar-nav-item { display: flex; align-items: center; gap: 8px; padding: 10px 14px; border-radius: 8px; font-size: 14px; font-weight: 500; cursor: pointer; color: var(--text-muted); background: transparent; border: none; text-align: left; width: 100%; transition: background .15s, color .15s; font-family: inherit; }
+      .sidebar-nav-item:hover { background: var(--surface-color); color: var(--text-color); box-shadow: none; filter: none; }
+      .sidebar-nav-item.active { background: #9146ff; color: #fff; }
+      .content-area { flex: 1; min-width: 0; }
+      .section-page { display: none; }
+      .section-page.active { display: block; }
+      @media (max-width: 768px) {
+        main { flex-direction: column; }
+        .sidebar { width: 100%; position: static; }
+        .sidebar-nav { flex-direction: row; overflow-x: auto; gap: 4px; padding-bottom: 4px; }
+        .sidebar-nav-item { white-space: nowrap; padding: 8px 12px; font-size: 13px; }
+      }
       h1 { margin: 0 0 8px; font-size: 28px; }
       .subtitle { margin: 0 0 24px; color: var(--text-muted); font-size: 14px; }
       .overview-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 14px; margin-bottom: 28px; }
@@ -76,6 +90,16 @@ export function renderAdminDashboardPage(options = {}) {
       .health-label { color: var(--text-muted); font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 2px; }
       .health-value { font-weight: 600; }
       .health-error { color: #ef4444; }
+      .log-box { padding: 10px; background: var(--surface-muted); border: 1px solid var(--surface-border); border-radius: 8px; max-height: 500px; overflow-y: auto; font-size: 12px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+      .log-line { margin-bottom: 4px; white-space: nowrap; text-overflow: ellipsis; overflow: hidden; }
+      .log-time { color: var(--text-muted); margin-right: 8px; }
+      .log-type { display: inline-block; min-width: 100px; color: #9146ff; }
+      .log-detail { opacity: 0.85; }
+      .log-toolbar { display: flex; gap: 10px; align-items: center; margin-bottom: 12px; flex-wrap: wrap; }
+      .log-toolbar select { padding: 6px 10px; border-radius: 8px; border: 1px solid var(--surface-border); background: var(--surface-muted); color: var(--text-color); font-size: 13px; min-width: 200px; }
+      .log-toolbar button { background: #9146ff; color: #fff; border: none; padding: 6px 14px; border-radius: 8px; font-size: 12px; font-weight: 600; cursor: pointer; }
+      .log-toolbar button:hover { background: #7c3aed; }
+      .log-toolbar .log-status { font-size: 12px; color: var(--text-muted); }
       .tour-btn { position: fixed; bottom: 20px; right: 20px; background: #9146ff; color: #fff; border: none; padding: 8px 16px; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; z-index: 10; opacity: 0.85; transition: opacity 0.15s; }
       .tour-btn:hover { opacity: 1; }
       ${THEME_TOGGLE_STYLES}
@@ -93,9 +117,21 @@ export function renderAdminDashboardPage(options = {}) {
       showLogout: true,
     })}
     <main>
+      <nav class="sidebar">
+        <div class="sidebar-nav">
+          <button class="sidebar-nav-item active" data-section="overview">Overview</button>
+          <button class="sidebar-nav-item" data-section="health">Server Health</button>
+          <button class="sidebar-nav-item" data-section="tts-config">TTS Config</button>
+          <button class="sidebar-nav-item" data-section="test-alerts">Test Alerts</button>
+          <button class="sidebar-nav-item" data-section="event-logs">Event Logs</button>
+          <button class="sidebar-nav-item" data-section="broadcasters">Broadcasters</button>
+        </div>
+      </nav>
+      <div class="content-area">
       <h1>Admin Dashboard</h1>
       <p class="subtitle">Service usage overview. Auto-refreshes every 10 seconds.</p>
 
+      <div class="section-page active" data-section="overview">
       <div class="overview-grid">
         <div class="stat-card">
           <div class="stat-value" id="statRegistered">--</div>
@@ -114,15 +150,19 @@ export function renderAdminDashboardPage(options = {}) {
           <div class="stat-label">Total SSE Served</div>
         </div>
       </div>
+      </div>
 
-      <div class="table-card" style="margin-bottom: 18px;">
+      <div class="section-page" data-section="health">
+      <div class="table-card">
         <h2>Server Health</h2>
         <div id="serverHealth" class="server-health-grid">
           <div class="empty-state">Loading...</div>
         </div>
       </div>
+      </div>
 
-      <div class="table-card" style="margin-bottom: 18px;">
+      <div class="section-page" data-section="tts-config">
+      <div class="table-card">
         <h2>TTS Configuration</h2>
         <div class="tts-config-grid">
           <div>
@@ -173,8 +213,10 @@ export function renderAdminDashboardPage(options = {}) {
           </div>
         </div>
       </div>
+      </div>
 
-      <div class="table-card" style="margin-bottom: 18px;">
+      <div class="section-page" data-section="test-alerts">
+      <div class="table-card">
         <h2>Test Alerts</h2>
         <div style="font-size:12px; color:var(--text-muted); margin-bottom:12px;">Trigger sound or TTS alerts without Bits. Useful for testing overlay playback. The alert will be sent to the broadcaster's OBS overlay via SSE.</div>
         <div style="display:grid; grid-template-columns:1fr 1fr; gap:18px;">
@@ -206,16 +248,51 @@ export function renderAdminDashboardPage(options = {}) {
           </div>
         </div>
       </div>
+      </div>
 
+      <div class="section-page" data-section="event-logs">
+      <div class="table-card">
+        <h2>Event Logs</h2>
+        <div class="log-toolbar">
+          <select id="logBroadcaster">
+            <option value="">Select a broadcaster...</option>
+          </select>
+          <button id="logRefreshBtn">Refresh</button>
+          <span class="log-status" id="logStatus"></span>
+        </div>
+        <div id="logContainer" class="log-box" style="display:none;"></div>
+        <div id="logEmpty" class="empty-state">Select a broadcaster to view their event log.</div>
+      </div>
+      </div>
+
+      <div class="section-page" data-section="broadcasters">
       <div class="table-card">
         <h2>Broadcasters <span class="refresh-info" id="lastRefresh"></span></h2>
         <div id="tableContainer">
           <div class="empty-state">Loading...</div>
         </div>
       </div>
+      </div>
+
+      </div><!-- /content-area -->
     </main>
     <script>
       (function() {
+        // Sidebar section navigation
+        function switchSection(sectionId) {
+          document.querySelectorAll('.section-page').forEach(function(el) {
+            el.classList.toggle('active', el.getAttribute('data-section') === sectionId);
+          });
+          document.querySelectorAll('.sidebar-nav-item').forEach(function(el) {
+            el.classList.toggle('active', el.getAttribute('data-section') === sectionId);
+          });
+        }
+        document.querySelectorAll('.sidebar-nav-item').forEach(function(btn) {
+          btn.addEventListener('click', function() {
+            switchSection(btn.getAttribute('data-section'));
+          });
+        });
+
         var refreshInterval = 10000;
         var tableContainer = document.getElementById('tableContainer');
         var lastRefreshEl = document.getElementById('lastRefresh');
@@ -903,6 +980,172 @@ export function renderAdminDashboardPage(options = {}) {
             showTestStatus(testTtsStatus, 'Request failed', true);
           });
         });
+
+        // ===== Event Logs =====
+        var logBroadcaster = document.getElementById('logBroadcaster');
+        var logRefreshBtn = document.getElementById('logRefreshBtn');
+        var logStatus = document.getElementById('logStatus');
+        var logContainer = document.getElementById('logContainer');
+        var logEmpty = document.getElementById('logEmpty');
+
+        function populateLogBroadcasters() {
+          var currentVal = logBroadcaster.value;
+          logBroadcaster.textContent = '';
+          var defaultOpt = document.createElement('option');
+          defaultOpt.value = '';
+          defaultOpt.textContent = 'Select a broadcaster...';
+          logBroadcaster.appendChild(defaultOpt);
+          cachedBroadcasters.forEach(function(u) {
+            var opt = document.createElement('option');
+            opt.value = u.userId;
+            opt.textContent = (u.displayName || u.login || u.userId) + ' (' + u.userId + ')';
+            if (u.userId === currentVal) opt.selected = true;
+            logBroadcaster.appendChild(opt);
+          });
+        }
+
+        function formatLogTime(ts) {
+          var d = ts ? new Date(ts) : new Date();
+          return d.toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit' });
+        }
+
+        function formatLogDetail(e) {
+          var src = e.type || e.source || 'event';
+          var label = e.label || '';
+          var base = Number(e.baseSeconds || 0);
+          var applied = Number(e.appliedSeconds || 0);
+          var actual = Number(e.actualSeconds || applied);
+          var hype = Number(e.hypeMultiplier || 1);
+          var capNote = (applied > 0 && actual < applied) ? ' (capped)' : '';
+
+          if (src === 'sound_alert') {
+            var snd = e.soundName || 'Sound';
+            var viewer = e.viewerUserId ? ' (user ' + e.viewerUserId + ')' : '';
+            return { type: 'Sound Alert', detail: snd + viewer, color: '#9146ff', seconds: null };
+          }
+          if (src === 'tts_alert') {
+            return { type: 'TTS Alert', detail: e.message || 'TTS', color: '#9146ff', seconds: null };
+          }
+
+          var detail = '';
+          if (src === 'channel.cheer' || src === 'channel.bits.use') {
+            var bits = Number(e.bits || 0);
+            if (bits > 0) detail = bits + ' bits';
+          } else if (src === 'channel.subscribe' || src === 'channel.subscription.message') {
+            if (e.subTier) detail = 'Tier ' + String(e.subTier).replace(/^0+/, '');
+          } else if (src === 'channel.subscription.gift') {
+            var gifts = Number(e.giftCount || 0);
+            if (gifts > 0) detail = gifts + ' gift sub' + (gifts === 1 ? '' : 's');
+          } else if (src === 'channel.charity_campaign.donate') {
+            var amt = Number(e.charityAmount || 0);
+            var dec = Number(e.charityDecimals || 2);
+            if (amt > 0) detail = '$' + (amt / Math.pow(10, dec)).toFixed(dec);
+          } else if (src === 'streamelements_tip') {
+            var tipAmt = Number(e.tipAmount || 0);
+            if (tipAmt > 0) detail = (e.tipUsername || 'Anon') + ' tipped $' + tipAmt.toFixed(2);
+            else detail = 'SE Tip';
+          } else if (src === 'channel.follow') {
+            detail = 'Follow';
+          } else if (src === 'channel.hype_train.begin') {
+            detail = 'Hype Train started';
+          } else if (src === 'channel.hype_train.progress') {
+            detail = 'Hype Train progress';
+          } else if (src === 'channel.hype_train.end') {
+            detail = 'Hype Train ended';
+          } else if (src === 'manual_start' || src === 'manual_add' || src === 'manual_clear' || src === 'manual_restart') {
+            detail = label || src;
+          }
+
+          var hypeInfo = hype !== 1 ? (' (base ' + base + 's x' + hype + ')') : '';
+          var seconds = actual > 0 ? '+' + actual + 's' + hypeInfo + capNote : '';
+          return { type: src, detail: detail, color: null, seconds: seconds };
+        }
+
+        function renderLogEntries(entries) {
+          logContainer.textContent = '';
+          if (!entries || entries.length === 0) {
+            logContainer.style.display = 'none';
+            logEmpty.textContent = 'No log entries found for this broadcaster.';
+            logEmpty.style.display = '';
+            return;
+          }
+          logEmpty.style.display = 'none';
+          logContainer.style.display = '';
+
+          var sorted = entries.slice().sort(function(a, b) { return (b.ts || 0) - (a.ts || 0); });
+          sorted.forEach(function(e) {
+            var line = document.createElement('div');
+            line.className = 'log-line';
+
+            var timeSpan = document.createElement('span');
+            timeSpan.className = 'log-time';
+            timeSpan.textContent = formatLogTime(e.ts);
+
+            var info = formatLogDetail(e);
+
+            var typeSpan = document.createElement('span');
+            typeSpan.className = 'log-type';
+            typeSpan.textContent = info.type;
+            if (info.color) typeSpan.style.color = info.color;
+
+            var detailSpan = document.createElement('span');
+            detailSpan.className = 'log-detail';
+            var parts = [];
+            if (info.detail) parts.push(info.detail);
+            if (info.seconds) parts.push(info.seconds);
+            detailSpan.textContent = parts.length ? ' – ' + parts.join(' · ') : '';
+
+            line.appendChild(timeSpan);
+            line.appendChild(typeSpan);
+            line.appendChild(detailSpan);
+            logContainer.appendChild(line);
+          });
+
+          logStatus.textContent = sorted.length + ' entries';
+        }
+
+        function fetchLogEntries() {
+          var uid = logBroadcaster.value;
+          if (!uid) return;
+          logRefreshBtn.disabled = true;
+          logStatus.textContent = 'Loading...';
+          fetch('/api/admin/events/log/' + encodeURIComponent(uid), { credentials: 'same-origin' })
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+              logRefreshBtn.disabled = false;
+              if (data.error) {
+                logStatus.textContent = 'Error: ' + data.error;
+                return;
+              }
+              renderLogEntries(data.entries || []);
+            })
+            .catch(function() {
+              logRefreshBtn.disabled = false;
+              logStatus.textContent = 'Failed to load logs';
+            });
+        }
+
+        logBroadcaster.addEventListener('change', function() {
+          if (logBroadcaster.value) {
+            fetchLogEntries();
+          } else {
+            logContainer.style.display = 'none';
+            logEmpty.textContent = 'Select a broadcaster to view their event log.';
+            logEmpty.style.display = '';
+            logStatus.textContent = '';
+          }
+        });
+
+        logRefreshBtn.addEventListener('click', function() {
+          if (logBroadcaster.value) fetchLogEntries();
+        });
+
+        // Hook into stats fetch to populate log broadcaster picker
+        var origPopulateTest = populateTestBroadcasters;
+        populateTestBroadcasters = function(users) {
+          origPopulateTest(users);
+          populateLogBroadcasters();
+        };
       })();
     </script>
     <button class="tour-btn" id="tourBtn" title="Show guided tour">Take A Tour</button>
@@ -910,14 +1153,27 @@ export function renderAdminDashboardPage(options = {}) {
     <script>
       (function() {
         var TOUR_KEY = 'admin_tour_seen';
+        function tourSwitchSection(s) {
+          document.querySelectorAll('.section-page').forEach(function(el) { el.classList.toggle('active', el.getAttribute('data-section') === s); });
+          document.querySelectorAll('.sidebar-nav-item').forEach(function(el) { el.classList.toggle('active', el.getAttribute('data-section') === s); });
+        }
         var tourSteps = [
+          {
+            element: '.sidebar-nav',
+            popover: {
+              title: 'Navigation',
+              description: 'Use the sidebar to switch between Overview, Server Health, TTS Config, Test Alerts, and Broadcasters.',
+              side: 'right', align: 'start'
+            }
+          },
           {
             element: '.overview-grid',
             popover: {
               title: 'Overview Stats',
               description: 'Quick glance at your service: registered broadcasters, EventSub connections, active overlays, and total SSE connections served.',
               side: 'bottom', align: 'center'
-            }
+            },
+            onHighlightStarted: function() { tourSwitchSection('overview'); }
           },
           {
             element: '#serverHealth',
@@ -925,7 +1181,17 @@ export function renderAdminDashboardPage(options = {}) {
               title: 'Server Health',
               description: 'Live server metrics — uptime, memory usage, EventSub status, and any recent errors.',
               side: 'bottom', align: 'center'
-            }
+            },
+            onHighlightStarted: function() { tourSwitchSection('health'); }
+          },
+          {
+            element: '[data-section="event-logs"].section-page',
+            popover: {
+              title: 'Event Logs',
+              description: 'View per-broadcaster event logs — timer events, sound alerts, TTS alerts, subscriptions, and more.',
+              side: 'bottom', align: 'center'
+            },
+            onHighlightStarted: function() { tourSwitchSection('event-logs'); }
           },
           {
             element: '#tableContainer',
@@ -933,7 +1199,8 @@ export function renderAdminDashboardPage(options = {}) {
               title: 'Broadcasters Table',
               description: 'Every registered broadcaster, their connection status, timer state, enabled features, and moderation actions.',
               side: 'top', align: 'center'
-            }
+            },
+            onHighlightStarted: function() { tourSwitchSection('broadcasters'); }
           }
         ];
 

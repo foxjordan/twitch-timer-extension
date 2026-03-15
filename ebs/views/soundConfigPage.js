@@ -24,6 +24,7 @@ export function renderSoundConfigPage(options = {}) {
       `<option value="${sku}"${sku === DEFAULT_TIER ? " selected" : ""}>${TIER_LABELS[sku]}</option>`,
   ).join("\n              ");
   const showAdminLink = Boolean(options.showAdminLink);
+  const isSuperAdmin = Boolean(options.isSuperAdmin);
 
   return `<!doctype html>
 <html lang="en">
@@ -39,11 +40,40 @@ export function renderSoundConfigPage(options = {}) {
     <style>
       ${THEME_CSS_VARS}
       body { margin: 0; font-family: Inter, system-ui, Arial, sans-serif; background: var(--page-bg); color: var(--text-color); min-height: 100vh; display: flex; flex-direction: column; }
-      main { flex: 1; width: min(800px, 100%); margin: 32px auto 48px; padding: 0 20px; }
+      main { flex: 1; width: min(1100px, 100%); margin: 32px auto 48px; padding: 0 20px; display: flex; gap: 24px; }
+      .sidebar { width: 200px; flex-shrink: 0; position: sticky; top: 32px; align-self: flex-start; }
+      .sidebar-nav { display: flex; flex-direction: column; gap: 2px; }
+      .sidebar-nav-item { display: flex; align-items: center; gap: 8px; padding: 10px 14px; border-radius: 8px; font-size: 14px; font-weight: 500; cursor: pointer; color: var(--text-muted); background: transparent; border: none; text-align: left; width: 100%; transition: background .15s, color .15s; font-family: inherit; }
+      .sidebar-nav-item:hover { background: var(--surface-color); color: var(--text-color); box-shadow: none; filter: none; }
+      .sidebar-nav-item.active { background: var(--accent-color); color: #fff; }
+      .content-area { flex: 1; min-width: 0; max-width: 800px; }
+      .section-page { display: none; }
+      .section-page.active { display: block; }
+      @media (max-width: 768px) {
+        main { flex-direction: column; }
+        .sidebar { width: 100%; position: static; }
+        .sidebar-nav { flex-direction: row; overflow-x: auto; gap: 4px; padding-bottom: 4px; }
+        .sidebar-nav-item { white-space: nowrap; padding: 8px 12px; font-size: 13px; }
+      }
       h1 { margin: 0 0 4px; font-size: 26px; }
       .subtitle { margin: 0 0 24px; color: var(--text-muted); font-size: 14px; }
       .card { background: var(--surface-color); border: 1px solid var(--surface-border); border-radius: 14px; padding: 20px; margin-bottom: 18px; }
       .card h2 { margin: 0 0 12px; font-size: 17px; }
+      .library-search { width: 100%; box-sizing: border-box; padding: 8px 12px; border-radius: 8px; border: 1px solid var(--input-border); background: var(--input-bg); color: var(--text-color); font-size: 14px; margin-bottom: 12px; }
+      .library-search::placeholder { color: var(--text-muted); }
+      .library-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 10px; }
+      .library-card { display: flex; flex-direction: column; align-items: center; padding: 8px 6px; border-radius: 10px; background: var(--surface-muted, #1a1a1e); border: 1px solid var(--surface-border, #303038); cursor: default; transition: background 0.15s, transform 0.1s; position: relative; }
+      .library-card:hover { background: var(--surface-color, #2a2a32); transform: scale(1.03); }
+      .library-card-thumb { width: 100%; padding-bottom: 100%; border-radius: 8px; position: relative; background: var(--code-bg, #0e0e10); overflow: hidden; margin-bottom: 6px; }
+      .library-card-thumb-inner { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; }
+      .library-card-thumb-inner img { width: 100%; height: 100%; object-fit: cover; }
+      .library-card-thumb-inner img.fallback { width: 50%; height: 50%; object-fit: contain; opacity: 0.4; }
+      .library-card-preview { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,0.5); border-radius: 8px; cursor: pointer; opacity: 0; transition: opacity 0.15s; }
+      .library-card-thumb:hover .library-card-preview { opacity: 1; }
+      .library-card-name { font-size: 12px; font-weight: 600; text-align: center; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; width: 100%; margin-bottom: 2px; }
+      .library-card-owner { font-size: 11px; color: var(--text-muted); text-align: center; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; width: 100%; margin-bottom: 6px; }
+      .library-card-actions { display: flex; gap: 4px; width: 100%; }
+      .library-card-actions button { flex: 1; font-size: 11px; padding: 4px 6px; }
       .row2 { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
       input[type="text"], input[type="number"], select {
         box-sizing: border-box;
@@ -168,6 +198,17 @@ export function renderSoundConfigPage(options = {}) {
     </aside>
 
     <main>
+      <nav class="sidebar">
+        <div class="sidebar-nav">
+          <button class="sidebar-nav-item active" data-section="alerts">Alerts</button>
+          <button class="sidebar-nav-item" data-section="create">Create Alert</button>
+          <button class="sidebar-nav-item" data-section="library">Community Library</button>
+          <button class="sidebar-nav-item" data-section="settings">Settings</button>
+          <button class="sidebar-nav-item" data-section="tts">Text-to-Speech</button>
+          <button class="sidebar-nav-item" data-section="history">Alert History</button>
+        </div>
+      </nav>
+      <div class="content-area">
       ${isAdminMode ? `
       <div style="background:#9146ff22; border:1px solid #9146ff55; border-radius:10px; padding:10px 16px; margin-bottom:16px; display:flex; align-items:center; gap:10px; font-size:13px;">
         <a href="/admin" style="color:#9146ff; text-decoration:none; font-weight:600;">&larr; Back to Dashboard</a>
@@ -190,13 +231,11 @@ export function renderSoundConfigPage(options = {}) {
       </div>
       `}
 
-      <!-- Settings (collapsible, collapsed by default) -->
+      <div class="section-page" data-section="settings">
+      <!-- Settings -->
       <div class="card" id="settingsCard">
-        <h2 style="cursor:pointer; display:flex; align-items:center; justify-content:space-between; margin:0;" id="settingsToggle">
-          Settings
-          <span id="settingsArrow" style="font-size:12px; transition:transform .2s;">&#9662;</span>
-        </h2>
-        <div id="settingsBody" style="display:none; margin-top:12px;">
+        <h2>Settings</h2>
+        <div id="settingsBody">
           <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px 20px;">
             <label style="display:flex; align-items:center; gap:8px; font-size:13px;">
               <input type="checkbox" id="soundEnabled" checked>
@@ -222,14 +261,13 @@ export function renderSoundConfigPage(options = {}) {
           </div>
         </div>
       </div>
+      </div>
 
-      <!-- Create Alert (collapsible, open by default) -->
+      <div class="section-page" data-section="create">
+      <!-- Create Alert -->
       <div class="card" id="createAlertCard">
-        <h2 style="cursor:pointer; display:flex; align-items:center; justify-content:space-between; margin:0;" id="createAlertToggle">
-          Create Alert
-          <span id="createAlertArrow" style="font-size:12px; transition:transform .2s; transform:rotate(180deg);">&#9662;</span>
-        </h2>
-        <div id="createAlertBody" style="margin-top:12px;">
+        <h2>Create Alert</h2>
+        <div id="createAlertBody">
         <div style="display:flex; gap:4px; margin-bottom:12px;">
           <button id="tabSound" class="tab-btn active" data-tab="sound" style="font-size:12px; padding:5px 12px; border-radius:6px;">Sound</button>
           <button id="tabClip" class="tab-btn" data-tab="clip" style="font-size:12px; padding:5px 12px; border-radius:6px; display:none;">Twitch Clip</button>
@@ -256,8 +294,12 @@ export function renderSoundConfigPage(options = {}) {
               <span id="soundUploadVolumeVal" style="font-size:12px; opacity:0.7;">80%</span>
             </label>
           </div>
+          <label style="display:flex; align-items:center; gap:6px; font-size:13px; margin-bottom:8px;">
+            <input type="checkbox" id="soundShareToLibrary" checked> Share to Community Library
+          </label>
           <button type="submit" id="soundUploadBtn">Upload Sound</button>
           <span id="soundUploadHint" class="hint" style="margin-left:8px;"></span>
+          <p class="hint" style="margin-top:10px; font-size:11px; line-height:1.5; opacity:0.7;">By clicking "Upload", you confirm that you own or have the rights to the uploaded media and that you grant permission for it to be publicly broadcast across Twitch. See our <a href="/terms" style="color:var(--accent-color);">Terms of Service</a> for details.</p>
         </form>
 
         <!-- Twitch Clip tab -->
@@ -284,8 +326,12 @@ export function renderSoundConfigPage(options = {}) {
               <input type="checkbox" id="clipAudioOnly" /> Audio only (smaller file, no video)
             </label>
           </div>
+          <label style="display:flex; align-items:center; gap:6px; font-size:13px; margin-bottom:8px;">
+            <input type="checkbox" id="clipShareToLibrary" checked> Share to Community Library
+          </label>
           <button type="submit" id="clipUploadBtn">Add Clip</button>
           <span id="clipUploadHint" class="hint" style="margin-left:8px;"></span>
+          <p class="hint" style="margin-top:10px; font-size:11px; line-height:1.5; opacity:0.7;">By clicking "Add Clip", you confirm that you own or have the rights to the uploaded media and that you grant permission for it to be publicly broadcast across Twitch. See our <a href="/terms" style="color:var(--accent-color);">Terms of Service</a> for details.</p>
         </form>
 
         <!-- Video upload tab -->
@@ -307,12 +353,32 @@ export function renderSoundConfigPage(options = {}) {
               <span id="videoVolumeVal" style="font-size:12px; opacity:0.7;">80%</span>
             </label>
           </div>
+          <label style="display:flex; align-items:center; gap:6px; font-size:13px; margin-bottom:8px;">
+            <input type="checkbox" id="videoShareToLibrary" checked> Share to Community Library
+          </label>
           <button type="submit" id="videoUploadBtn">Upload Video</button>
           <span id="videoUploadHint" class="hint" style="margin-left:8px;"></span>
+          <p class="hint" style="margin-top:10px; font-size:11px; line-height:1.5; opacity:0.7;">By clicking "Upload", you confirm that you own or have the rights to the uploaded media and that you grant permission for it to be publicly broadcast across Twitch. See our <a href="/terms" style="color:var(--accent-color);">Terms of Service</a> for details.</p>
         </form>
         </div>
       </div>
+      </div>
 
+      <div class="section-page" data-section="library">
+      <!-- Community Library -->
+      <div class="card" id="libraryCard">
+        <h2>Community Library</h2>
+        <div id="libraryBody">
+          <p class="hint" style="margin-bottom:12px;">Browse sounds shared by other streamers. Preview and add to your alerts.</p>
+          <input type="text" id="librarySearch" class="library-search" placeholder="Search by name or uploader..." />
+          <div id="libraryList" class="library-grid">
+            <div class="hint" style="grid-column: 1 / -1;">Loading library...</div>
+          </div>
+        </div>
+      </div>
+      </div>
+
+      <div class="section-page active" data-section="alerts">
       <!-- Sound List -->
       <div class="card">
         <h2>Alerts (<span id="soundCount">0</span>/20)</h2>
@@ -320,14 +386,13 @@ export function renderSoundConfigPage(options = {}) {
           <div class="hint">Loading sounds…</div>
         </div>
       </div>
+      </div>
 
-      <!-- TTS Settings (collapsible, collapsed by default) -->
+      <div class="section-page" data-section="tts">
+      <!-- TTS Settings -->
       <div class="card" id="ttsCard">
-        <h2 style="cursor:pointer; display:flex; align-items:center; justify-content:space-between; margin:0;" id="ttsToggle">
-          Text-to-Speech
-          <span id="ttsArrow" style="font-size:12px; transition:transform .2s;">&#9662;</span>
-        </h2>
-        <div id="ttsBody" style="display:none; margin-top:12px;">
+        <h2>Text-to-Speech</h2>
+        <div id="ttsBody">
           <div id="ttsAccessHint" class="hint" style="margin-bottom:10px; display:none;">TTS requires a Pro plan or admin grant.</div>
           <div id="ttsSettings">
             <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px 20px;">
@@ -389,7 +454,9 @@ export function renderSoundConfigPage(options = {}) {
           </div>
         </div>
       </div>
+      </div>
 
+      <div class="section-page" data-section="history">
       <!-- Alert History -->
       <div class="card" id="alertHistoryCard">
         <h2>Alert History</h2>
@@ -401,7 +468,9 @@ export function renderSoundConfigPage(options = {}) {
         <div id="alertHistoryList" style="max-height:400px; overflow-y:auto;"></div>
         <div id="alertHistoryEmpty" class="hint" style="display:none;">No alerts yet.</div>
       </div>
+      </div>
 
+      </div><!-- /content-area -->
     </main>
     <footer class="global-footer">
       <a href="${termsUrl}">Terms of Service</a>
@@ -416,6 +485,7 @@ export function renderSoundConfigPage(options = {}) {
         var API_BASE = ${JSON.stringify(apiBase)};
         var TTS_API_BASE = ${JSON.stringify(ttsApiBase)};
         var IS_ADMIN_MODE = ${JSON.stringify(isAdminMode)};
+        var IS_SUPER_ADMIN = ${JSON.stringify(isSuperAdmin)};
 
         function setBusy(btn, busy) { if (!btn) return; btn.disabled = !!busy; }
         function flashButton(btn) { if (!btn) return; btn.classList.add('btn-click'); setTimeout(function() { btn.classList.remove('btn-click'); }, 160); }
@@ -491,27 +561,20 @@ export function renderSoundConfigPage(options = {}) {
           });
         }
 
-        // Collapsible sections
-        function setupCollapsible(toggleId, bodyId, arrowId, startOpen) {
-          var toggle = document.getElementById(toggleId);
-          var body = document.getElementById(bodyId);
-          var arrow = document.getElementById(arrowId);
-          if (!toggle || !body) return;
-          if (startOpen) {
-            body.style.display = '';
-            if (arrow) arrow.style.transform = 'rotate(180deg)';
-          } else {
-            body.style.display = 'none';
-            if (arrow) arrow.style.transform = '';
-          }
-          toggle.addEventListener('click', function() {
-            var open = body.style.display !== 'none';
-            body.style.display = open ? 'none' : '';
-            if (arrow) arrow.style.transform = open ? '' : 'rotate(180deg)';
+        // Sidebar section navigation
+        function switchSection(sectionId) {
+          document.querySelectorAll('.section-page').forEach(function(el) {
+            el.classList.toggle('active', el.getAttribute('data-section') === sectionId);
+          });
+          document.querySelectorAll('.sidebar-nav-item').forEach(function(el) {
+            el.classList.toggle('active', el.getAttribute('data-section') === sectionId);
           });
         }
-        setupCollapsible('settingsToggle', 'settingsBody', 'settingsArrow', false);
-        setupCollapsible('createAlertToggle', 'createAlertBody', 'createAlertArrow', true);
+        document.querySelectorAll('.sidebar-nav-item').forEach(function(btn) {
+          btn.addEventListener('click', function() {
+            switchSection(btn.getAttribute('data-section'));
+          });
+        });
 
         var soundsCache = [];
 
@@ -601,6 +664,14 @@ export function renderSoundConfigPage(options = {}) {
               nameDiv.appendChild(badge);
             }
 
+            // Shared badge
+            if (s.shared) {
+              var sharedBadge = document.createElement('span');
+              sharedBadge.style.cssText = 'display:inline-block; padding:1px 6px; border-radius:4px; font-size:10px; font-weight:600; letter-spacing:0.04em; margin-left:6px; background:rgba(34,197,94,0.15); color:#22c55e;';
+              sharedBadge.textContent = 'SHARED';
+              nameDiv.appendChild(sharedBadge);
+            }
+
             var metaDiv = document.createElement('div');
             metaDiv.style.cssText = 'font-size:12px; opacity:0.6;';
             var metaText = (TIER_LABELS[s.tier] || s.tier) + ' \\u00b7 Vol ' + s.volume + '%';
@@ -651,6 +722,193 @@ export function renderSoundConfigPage(options = {}) {
             card.appendChild(controls);
 
             soundListEl.appendChild(card);
+          });
+        }
+
+        // ===== Community Library =====
+        var libraryAudio = null;
+        var libraryAudioUrl = null;
+        var librarySounds = [];
+
+        async function fetchLibrary() {
+          try {
+            var r = await fetch(API_BASE + '/library', { cache: 'no-store' });
+            var data = await r.json();
+            librarySounds = data.sounds || [];
+            renderLibraryList(librarySounds);
+          } catch (e) {
+            var el = document.getElementById('libraryList');
+            if (el) { el.textContent = ''; var h = document.createElement('div'); h.className = 'hint'; h.style.gridColumn = '1 / -1'; h.textContent = 'Failed to load library'; el.appendChild(h); }
+          }
+        }
+
+        // Search/filter
+        (function() {
+          var searchInput = document.getElementById('librarySearch');
+          var debounceTimer = null;
+          if (searchInput) {
+            searchInput.addEventListener('input', function() {
+              clearTimeout(debounceTimer);
+              debounceTimer = setTimeout(function() {
+                var q = searchInput.value.trim().toLowerCase();
+                if (!q) { renderLibraryList(librarySounds); return; }
+                var filtered = librarySounds.filter(function(s) {
+                  return (s.name || '').toLowerCase().indexOf(q) !== -1 ||
+                         (s.ownerDisplayName || '').toLowerCase().indexOf(q) !== -1;
+                });
+                renderLibraryList(filtered);
+              }, 200);
+            });
+          }
+        })();
+
+        function stopLibraryPreview() {
+          if (libraryAudio) { libraryAudio.pause(); libraryAudio = null; }
+          if (libraryAudioUrl) { URL.revokeObjectURL(libraryAudioUrl); libraryAudioUrl = null; }
+          document.querySelectorAll('.library-card-preview span').forEach(function(el) { el.textContent = '\\u25B6'; });
+        }
+
+        function renderLibraryList(sounds) {
+          var listEl = document.getElementById('libraryList');
+          if (!listEl) return;
+          listEl.textContent = '';
+          if (!sounds.length) {
+            var empty = document.createElement('div');
+            empty.className = 'hint';
+            empty.style.gridColumn = '1 / -1';
+            empty.textContent = 'No shared sounds yet. Upload a sound and share it to see it here!';
+            listEl.appendChild(empty);
+            return;
+          }
+          sounds.forEach(function(s) {
+            var card = document.createElement('div');
+            card.className = 'library-card';
+
+            // Square thumbnail with preview overlay
+            var thumb = document.createElement('div');
+            thumb.className = 'library-card-thumb';
+            var thumbInner = document.createElement('div');
+            thumbInner.className = 'library-card-thumb-inner';
+            if (s.hasImage) {
+              var img = document.createElement('img');
+              img.src = API_BASE + '/library/' + encodeURIComponent(s.ownerUserId) + '/' + encodeURIComponent(s.id) + '/image';
+              img.alt = s.name;
+              img.onerror = function() { this.className = 'fallback'; this.src = '/assets/icons/megaphone.png'; };
+              thumbInner.appendChild(img);
+            } else {
+              var fallbackImg = document.createElement('img');
+              fallbackImg.className = 'fallback';
+              fallbackImg.src = '/assets/icons/megaphone.png';
+              fallbackImg.alt = '';
+              thumbInner.appendChild(fallbackImg);
+            }
+            thumb.appendChild(thumbInner);
+
+            // Preview play overlay
+            var previewOverlay = document.createElement('div');
+            previewOverlay.className = 'library-card-preview';
+            var playIcon = document.createElement('span');
+            playIcon.style.cssText = 'font-size:18px; color:#fff;';
+            playIcon.textContent = '\\u25B6';
+            previewOverlay.appendChild(playIcon);
+            previewOverlay.addEventListener('click', async function(e) {
+              e.stopPropagation();
+              var isPlaying = libraryAudio && playIcon.textContent === '\\u25A0';
+              stopLibraryPreview();
+              if (isPlaying) return;
+              try {
+                var r = await fetch(API_BASE + '/library/' + encodeURIComponent(s.ownerUserId) + '/' + encodeURIComponent(s.id) + '/preview');
+                if (!r.ok) throw new Error('Preview failed');
+                var blob = await r.blob();
+                libraryAudioUrl = URL.createObjectURL(blob);
+                libraryAudio = new Audio(libraryAudioUrl);
+                libraryAudio.volume = 0.5;
+                playIcon.textContent = '\\u25A0';
+                libraryAudio.onended = function() { playIcon.textContent = '\\u25B6'; };
+                libraryAudio.play();
+              } catch (e) {}
+            });
+            thumb.appendChild(previewOverlay);
+            card.appendChild(thumb);
+
+            // Sound name
+            var nameDiv = document.createElement('div');
+            nameDiv.className = 'library-card-name';
+            nameDiv.textContent = s.name;
+            nameDiv.title = s.name;
+            card.appendChild(nameDiv);
+
+            // Uploader name
+            var ownerDiv = document.createElement('div');
+            ownerDiv.className = 'library-card-owner';
+            ownerDiv.textContent = s.ownerDisplayName || 'Unknown';
+            card.appendChild(ownerDiv);
+
+            // Add button
+            var actions = document.createElement('div');
+            actions.className = 'library-card-actions';
+            var addBtn = document.createElement('button');
+            if (s.owned) {
+              addBtn.className = 'secondary';
+              addBtn.textContent = 'Added';
+              addBtn.disabled = true;
+              addBtn.style.opacity = '0.5';
+            } else {
+              addBtn.textContent = 'Add';
+            }
+            addBtn.addEventListener('click', async function() {
+              if (s.owned) return;
+              flashButton(addBtn);
+              setBusy(addBtn, true);
+              try {
+                var r = await fetch(API_BASE + '/library/add', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ ownerUserId: s.ownerUserId, soundId: s.id })
+                });
+                if (!r.ok) {
+                  var body = await r.json().catch(function() { return {}; });
+                  throw new Error(body.error || 'Failed to add');
+                }
+                s.owned = true;
+                addBtn.className = 'secondary';
+                addBtn.textContent = 'Added';
+                addBtn.style.opacity = '0.5';
+                addBtn.disabled = true;
+                await fetchSoundsAdmin();
+              } catch (err) {
+                addBtn.textContent = err.message || 'Error';
+                setTimeout(function() { addBtn.textContent = 'Add'; }, 2000);
+              }
+              setBusy(addBtn, false);
+            });
+            actions.appendChild(addBtn);
+            if (IS_SUPER_ADMIN) {
+              var delBtn = document.createElement('button');
+              delBtn.className = 'secondary';
+              delBtn.textContent = 'Delete';
+              delBtn.title = 'Remove from library (admin)';
+              delBtn.style.cssText = 'color:#ef4444; border-color:#ef4444;';
+              delBtn.addEventListener('click', async function() {
+                if (!confirm('Delete "' + s.name + '" from the library? This removes the sound from the uploader\\'s account permanently.')) return;
+                flashButton(delBtn);
+                setBusy(delBtn, true);
+                try {
+                  var r = await fetch('/api/sounds/library/' + encodeURIComponent(s.ownerUserId) + '/' + encodeURIComponent(s.id), { method: 'DELETE' });
+                  if (!r.ok) throw new Error('Delete failed');
+                  card.remove();
+                  librarySounds = librarySounds.filter(function(x) { return !(x.ownerUserId === s.ownerUserId && x.id === s.id); });
+                } catch (err) {
+                  delBtn.textContent = 'Error';
+                  setTimeout(function() { delBtn.textContent = 'Delete'; }, 2000);
+                }
+                setBusy(delBtn, false);
+              });
+              actions.appendChild(delBtn);
+            }
+            card.appendChild(actions);
+
+            listEl.appendChild(card);
           });
         }
 
@@ -947,7 +1205,8 @@ export function renderSoundConfigPage(options = {}) {
               name: nameInput.value,
               tier: tierSelect.value,
               volume: Number(volRange.value),
-              cooldownMs: Number(cdInput.value) * 1000
+              cooldownMs: Number(cdInput.value) * 1000,
+              shared: sharedCb.checked
             };
             if (s.type === 'clip') {
               var clipUrlInput = document.getElementById('editClipUrl_' + s.id);
@@ -974,10 +1233,20 @@ export function renderSoundConfigPage(options = {}) {
           btnRow.appendChild(saveBtn);
           btnRow.appendChild(cancelBtn);
 
+          // Share to Library checkbox
+          var sharedLabel = document.createElement('label');
+          sharedLabel.style.cssText = 'display:flex; align-items:center; gap:6px; font-size:13px;';
+          var sharedCb = document.createElement('input');
+          sharedCb.type = 'checkbox';
+          sharedCb.checked = !!s.shared;
+          sharedLabel.appendChild(sharedCb);
+          sharedLabel.appendChild(document.createTextNode('Share to Community Library'));
+
           form.appendChild(nameInput);
           form.appendChild(row);
           form.appendChild(cdLabel);
           form.appendChild(imageSection);
+          form.appendChild(sharedLabel);
 
           // Clip URL field (only for clip type)
           if (s.type === 'clip') {
@@ -1071,6 +1340,8 @@ export function renderSoundConfigPage(options = {}) {
               fd.append('name', (soundNameEl ? soundNameEl.value : '') || file.name.replace(/\\.[^.]+$/, ''));
               fd.append('tier', soundTierEl ? soundTierEl.value : '${DEFAULT_TIER}');
               fd.append('volume', soundUploadVolumeEl ? soundUploadVolumeEl.value : '80');
+              var shareEl = document.getElementById('soundShareToLibrary');
+              fd.append('shared', shareEl && shareEl.checked ? 'true' : 'false');
               var r = await fetch(API_BASE, { method: 'POST', body: fd });
               if (!r.ok) {
                 var body = await r.json().catch(function() { return {}; });
@@ -1117,6 +1388,7 @@ export function renderSoundConfigPage(options = {}) {
                   tier: clipTierEl ? clipTierEl.value : '${DEFAULT_TIER}',
                   volume: clipVolumeEl ? Number(clipVolumeEl.value) : 80,
                   audioOnly: Boolean(clipAudioOnlyEl && clipAudioOnlyEl.checked),
+                  shared: Boolean(document.getElementById('clipShareToLibrary') && document.getElementById('clipShareToLibrary').checked),
                 })
               });
               if (!r.ok) {
@@ -1160,6 +1432,8 @@ export function renderSoundConfigPage(options = {}) {
               fd.append('name', (videoNameEl ? videoNameEl.value : '') || file.name.replace(/\\.[^.]+$/, ''));
               fd.append('tier', videoTierEl ? videoTierEl.value : '${DEFAULT_TIER}');
               fd.append('volume', videoVolumeEl ? videoVolumeEl.value : '80');
+              var shareEl = document.getElementById('videoShareToLibrary');
+              fd.append('shared', shareEl && shareEl.checked ? 'true' : 'false');
               var r = await fetch(API_BASE + '/video', { method: 'POST', body: fd });
               if (!r.ok) {
                 var body = await r.json().catch(function() { return {}; });
@@ -1180,7 +1454,6 @@ export function renderSoundConfigPage(options = {}) {
         }
 
         // ===== TTS Settings =====
-        setupCollapsible('ttsToggle', 'ttsBody', 'ttsArrow', false);
 
         var ttsEnabledEl = document.getElementById('ttsEnabled');
         var ttsTierEl = document.getElementById('ttsTier');
@@ -1565,6 +1838,7 @@ export function renderSoundConfigPage(options = {}) {
 
         // Initial load
         fetchSoundsAdmin();
+        fetchLibrary();
         fetchTtsSettings();
         fetchAlertHistory();
         fetchOverlayStatus();
@@ -1575,6 +1849,10 @@ export function renderSoundConfigPage(options = {}) {
     <script>
       (function() {
         var TOUR_KEY = 'sounds_tour_seen';
+        function tourSwitchSection(s) {
+          document.querySelectorAll('.section-page').forEach(function(el) { el.classList.toggle('active', el.getAttribute('data-section') === s); });
+          document.querySelectorAll('.sidebar-nav-item').forEach(function(el) { el.classList.toggle('active', el.getAttribute('data-section') === s); });
+        }
         var tourSteps = [
           {
             element: '#copySoundUrl',
@@ -1585,19 +1863,11 @@ export function renderSoundConfigPage(options = {}) {
             }
           },
           {
-            element: '#settingsCard',
+            element: '.sidebar-nav',
             popover: {
-              title: 'Settings',
-              description: 'Toggle alerts on/off, set a cooldown between triggers, adjust global volume, and limit the queue size.',
-              side: 'bottom', align: 'center'
-            }
-          },
-          {
-            element: '#createAlertCard',
-            popover: {
-              title: 'Create Alert',
-              description: 'Upload a sound, paste a Twitch clip URL, or upload a video. Each alert gets its own Bits tier and volume.',
-              side: 'bottom', align: 'center'
+              title: 'Navigation',
+              description: 'Use the sidebar to switch between sections: Alerts, Create, Library, Settings, TTS, and History.',
+              side: 'right', align: 'start'
             }
           },
           {
@@ -1606,7 +1876,17 @@ export function renderSoundConfigPage(options = {}) {
               title: 'Your Alerts',
               description: 'All your alerts appear here. You can preview, edit, reorder, or delete them.',
               side: 'top', align: 'center'
-            }
+            },
+            onHighlightStarted: function() { tourSwitchSection('alerts'); }
+          },
+          {
+            element: '#createAlertCard',
+            popover: {
+              title: 'Create Alert',
+              description: 'Upload a sound, paste a Twitch clip URL, or upload a video. Each alert gets its own Bits tier and volume.',
+              side: 'bottom', align: 'center'
+            },
+            onHighlightStarted: function() { tourSwitchSection('create'); }
           },
           {
             element: '.ext-promo',

@@ -34,7 +34,21 @@ export function renderUtilitiesPage(options = {}) {
     <style>
       ${THEME_CSS_VARS}
       body { margin: 0; font-family: Inter, system-ui, Arial, sans-serif; background: var(--page-bg); color: var(--text-color); min-height: 100vh; display:flex; flex-direction: column; }
-      main { flex: 1; width: min(1100px, 100%); margin: 32px auto 48px; padding: 0 20px; }
+      main { flex: 1; width: min(1100px, 100%); margin: 32px auto 48px; padding: 0 20px; display: flex; gap: 24px; }
+      .sidebar { width: 200px; flex-shrink: 0; position: sticky; top: 32px; align-self: flex-start; }
+      .sidebar-nav { display: flex; flex-direction: column; gap: 2px; }
+      .sidebar-nav-item { display: flex; align-items: center; gap: 8px; padding: 10px 14px; border-radius: 8px; font-size: 14px; font-weight: 500; cursor: pointer; color: var(--text-muted); background: transparent; border: none; text-align: left; width: 100%; transition: background .15s, color .15s; font-family: inherit; }
+      .sidebar-nav-item:hover { background: var(--surface-color); color: var(--text-color); box-shadow: none; filter: none; }
+      .sidebar-nav-item.active { background: var(--accent-color); color: #fff; }
+      .content-area { flex: 1; min-width: 0; }
+      .section-page { display: none; }
+      .section-page.active { display: block; }
+      @media (max-width: 768px) {
+        main { flex-direction: column; }
+        .sidebar { width: 100%; position: static; }
+        .sidebar-nav { flex-direction: row; overflow-x: auto; gap: 4px; padding-bottom: 4px; }
+        .sidebar-nav-item { white-space: nowrap; padding: 8px 12px; font-size: 13px; }
+      }
       h1 { margin: 0 0 12px; font-size: 32px; }
       p.lead { margin: 0 0 32px; color: var(--text-muted); max-width: 760px; }
       .utilities-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 18px; align-items: start; }
@@ -113,12 +127,24 @@ export function renderUtilitiesPage(options = {}) {
       showLogout: true,
     })}
     <main>
+      <nav class="sidebar">
+        <div class="sidebar-nav">
+          <button class="sidebar-nav-item active" data-section="wheels">Wheels</button>
+          <button class="sidebar-nav-item" data-section="quick-tools">Quick Tools</button>
+        </div>
+      </nav>
+      <div class="content-area">
       <h1>Utilities lab</h1>
       <p class="lead">Lightweight, browser-friendly tools you can project to stream or pipe into a Browser Source.</p>
+
+      <div class="section-page active" data-section="wheels">
       <div class="wheels-section">
         <div id="wheelsContainer"></div>
         <button id="addWheelBtn" class="add-wheel-btn" type="button">+ Add wheel</button>
       </div>
+      </div>
+
+      <div class="section-page" data-section="quick-tools">
       <div class="secondary-tools">
         <h2>Quick tools</h2>
         <div class="utilities-grid">
@@ -154,15 +180,33 @@ export function renderUtilitiesPage(options = {}) {
           </section>
         </div>
       </div>
-      <footer class="global-footer">
-        <a href="${termsUrl}">Terms of Service</a>
-        <a href="${privacyUrl}">Privacy Policy</a>
-        <a href="${gdprUrl}">GDPR / UK GDPR Disclosure</a>
-        <a href="https://discord.gg/nwu4w5cUVd" target="_blank" rel="noopener noreferrer"><svg style="width:14px;height:14px;fill:currentColor;vertical-align:-2px;margin-right:3px" viewBox="0 0 127.14 96.36"><path d="M107.7 8.07A105.15 105.15 0 0 0 81.47 0a72.06 72.06 0 0 0-3.36 6.83 97.68 97.68 0 0 0-29.11 0A72.37 72.37 0 0 0 45.64 0 105.89 105.89 0 0 0 19.39 8.09C2.79 32.65-1.71 56.6.54 80.21a105.73 105.73 0 0 0 32.17 16.15 77.7 77.7 0 0 0 6.89-11.11 68.42 68.42 0 0 1-10.85-5.18c.91-.66 1.8-1.34 2.66-2.03a75.57 75.57 0 0 0 64.32 0c.87.71 1.76 1.39 2.66 2.03a68.68 68.68 0 0 1-10.87 5.19 77 77 0 0 0 6.89 11.1 105.25 105.25 0 0 0 32.19-16.14c2.64-27.38-4.51-51.11-18.9-72.15ZM42.45 65.69C36.18 65.69 31 60 31 53.05s5-12.68 11.45-12.68S54 46.09 53.89 53.05 48.84 65.69 42.45 65.69Zm42.24 0C78.41 65.69 73.25 60 73.25 53.05s5-12.68 11.44-12.68S96.23 46.09 96.12 53.05 91.08 65.69 84.69 65.69Z"/></svg>Discord</a>
-      </footer>
+      </div>
+
+      </div><!-- /content-area -->
     </main>
+    <footer class="global-footer">
+      <a href="${termsUrl}">Terms of Service</a>
+      <a href="${privacyUrl}">Privacy Policy</a>
+      <a href="${gdprUrl}">GDPR / UK GDPR Disclosure</a>
+      <a href="https://discord.gg/nwu4w5cUVd" target="_blank" rel="noopener noreferrer"><svg style="width:14px;height:14px;fill:currentColor;vertical-align:-2px;margin-right:3px" viewBox="0 0 127.14 96.36"><path d="M107.7 8.07A105.15 105.15 0 0 0 81.47 0a72.06 72.06 0 0 0-3.36 6.83 97.68 97.68 0 0 0-29.11 0A72.37 72.37 0 0 0 45.64 0 105.89 105.89 0 0 0 19.39 8.09C2.79 32.65-1.71 56.6.54 80.21a105.73 105.73 0 0 0 32.17 16.15 77.7 77.7 0 0 0 6.89-11.11 68.42 68.42 0 0 1-10.85-5.18c.91-.66 1.8-1.34 2.66-2.03a75.57 75.57 0 0 0 64.32 0c.87.71 1.76 1.39 2.66 2.03a68.68 68.68 0 0 1-10.87 5.19 77 77 0 0 0 6.89 11.1 105.25 105.25 0 0 0 32.19-16.14c2.64-27.38-4.51-51.11-18.9-72.15ZM42.45 65.69C36.18 65.69 31 60 31 53.05s5-12.68 11.45-12.68S54 46.09 53.89 53.05 48.84 65.69 42.45 65.69Zm42.24 0C78.41 65.69 73.25 60 73.25 53.05s5-12.68 11.44-12.68S96.23 46.09 96.12 53.05 91.08 65.69 84.69 65.69Z"/></svg>Discord</a>
+    </footer>
     <script>
       (function(){
+        // Sidebar section navigation
+        function switchSection(sectionId) {
+          document.querySelectorAll('.section-page').forEach(function(el) {
+            el.classList.toggle('active', el.getAttribute('data-section') === sectionId);
+          });
+          document.querySelectorAll('.sidebar-nav-item').forEach(function(el) {
+            el.classList.toggle('active', el.getAttribute('data-section') === sectionId);
+          });
+        }
+        document.querySelectorAll('.sidebar-nav-item').forEach(function(btn) {
+          btn.addEventListener('click', function() {
+            switchSection(btn.getAttribute('data-section'));
+          });
+        });
+
         var wheelOverlayBase = ${JSON.stringify(wheelOverlayBase)};
         var overlayShareKey = ${JSON.stringify(overlayKey)};
         var defaultColors = ['#9146FF','#F97316','#3B82F6','#10B981','#EC4899','#FCD34D'];

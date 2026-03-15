@@ -66,11 +66,13 @@ export function mountOverlayPageRoutes(app, deps) {
       req.session?.userOverlayKey || req.session?.twitchUser?.id || ""
     );
 
+    const superAdmin = isSuperAdmin(req);
     const html = renderSoundConfigPage({
       base: "",
       adminName,
       userKey,
-      showAdminLink: isSuperAdmin(req),
+      showAdminLink: superAdmin,
+      isSuperAdmin: superAdmin,
     });
 
     res.setHeader("Content-Type", "text/html; charset=utf-8");

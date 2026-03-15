@@ -12,7 +12,7 @@ import { renderFirebaseScript } from "./firebase.js";
 export function renderTermsPage(options = {}) {
   const base = String(options.base || "");
   const contactEmail = String(options.contactEmail || "help@darkfoxdev.com");
-  const lastUpdated = String(options.lastUpdated || "March 5, 2026");
+  const lastUpdated = String(options.lastUpdated || "March 13, 2026");
 
   const privacyUrl = `${base}/privacy`;
   const homeUrl = base ? `${base}/` : "/";
@@ -81,7 +81,23 @@ export function renderTermsPage(options = {}) {
       </ul>
 
       <h2>4. User content</h2>
-      <p>You retain ownership of content you upload to the Service (sound files, video clips, overlay configurations). By uploading content, you grant us a limited, non-exclusive license to store, process, and serve that content solely for the purpose of operating the Service. You represent that you have the right to upload any content you provide and that it does not infringe on the rights of any third party.</p>
+      <p>You retain ownership of content you upload to the Service (sound files, video clips, overlay configurations). By uploading content, you grant us a limited, non-exclusive license to store, process, and serve that content solely for the purpose of operating the Service. You represent and warrant that you own or have obtained all necessary rights, licenses, and permissions to upload any content you provide and that it does not infringe on the intellectual property or other rights of any third party.</p>
+
+      <h2>4a. Community Library and shared content</h2>
+      <p>The Service includes a Community Library feature that allows users to share uploaded sound alerts with other broadcasters. By opting in to share content through the Community Library, you grant an additional non-exclusive license for that content to be browsed, previewed, and copied by other users of the Service for use in their own broadcasts. You may withdraw content from the Community Library at any time by disabling sharing on individual alerts.</p>
+      <p>Livestreamer Hub does not pre-screen, endorse, or assume responsibility for any user-uploaded content made available through the Community Library or any other part of the Service. All content is provided by users and remains the sole responsibility of the person who uploaded it. We make no guarantees regarding the legality, accuracy, quality, or appropriateness of any user-submitted content.</p>
+      <p>We reserve the right to remove any content from the Service at any time and without prior notice if we determine, in our sole discretion, that it is inappropriate, offensive, or otherwise in violation of these Terms, applicable law, or Twitch's Community Guidelines.</p>
+
+      <h2>4b. Copyright and DMCA takedown requests</h2>
+      <p>If you believe that content available through the Service infringes on your copyright or other intellectual property rights, you may submit a takedown request by contacting us at <a href="mailto:${contactEmail}">${contactEmail}</a>. Please include:</p>
+      <ul>
+        <li>A description of the copyrighted work you claim has been infringed.</li>
+        <li>A description of the content you believe is infringing and its location within the Service (if known).</li>
+        <li>Your contact information (name, email address, and, if applicable, mailing address and phone number).</li>
+        <li>A statement that you have a good-faith belief that the use of the material is not authorized by the copyright owner, its agent, or the law.</li>
+        <li>A statement, under penalty of perjury, that the information in your notice is accurate and that you are the copyright owner or authorized to act on the owner&rsquo;s behalf.</li>
+      </ul>
+      <p>Upon receipt of a valid takedown request, we will promptly remove or disable access to the identified content and make reasonable efforts to notify the user who uploaded it.</p>
 
       <h2>5. Subscriptions and payments</h2>
       <p>Certain features of the Service require a paid Pro subscription. Payments are processed by Stripe. Subscription terms, pricing, and billing cycles are presented at the time of purchase. Unless otherwise stated:</p>

@@ -2,4 +2,7 @@ node_modules
 npm-debug.log
 *.log
 overlay-*.json
+twitch-tokens.enc.json
+user-profiles.json
+*.enc.json
 

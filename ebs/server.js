@@ -1237,10 +1237,10 @@ function secondsFromEvent(notification, uid = "default") {
       const tier = e.tier || "1000";
       return RULES.sub[tier] || RULES.sub["1000"];
     }
-    case "channel.subscription.message": {
-      if (e.is_gift || e.was_gift) return 0;
-      return RULES.resub.base_seconds;
-    }
+    case "channel.subscription.message":
+      // Handled earlier in handleEventSub — logged but skipped for timer math
+      // to avoid double-counting with channel.subscribe.
+      return 0;
     case "channel.subscription.gift": {
       // For gift subs, use the per-event total (number of subs in this gift).
       // Do not use lifetime cumulative totals, or we will miscount.
@@ -1345,6 +1345,29 @@ async function handleEventSub(notification, expectedUserId = null) {
       allTimeHighTotal: e.all_time_high_total ?? null,
       sharedTrainParticipants: e.shared_train_participants?.length ?? null,
     });
+  }
+
+  // ---- Sub dedup: channel.subscribe vs channel.subscription.message ----
+  // Twitch fires channel.subscribe for ALL subs (new + resub). It also fires
+  // channel.subscription.message when a resub includes a chat message, which
+  // would cause double time. We ignore subscription.message for timer math
+  // and only use channel.subscribe. We still log the message event.
+  const skipTimer = subType === "channel.subscription.message";
+
+  if (skipTimer) {
+    // Log the resub message but don't add time (channel.subscribe already did)
+    addLogEntry({
+      type: subType,
+      baseSeconds: 0,
+      appliedSeconds: 0,
+      actualSeconds: 0,
+      subTier: e.tier,
+      userId: timerUid,
+      userName: e.is_anonymous ? "Anonymous" : (e.user_name || e.user_login || undefined),
+      isAnonymous: e.is_anonymous || false,
+      label: "resub message (no time added — already counted by channel.subscribe)",
+    });
+    return;
   }
 
   const baseSeconds = secondsFromEvent(notification, timerUid);

@@ -27,7 +27,8 @@
       "Bash(node -e \"require\\(''./ebs/views/soundConfigPage.js''\\)\")",
       "Bash(node -e \"require\\(''./ebs/routes_sounds.js''\\)\")",
       "Bash(node -e \"require\\(''./ebs/routes_overlay_page.js''\\)\")",
-      "Bash(node -e \"require\\(''./ebs/routes_admin.js''\\)\")"
+      "Bash(node -e \"require\\(''./ebs/routes_admin.js''\\)\")",
+      "WebSearch"
     ]
   }
 }

@@ -1239,7 +1239,8 @@ function secondsFromEvent(notification, uid = "default") {
     }
     case "channel.subscription.message": {
       if (e.is_gift || e.was_gift) return 0;
-      return RULES.resub?.base_seconds || RULES.sub?.["1000"] || 0;
+      const resubTier = e.tier || "1000";
+      return RULES.sub[resubTier] || RULES.resub?.base_seconds || RULES.sub["1000"] || 0;
     }
     case "channel.subscription.gift": {
       // For gift subs, use the per-event total (number of subs in this gift).

@@ -1021,8 +1021,9 @@ export function renderAdminDashboardPage(options = {}) {
 
           if (src === 'sound_alert') {
             var snd = e.soundName || 'Sound';
-            var viewer = e.viewerUserId ? ' by ' + e.viewerUserId : '';
-            return { type: 'Sound Alert', detail: snd + viewer, color: '#9146ff', seconds: null };
+            var viewer = (e.viewerDisplayName || e.viewerUserId) ? ' by ' + (e.viewerDisplayName || e.viewerUserId) : '';
+            var bitsNote = e.bitsAmount ? ' (' + e.bitsAmount + ' bits' + (e.secondsAdded ? ', +' + e.secondsAdded + 's' : '') + ')' : '';
+            return { type: 'Sound Alert', detail: snd + viewer + bitsNote, color: '#9146ff', seconds: null };
           }
           if (src === 'tts_alert') {
             var ttsBy = e.viewerDisplayName || '';
@@ -1046,8 +1047,10 @@ export function renderAdminDashboardPage(options = {}) {
             detail = (who || 'Someone') + ' donated' + amtStr;
           } else if (src === 'streamelements_tip') {
             var tipAmt = Number(e.tipAmount || 0);
-            if (tipAmt > 0) detail = (e.tipUsername || 'Anon') + ' tipped $' + tipAmt.toFixed(2);
-            else detail = 'SE Tip';
+            if (tipAmt > 0) {
+              var tipSymbol = e.tipCurrency ? (new Intl.NumberFormat('en', { style: 'currency', currency: e.tipCurrency }).formatToParts(0).find(function(p) { return p.type === 'currency'; }) || {}).value || e.tipCurrency : '$';
+              detail = (e.tipUsername || 'Anon') + ' tipped ' + tipSymbol + tipAmt.toFixed(2);
+            } else detail = 'SE Tip';
           } else if (src === 'channel.follow') {
             detail = (who || 'Someone') + ' followed';
           } else if (src === 'channel.hype_train.begin') {

@@ -905,7 +905,7 @@ mountSoundRoutes(app, {
   getSessionUserId: (req) => req.session?.twitchUser?.id,
   getUserIdForKey,
   onSoundAlert: ({ channelId, soundId, soundName, tier, txId, viewerUserId, type, clipSlug, volume }) => {
-    addLogEntry({
+    const logEntry = addLogEntry({
       type: "sound_alert",
       userId: String(channelId),
       soundId,
@@ -948,6 +948,7 @@ mountSoundRoutes(app, {
     if (tier) {
       const bits = Number(tier.replace("sound_", "")) || 0;
       if (bits > 0) {
+        logEntry.bitsAmount = bits;
         const timerUid = String(channelId);
         const RULES = getRules(timerUid);
         const per = Math.max(1, Number(RULES.bits?.per || 0));
@@ -961,17 +962,19 @@ mountSoundRoutes(app, {
           if (units > 0) {
             const secs = units * addSec;
             addSeconds(timerUid, secs);
+            logEntry.secondsAdded = secs;
             logger.info("bits_in_ext_timer_add", { userId: timerUid, bits, seconds: secs, source: "sound_alert" });
           }
         }
       }
     }
 
-    // Post to chat (async, best-effort)
+    // Post to chat (async, best-effort) — also backfill display name on the log entry
     if (viewerUserId && tier) {
       const bits = tier.replace("sound_", "");
       (async () => {
         const displayName = await fetchUserDisplayName(viewerUserId);
+        if (displayName) logEntry.viewerDisplayName = displayName;
         const who = displayName || `User ${viewerUserId}`;
         await sendExtensionChatMessage({
           broadcasterId: channelId,
@@ -1207,6 +1210,75 @@ app.delete("/api/account", async (req, res) => {
   res.json({ ok: true, userId: uid, deleted: result.deleted });
 });
 
+// ---- Chat command ----
+const chatCommandCooldowns = new Map(); // broadcasterId -> lastFiredEpochMs
+
+function fmtSecs(s) {
+  const n = Number(s) || 0;
+  if (n >= 3600) return (n / 3600).toFixed(1).replace(/\.0$/, "") + "h";
+  if (n >= 60) return Math.round(n / 60) + "m";
+  return n + "s";
+}
+
+function buildRulesSummary(rules) {
+  const parts = [];
+  if (rules.bits?.add_seconds > 0) {
+    parts.push(`${rules.bits.per} bits=+${fmtSecs(rules.bits.add_seconds)}`);
+  }
+  if (rules.sub) {
+    if (rules.sub["1000"] > 0) parts.push(`T1 Sub +${fmtSecs(rules.sub["1000"])}`);
+    if (rules.sub["2000"] > 0) parts.push(`T2 Sub +${fmtSecs(rules.sub["2000"])}`);
+    if (rules.sub["3000"] > 0) parts.push(`T3 Sub +${fmtSecs(rules.sub["3000"])}`);
+  }
+  if (rules.resub?.base_seconds > 0) {
+    parts.push(`Resub +${fmtSecs(rules.resub.base_seconds)}`);
+  }
+  if (rules.gift_sub) {
+    if (rules.gift_sub.matchSubTiers) {
+      parts.push("Gift subs match sub tiers");
+    } else {
+      if (rules.gift_sub["1000"] > 0) parts.push(`T1 Gift +${fmtSecs(rules.gift_sub["1000"])}`);
+      if (rules.gift_sub["2000"] > 0) parts.push(`T2 Gift +${fmtSecs(rules.gift_sub["2000"])}`);
+      if (rules.gift_sub["3000"] > 0) parts.push(`T3 Gift +${fmtSecs(rules.gift_sub["3000"])}`);
+    }
+  }
+  if (rules.charity?.per_usd > 0) {
+    parts.push(`$1 charity=+${fmtSecs(rules.charity.per_usd)}`);
+  }
+  if (rules.thirdPartyTip?.per_unit > 0) {
+    const min = rules.thirdPartyTip.min_amount > 0 ? `$${rules.thirdPartyTip.min_amount}+` : "$1+";
+    parts.push(`Tips ${min}=+${fmtSecs(rules.thirdPartyTip.per_unit)}`);
+  }
+  if (rules.follow?.enabled && rules.follow?.add_seconds > 0) {
+    parts.push(`Follow +${fmtSecs(rules.follow.add_seconds)}`);
+  }
+  const text = "Timer Rules: " + (parts.length ? parts.join(" | ") : "No rules configured");
+  return text.slice(0, 500);
+}
+
+async function handleChatCommand(event, broadcasterId) {
+  const text = (event.message?.text || "").trim();
+  if (!text.startsWith("!")) return;
+
+  const rules = getRules(broadcasterId);
+  const cmd = rules.chatCommand;
+  if (!cmd?.enabled || !cmd?.command) return;
+
+  const expectedCommand = ("!" + cmd.command).toLowerCase();
+  // Allow the command with or without trailing spaces/args
+  const msgLower = text.toLowerCase();
+  if (msgLower !== expectedCommand && !msgLower.startsWith(expectedCommand + " ")) return;
+
+  const cooldownMs = Math.max(0, Number(cmd.cooldownSeconds) || 30) * 1000;
+  const now = Date.now();
+  const lastAt = chatCommandCooldowns.get(broadcasterId) || 0;
+  if (cooldownMs > 0 && now - lastAt < cooldownMs) return;
+  chatCommandCooldowns.set(broadcasterId, now);
+
+  const summary = buildRulesSummary(rules);
+  sendExtensionChatMessage({ broadcasterId, text: summary }).catch(() => {});
+}
+
 // ---- EventSub integration ----
 function secondsFromEvent(notification, uid = "default") {
   const subType = notification?.payload?.subscription?.type;
@@ -1376,6 +1448,11 @@ async function handleEventSub(notification, expectedUserId = null) {
       pendingSubscribes.delete(dedupKey);
       logger.info("sub_dedup_cancelled", { broadcasterId: timerUid, userId: subUserId });
     }
+  }
+
+  if (subType === "channel.chat.message") {
+    await handleChatCommand(e, timerUid);
+    return;
   }
 
   processEventTimer(notification, timerUid, id, now);

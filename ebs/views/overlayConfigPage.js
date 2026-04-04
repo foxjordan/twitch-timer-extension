@@ -471,6 +471,29 @@ export function renderOverlayConfigPage(options = {}) {
                 <div class="hint" style="margin-top:6px;">Tip time is calculated using your 3rd Party Tip rules above (per-unit seconds and minimum amount).</div>
         </div>
       </div><!-- end streamelements panel -->
+
+      <div class="panel" style="margin-top:16px;">
+        <div style="padding: 12px; font-size: 15px; font-weight: 600;">Chat Command</div>
+        <div style="padding: 0 12px 12px;">
+          <p class="hint" style="margin-bottom:12px;">Let viewers type a command in chat to have the bot post the current timer rules. Requires re-authorizing if you haven't done so since this feature was added.</p>
+          <div class="control">
+            <label style="display:flex; gap:6px; align-items:center;"><input id="r_cmd_enabled" type="checkbox" /> Enable chat command</label>
+          </div>
+          <div class="control">
+            <label>Command</label>
+            <div style="display:flex; align-items:center;">
+              <span style="padding:0 8px; background:rgba(255,255,255,0.07); border:1px solid rgba(255,255,255,0.15); border-right:none; border-radius:6px 0 0 6px; line-height:32px; font-size:14px; user-select:none;">!</span>
+              <input id="r_cmd_word" type="text" placeholder="timerules" style="border-radius:0 6px 6px 0; flex:1;" />
+            </div>
+            <div class="hint" style="margin-top:4px;">Viewers will type <span id="r_cmd_preview" style="font-family:monospace;">!timerules</span> in chat.</div>
+          </div>
+          <div class="control">
+            <label>Cooldown (seconds)</label>
+            <input id="r_cmd_cooldown" type="number" min="0" step="1" value="30" style="max-width:140px;" />
+          </div>
+          <div class="row2"><button id="saveChatCmd">Save</button></div>
+        </div>
+      </div><!-- end chat command panel -->
       </div><!-- end rules section-page -->
 
       <div class="section-page" data-section="log-debug">
@@ -664,8 +687,10 @@ export function renderOverlayConfigPage(options = {}) {
               detail = (who || 'Someone') + ' donated' + amtStr;
             } else if (src === 'streamelements_tip') {
               var tipAmt = Number(e.tipAmount || 0);
-              if (tipAmt > 0) detail = (e.tipUsername || 'Anon') + ' tipped $' + tipAmt.toFixed(2);
-              else detail = 'SE Tip';
+              if (tipAmt > 0) {
+                var tipSymbol = e.tipCurrency ? (new Intl.NumberFormat('en', { style: 'currency', currency: e.tipCurrency }).formatToParts(0).find(function(p) { return p.type === 'currency'; }) || {}).value || e.tipCurrency : '$';
+                detail = (e.tipUsername || 'Anon') + ' tipped ' + tipSymbol + tipAmt.toFixed(2);
+              } else detail = 'SE Tip';
             } else if (src === 'channel.follow') {
               detail = (who || 'Someone') + ' followed';
             } else if (src === 'channel.hype_train.begin') {
@@ -678,9 +703,11 @@ export function renderOverlayConfigPage(options = {}) {
               detail = label || (e.source || 'Manual');
             } else if (src === 'sound_alert') {
               var snd = e.soundName || 'Sound';
-              var viewer = e.viewerUserId ? ' (user ' + escHtml(e.viewerUserId) + ')' : '';
+              var viewerName = e.viewerDisplayName || e.viewerUserId || '';
+              var viewer = viewerName ? ' by ' + escHtml(viewerName) : '';
+              var bitsNote = e.bitsAmount ? ' (' + e.bitsAmount + ' bits' + (e.secondsAdded ? ', +' + e.secondsAdded + 's' : '') + ')' : '';
               return '<div class="log-line"><span class="log-time">' + tStr + '</span><span class="log-text" style="color:#9146FF">' +
-                'Sound Alert – ' + escHtml(snd) + viewer +
+                'Sound Alert – ' + escHtml(snd) + viewer + escHtml(bitsNote) +
                 '</span></div>';
             }
             var hypeInfo = hype !== 1 ? (' (base ' + base + 's ×' + hype + ')') : '';
@@ -1203,6 +1230,16 @@ export function renderOverlayConfigPage(options = {}) {
               if (document.getElementById('r_bonus')) document.getElementById('r_bonus').value = rr.bonusTime.multiplier ?? 2;
               if (document.getElementById('r_bonus_stack')) document.getElementById('r_bonus_stack').checked = Boolean(rr.bonusTime.stackWithHype);
             }
+            if (rr && rr.chatCommand) {
+              var cmdEnabled = document.getElementById('r_cmd_enabled');
+              var cmdWord = document.getElementById('r_cmd_word');
+              var cmdCooldown = document.getElementById('r_cmd_cooldown');
+              if (cmdEnabled) cmdEnabled.checked = Boolean(rr.chatCommand.enabled);
+              if (cmdWord) cmdWord.value = rr.chatCommand.command || 'timerules';
+              if (cmdCooldown) cmdCooldown.value = rr.chatCommand.cooldownSeconds ?? 30;
+              var preview = document.getElementById('r_cmd_preview');
+              if (preview) preview.textContent = '!' + (rr.chatCommand.command || 'timerules');
+            }
           } catch (e) {}
         }).catch(function(){});
 
@@ -1233,7 +1270,38 @@ export function renderOverlayConfigPage(options = {}) {
           try { await fetch('/api/rules', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }); } catch(e) {}
         });
 
-        // (rules UI removed)
+        // ---- Chat command UI ----
+        (function initChatCmd() {
+          var cmdWord = document.getElementById('r_cmd_word');
+          var cmdPreview = document.getElementById('r_cmd_preview');
+
+          // Strip any leading ! the streamer types and update the preview
+          if (cmdWord) {
+            cmdWord.addEventListener('input', function() {
+              cmdWord.value = cmdWord.value.replace(/^!+/, '');
+              if (cmdPreview) cmdPreview.textContent = '!' + (cmdWord.value || 'timerules');
+            });
+          }
+
+          var saveChatCmd = document.getElementById('saveChatCmd');
+          if (saveChatCmd) {
+            saveChatCmd.addEventListener('click', async function(e) {
+              e.preventDefault();
+              var enabled = Boolean((document.getElementById('r_cmd_enabled') || {}).checked);
+              var command = (cmdWord ? cmdWord.value.trim() : '') || 'timerules';
+              var cooldownSeconds = Number((document.getElementById('r_cmd_cooldown') || {}).value || 30);
+              try {
+                await fetch('/api/rules', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ chatCommand: { enabled, command, cooldownSeconds } })
+                });
+                saveChatCmd.textContent = 'Saved!';
+                setTimeout(function() { saveChatCmd.textContent = 'Save'; }, 2000);
+              } catch(e) {}
+            });
+          }
+        })();
 
         // ---- StreamElements connection UI ----
         (function initSE() {

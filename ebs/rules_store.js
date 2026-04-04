@@ -65,6 +65,14 @@ function mergeRules(base, patch = {}) {
       min_amount: numberOr(next.thirdPartyTip?.min_amount ?? 1, patch.thirdPartyTip.min_amount, 0)
     };
   }
+  if (patch.chatCommand) {
+    const rawCmd = typeof patch.chatCommand.command === 'string' ? patch.chatCommand.command.trim().replace(/^!+/, '') : null;
+    next.chatCommand = {
+      enabled: (typeof patch.chatCommand.enabled === 'boolean') ? patch.chatCommand.enabled : (next.chatCommand?.enabled ?? false),
+      command: rawCmd !== null ? rawCmd : (next.chatCommand?.command ?? 'timerules'),
+      cooldownSeconds: numberOr(next.chatCommand?.cooldownSeconds ?? 30, patch.chatCommand.cooldownSeconds, 0),
+    };
+  }
   return next;
 }
 

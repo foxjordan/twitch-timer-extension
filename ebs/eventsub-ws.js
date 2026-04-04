@@ -61,7 +61,8 @@ export async function connectEventSubWS({
         { type: 'channel.hype_train.begin', version: '2' },
         { type: 'channel.hype_train.progress', version: '2' },
         { type: 'channel.hype_train.end', version: '2' },
-        { type: 'channel.follow', version: '2' }
+        { type: 'channel.follow', version: '2' },
+        { type: 'channel.chat.message', version: '1' },
       ];
 
       for (const { type, version } of wants) {
@@ -73,6 +74,9 @@ export async function connectEventSubWS({
           };
           if (type === 'channel.follow') {
             body.condition = { broadcaster_user_id: broadcasterId, moderator_user_id: broadcasterId };
+          }
+          if (type === 'channel.chat.message') {
+            body.condition = { broadcaster_user_id: broadcasterId, user_id: broadcasterId };
           }
           const r = await fetch('https://api.twitch.tv/helix/eventsub/subscriptions', {
             method: 'POST',

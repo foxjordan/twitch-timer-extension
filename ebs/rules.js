@@ -8,5 +8,5 @@ export const RULES = {
   bonusTime: { multiplier: 2.0, stackWithHype: false }, // manual bonus multiplier
   follow: { enabled: false, add_seconds: 600 },       // optional: follow -> +10 min
   thirdPartyTip: { per_unit: 60, min_amount: 1 },     // 1.00 donated -> +60s, min 1.00 to trigger
-  chatCommand: { enabled: false, command: 'timerules', cooldownSeconds: 30 }, // viewers run !timerules to see rules in chat
+  chatCommand: { enabled: false, command: 'timerules', cooldownSeconds: 30, customMessage: '' }, // viewers run !timerules to see rules in chat
 };

@@ -1256,6 +1256,27 @@ function buildRulesSummary(rules) {
   return text.slice(0, 500);
 }
 
+function applyCustomMessage(template, rules) {
+  const r = rules;
+  const vars = {
+    bits_per:    String(r.bits?.per ?? 100),
+    bits_add:    fmtSecs(r.bits?.add_seconds ?? 0),
+    t1_sub:      fmtSecs(r.sub?.["1000"] ?? 0),
+    t2_sub:      fmtSecs(r.sub?.["2000"] ?? 0),
+    t3_sub:      fmtSecs(r.sub?.["3000"] ?? 0),
+    resub:       fmtSecs(r.resub?.base_seconds ?? 0),
+    t1_gift:     fmtSecs(r.gift_sub?.["1000"] ?? 0),
+    t2_gift:     fmtSecs(r.gift_sub?.["2000"] ?? 0),
+    t3_gift:     fmtSecs(r.gift_sub?.["3000"] ?? 0),
+    charity_per: fmtSecs(r.charity?.per_usd ?? 0),
+    tip_per:     fmtSecs(r.thirdPartyTip?.per_unit ?? 0),
+    tip_min:     String(r.thirdPartyTip?.min_amount ?? 1),
+    follow:      fmtSecs(r.follow?.add_seconds ?? 0),
+    hype_mult:   String(r.hypeTrain?.multiplier ?? 1),
+  };
+  return template.replace(/\{(\w+)\}/g, (match, key) => vars[key] ?? match).slice(0, 500);
+}
+
 async function handleChatCommand(event, broadcasterId) {
   const text = (event.message?.text || "").trim();
   if (!text.startsWith("!")) return;
@@ -1275,8 +1296,10 @@ async function handleChatCommand(event, broadcasterId) {
   if (cooldownMs > 0 && now - lastAt < cooldownMs) return;
   chatCommandCooldowns.set(broadcasterId, now);
 
-  const summary = buildRulesSummary(rules);
-  sendExtensionChatMessage({ broadcasterId, text: summary }).catch(() => {});
+  const message = cmd.customMessage?.trim()
+    ? applyCustomMessage(cmd.customMessage, rules)
+    : buildRulesSummary(rules);
+  sendExtensionChatMessage({ broadcasterId, text: message }).catch(() => {});
 }
 
 // ---- EventSub integration ----

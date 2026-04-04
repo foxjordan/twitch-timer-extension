@@ -71,6 +71,7 @@ function mergeRules(base, patch = {}) {
       enabled: (typeof patch.chatCommand.enabled === 'boolean') ? patch.chatCommand.enabled : (next.chatCommand?.enabled ?? false),
       command: rawCmd !== null ? rawCmd : (next.chatCommand?.command ?? 'timerules'),
       cooldownSeconds: numberOr(next.chatCommand?.cooldownSeconds ?? 30, patch.chatCommand.cooldownSeconds, 0),
+      customMessage: (typeof patch.chatCommand.customMessage === 'string') ? patch.chatCommand.customMessage.slice(0, 500) : (next.chatCommand?.customMessage ?? ''),
     };
   }
   return next;

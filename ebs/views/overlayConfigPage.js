@@ -491,6 +491,11 @@ export function renderOverlayConfigPage(options = {}) {
             <label>Cooldown (seconds)</label>
             <input id="r_cmd_cooldown" type="number" min="0" step="1" value="30" style="max-width:140px;" />
           </div>
+          <div class="control">
+            <label>Custom message <span style="font-weight:400; opacity:.65;">(optional — leave blank to use the default)</span></label>
+            <textarea id="r_cmd_custom" rows="3" maxlength="500" placeholder="Leave blank for the auto-generated summary, or write your own here." style="width:100%; resize:vertical; padding:6px 8px; border-radius:6px; border:1px solid rgba(255,255,255,0.15); background:rgba(255,255,255,0.05); color:inherit; font-family:inherit; font-size:13px; box-sizing:border-box;"></textarea>
+            <div class="hint" style="margin-top:4px;">Available variables: <span style="font-family:monospace;">{bits_per} {bits_add} {t1_sub} {t2_sub} {t3_sub} {resub} {t1_gift} {t2_gift} {t3_gift} {charity_per} {tip_per} {tip_min} {follow} {hype_mult}</span></div>
+          </div>
           <div class="row2"><button id="saveChatCmd">Save</button></div>
         </div>
       </div><!-- end chat command panel -->
@@ -1234,9 +1239,11 @@ export function renderOverlayConfigPage(options = {}) {
               var cmdEnabled = document.getElementById('r_cmd_enabled');
               var cmdWord = document.getElementById('r_cmd_word');
               var cmdCooldown = document.getElementById('r_cmd_cooldown');
+              var cmdCustom = document.getElementById('r_cmd_custom');
               if (cmdEnabled) cmdEnabled.checked = Boolean(rr.chatCommand.enabled);
               if (cmdWord) cmdWord.value = rr.chatCommand.command || 'timerules';
               if (cmdCooldown) cmdCooldown.value = rr.chatCommand.cooldownSeconds ?? 30;
+              if (cmdCustom) cmdCustom.value = rr.chatCommand.customMessage || '';
               var preview = document.getElementById('r_cmd_preview');
               if (preview) preview.textContent = '!' + (rr.chatCommand.command || 'timerules');
             }
@@ -1290,11 +1297,12 @@ export function renderOverlayConfigPage(options = {}) {
               var enabled = Boolean((document.getElementById('r_cmd_enabled') || {}).checked);
               var command = (cmdWord ? cmdWord.value.trim() : '') || 'timerules';
               var cooldownSeconds = Number((document.getElementById('r_cmd_cooldown') || {}).value || 30);
+              var customMessage = (document.getElementById('r_cmd_custom') || {}).value || '';
               try {
                 await fetch('/api/rules', {
                   method: 'POST',
                   headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({ chatCommand: { enabled, command, cooldownSeconds } })
+                  body: JSON.stringify({ chatCommand: { enabled, command, cooldownSeconds, customMessage } })
                 });
                 saveChatCmd.textContent = 'Saved!';
                 setTimeout(function() { saveChatCmd.textContent = 'Save'; }, 2000);

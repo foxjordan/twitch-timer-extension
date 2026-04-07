@@ -494,7 +494,34 @@ export function renderOverlayConfigPage(options = {}) {
           <div class="control">
             <label>Custom message <span style="font-weight:400; opacity:.65;">(optional — leave blank to use the default)</span></label>
             <textarea id="r_cmd_custom" rows="3" maxlength="500" placeholder="Leave blank for the auto-generated summary, or write your own here." style="width:100%; resize:vertical; padding:6px 8px; border-radius:6px; border:1px solid rgba(255,255,255,0.15); background:rgba(255,255,255,0.05); color:inherit; font-family:inherit; font-size:13px; box-sizing:border-box;"></textarea>
-            <div class="hint" style="margin-top:4px;">Available variables: <span style="font-family:monospace;">{bits_per} {bits_add} {t1_sub} {t2_sub} {t3_sub} {resub} {t1_gift} {t2_gift} {t3_gift} {charity_per} {tip_per} {tip_min} {follow} {hype_mult}</span></div>
+            <div style="margin-top:8px;">
+              <div class="hint" style="margin-bottom:6px;">Available variables — hover any tag to see its description and current value:</div>
+              <div id="cmdVarGrid" style="display:flex; flex-wrap:wrap; gap:5px; position:relative;">
+                <style>
+                  .cmd-var { display:inline-flex; align-items:center; font-family:monospace; font-size:12px; background:rgba(145,70,255,0.15); border:1px solid rgba(145,70,255,0.35); border-radius:4px; padding:2px 7px; cursor:default; position:relative; }
+                  .cmd-var:hover { background:rgba(145,70,255,0.28); border-color:rgba(145,70,255,0.6); }
+                  .cmd-var-tip { display:none; position:absolute; bottom:calc(100% + 6px); left:50%; transform:translateX(-50%); background:#1e1e28; border:1px solid rgba(145,70,255,0.5); border-radius:7px; padding:8px 11px; min-width:210px; max-width:270px; z-index:99; pointer-events:none; box-shadow:0 4px 18px rgba(0,0,0,0.5); }
+                  .cmd-var:hover .cmd-var-tip { display:block; }
+                  .cmd-var-tip-name { font-size:13px; font-weight:600; color:#c084fc; margin-bottom:3px; }
+                  .cmd-var-tip-desc { font-size:12px; color:#ccc; line-height:1.45; margin-bottom:5px; font-family:sans-serif; }
+                  .cmd-var-tip-val { font-size:11px; color:#a3e635; background:rgba(163,230,53,0.1); border-radius:4px; padding:2px 6px; font-family:monospace; }
+                </style>
+                <span class="cmd-var">{bits_per}<span class="cmd-var-tip"><div class="cmd-var-tip-name">{bits_per}</div><div class="cmd-var-tip-desc">Minimum bits needed to trigger the timer.</div><div class="cmd-var-tip-val" data-var="bits_per">—</div></span></span>
+                <span class="cmd-var">{bits_add}<span class="cmd-var-tip"><div class="cmd-var-tip-name">{bits_add}</div><div class="cmd-var-tip-desc">Time added per bits trigger (e.g. 1m, 30s).</div><div class="cmd-var-tip-val" data-var="bits_add">—</div></span></span>
+                <span class="cmd-var">{t1_sub}<span class="cmd-var-tip"><div class="cmd-var-tip-name">{t1_sub}</div><div class="cmd-var-tip-desc">Time added for a Tier 1 subscriber.</div><div class="cmd-var-tip-val" data-var="t1_sub">—</div></span></span>
+                <span class="cmd-var">{t2_sub}<span class="cmd-var-tip"><div class="cmd-var-tip-name">{t2_sub}</div><div class="cmd-var-tip-desc">Time added for a Tier 2 subscriber.</div><div class="cmd-var-tip-val" data-var="t2_sub">—</div></span></span>
+                <span class="cmd-var">{t3_sub}<span class="cmd-var-tip"><div class="cmd-var-tip-name">{t3_sub}</div><div class="cmd-var-tip-desc">Time added for a Tier 3 subscriber.</div><div class="cmd-var-tip-val" data-var="t3_sub">—</div></span></span>
+                <span class="cmd-var">{resub}<span class="cmd-var-tip"><div class="cmd-var-tip-name">{resub}</div><div class="cmd-var-tip-desc">Base time added when a viewer resubscribes.</div><div class="cmd-var-tip-val" data-var="resub">—</div></span></span>
+                <span class="cmd-var">{t1_gift}<span class="cmd-var-tip"><div class="cmd-var-tip-name">{t1_gift}</div><div class="cmd-var-tip-desc">Time added per Tier 1 gift sub.</div><div class="cmd-var-tip-val" data-var="t1_gift">—</div></span></span>
+                <span class="cmd-var">{t2_gift}<span class="cmd-var-tip"><div class="cmd-var-tip-name">{t2_gift}</div><div class="cmd-var-tip-desc">Time added per Tier 2 gift sub.</div><div class="cmd-var-tip-val" data-var="t2_gift">—</div></span></span>
+                <span class="cmd-var">{t3_gift}<span class="cmd-var-tip"><div class="cmd-var-tip-name">{t3_gift}</div><div class="cmd-var-tip-desc">Time added per Tier 3 gift sub.</div><div class="cmd-var-tip-val" data-var="t3_gift">—</div></span></span>
+                <span class="cmd-var">{charity_per}<span class="cmd-var-tip"><div class="cmd-var-tip-name">{charity_per}</div><div class="cmd-var-tip-desc">Time added per $1 donated to charity.</div><div class="cmd-var-tip-val" data-var="charity_per">—</div></span></span>
+                <span class="cmd-var">{tip_per}<span class="cmd-var-tip"><div class="cmd-var-tip-name">{tip_per}</div><div class="cmd-var-tip-desc">Time added per unit of a 3rd-party tip (e.g. per £1 on StreamElements).</div><div class="cmd-var-tip-val" data-var="tip_per">—</div></span></span>
+                <span class="cmd-var">{tip_min}<span class="cmd-var-tip"><div class="cmd-var-tip-name">{tip_min}</div><div class="cmd-var-tip-desc">Minimum tip amount required to add time.</div><div class="cmd-var-tip-val" data-var="tip_min">—</div></span></span>
+                <span class="cmd-var">{follow}<span class="cmd-var-tip"><div class="cmd-var-tip-name">{follow}</div><div class="cmd-var-tip-desc">Time added when someone follows the channel (only if follows are enabled).</div><div class="cmd-var-tip-val" data-var="follow">—</div></span></span>
+                <span class="cmd-var">{hype_mult}<span class="cmd-var-tip"><div class="cmd-var-tip-name">{hype_mult}</div><div class="cmd-var-tip-desc">Multiplier applied to all time additions during a Hype Train.</div><div class="cmd-var-tip-val" data-var="hype_mult">—</div></span></span>
+              </div>
+            </div>
           </div>
           <div class="row2"><button id="saveChatCmd">Save</button></div>
         </div>
@@ -1289,6 +1316,47 @@ export function renderOverlayConfigPage(options = {}) {
               if (cmdPreview) cmdPreview.textContent = '!' + (cmdWord.value || 'timerules');
             });
           }
+
+          // Populate variable current-value chips from DEV_RULES
+          function fmtSecsClient(s) {
+            var n = Number(s) || 0;
+            if (n >= 3600) return (n / 3600).toFixed(1).replace(/\.0$/, '') + 'h';
+            if (n >= 60) return Math.round(n / 60) + 'm';
+            return n + 's';
+          }
+          function refreshVarValues() {
+            var r = window.DEV_RULES;
+            if (!r) return;
+            var vals = {
+              bits_per:    String(r.bits?.per ?? 100),
+              bits_add:    fmtSecsClient(r.bits?.add_seconds ?? 0),
+              t1_sub:      fmtSecsClient(r.sub?.['1000'] ?? 0),
+              t2_sub:      fmtSecsClient(r.sub?.['2000'] ?? 0),
+              t3_sub:      fmtSecsClient(r.sub?.['3000'] ?? 0),
+              resub:       fmtSecsClient(r.resub?.base_seconds ?? 0),
+              t1_gift:     fmtSecsClient(r.gift_sub?.['1000'] ?? 0),
+              t2_gift:     fmtSecsClient(r.gift_sub?.['2000'] ?? 0),
+              t3_gift:     fmtSecsClient(r.gift_sub?.['3000'] ?? 0),
+              charity_per: fmtSecsClient(r.charity?.per_usd ?? 0),
+              tip_per:     fmtSecsClient(r.thirdPartyTip?.per_unit ?? 0),
+              tip_min:     String(r.thirdPartyTip?.min_amount ?? 1),
+              follow:      fmtSecsClient(r.follow?.add_seconds ?? 0),
+              hype_mult:   String(r.hypeTrain?.multiplier ?? 1),
+            };
+            document.querySelectorAll('[data-var]').forEach(function(el) {
+              var key = el.getAttribute('data-var');
+              if (key in vals) el.textContent = 'Current value: ' + vals[key];
+            });
+          }
+          // Run once rules are loaded (DEV_RULES is set in the rules fetch callback)
+          // Poll briefly until DEV_RULES is available, then stop
+          var varPollCount = 0;
+          var varPoll = setInterval(function() {
+            if (window.DEV_RULES || ++varPollCount > 20) {
+              clearInterval(varPoll);
+              refreshVarValues();
+            }
+          }, 150);
 
           var saveChatCmd = document.getElementById('saveChatCmd');
           if (saveChatCmd) {

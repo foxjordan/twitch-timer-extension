@@ -496,12 +496,11 @@ export function renderOverlayConfigPage(options = {}) {
             <textarea id="r_cmd_custom" rows="3" maxlength="500" placeholder="Leave blank for the auto-generated summary, or write your own here." style="width:100%; resize:vertical; padding:6px 8px; border-radius:6px; border:1px solid rgba(255,255,255,0.15); background:rgba(255,255,255,0.05); color:inherit; font-family:inherit; font-size:13px; box-sizing:border-box;"></textarea>
             <div style="margin-top:8px;">
               <div class="hint" style="margin-bottom:6px;">Available variables — hover any tag to see its description and current value:</div>
-              <div id="cmdVarGrid" style="display:grid; grid-template-columns:repeat(3, 1fr); gap:4px; position:relative;">
+              <div id="cmdVarGrid" style="display:flex; flex-wrap:wrap; gap:5px; position:relative;">
                 <style>
-                  .cmd-var { display:flex; align-items:center; justify-content:center; font-family:monospace; font-size:12px; background:rgba(145,70,255,0.15); border:1px solid rgba(145,70,255,0.35); border-radius:4px; padding:3px 6px; cursor:default; position:relative; text-align:center; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+                  .cmd-var { display:inline-flex; align-items:center; font-family:monospace; font-size:12px; background:rgba(145,70,255,0.15); border:1px solid rgba(145,70,255,0.35); border-radius:4px; padding:2px 7px; cursor:default; position:relative; white-space:nowrap; }
                   .cmd-var:hover { background:rgba(145,70,255,0.28); border-color:rgba(145,70,255,0.6); }
                   .cmd-var-tip { display:none; position:absolute; bottom:calc(100% + 6px); left:50%; transform:translateX(-50%); background:#1e1e28; border:1px solid rgba(145,70,255,0.5); border-radius:7px; padding:8px 11px; min-width:210px; max-width:270px; z-index:99; pointer-events:none; box-shadow:0 4px 18px rgba(0,0,0,0.5); white-space:normal; }
-                  .cmd-var:nth-child(3n+3) .cmd-var-tip { left:auto; right:0; transform:none; }
                   .cmd-var:hover .cmd-var-tip { display:block; }
                   .cmd-var-tip-name { font-size:13px; font-weight:600; color:#c084fc; margin-bottom:3px; }
                   .cmd-var-tip-desc { font-size:12px; color:#ccc; line-height:1.45; margin-bottom:5px; font-family:sans-serif; }

@@ -494,6 +494,10 @@ export function renderOverlayConfigPage(options = {}) {
           <div class="control">
             <label>Custom message <span style="font-weight:400; opacity:.65;">(optional — leave blank to use the default)</span></label>
             <textarea id="r_cmd_custom" rows="3" maxlength="500" placeholder="Leave blank for the auto-generated summary, or write your own here." style="width:100%; resize:vertical; padding:6px 8px; border-radius:6px; border:1px solid rgba(255,255,255,0.15); background:rgba(255,255,255,0.05); color:inherit; font-family:inherit; font-size:13px; box-sizing:border-box;"></textarea>
+            <div id="r_cmd_preview_box" style="grid-column: 1 / -1; margin-top:8px; padding:8px 10px; background:rgba(255,255,255,0.04); border:1px solid rgba(255,255,255,0.1); border-radius:6px; font-size:12px; color:#ccc; line-height:1.5; display:none;">
+              <span style="opacity:.5; font-size:11px; display:block; margin-bottom:3px;">Preview</span>
+              <span id="r_cmd_preview_text"></span>
+            </div>
             <div style="margin-top:8px; grid-column: 1 / -1;">
               <div class="hint" style="margin-bottom:6px;">Available variables — hover any tag to see its description and current value:</div>
               <div id="cmdVarGrid" style="display:flex; flex-wrap:wrap; gap:5px; position:relative;">
@@ -1270,7 +1274,7 @@ export function renderOverlayConfigPage(options = {}) {
               if (cmdEnabled) cmdEnabled.checked = Boolean(rr.chatCommand.enabled);
               if (cmdWord) cmdWord.value = rr.chatCommand.command || 'timerules';
               if (cmdCooldown) cmdCooldown.value = rr.chatCommand.cooldownSeconds ?? 30;
-              if (cmdCustom) cmdCustom.value = rr.chatCommand.customMessage || '';
+              if (cmdCustom) { cmdCustom.value = rr.chatCommand.customMessage || ''; cmdCustom.dispatchEvent(new Event('input')); }
               var preview = document.getElementById('r_cmd_preview');
               if (preview) preview.textContent = '!' + (rr.chatCommand.command || 'timerules');
             }
@@ -1324,10 +1328,9 @@ export function renderOverlayConfigPage(options = {}) {
             if (n >= 60) return Math.round(n / 60) + 'm';
             return n + 's';
           }
-          function refreshVarValues() {
-            var r = window.DEV_RULES;
-            if (!r) return;
-            var vals = {
+          function getVals() {
+            var r = window.DEV_RULES || {};
+            return {
               bits_per:    String(r.bits?.per ?? 100),
               bits_add:    fmtSecsClient(r.bits?.add_seconds ?? 0),
               t1_sub:      fmtSecsClient(r.sub?.['1000'] ?? 0),
@@ -1343,10 +1346,56 @@ export function renderOverlayConfigPage(options = {}) {
               follow:      fmtSecsClient(r.follow?.add_seconds ?? 0),
               hype_mult:   String(r.hypeTrain?.multiplier ?? 1),
             };
+          }
+          function buildAutoSummary() {
+            var r = window.DEV_RULES;
+            if (!r) return '';
+            var parts = [];
+            if (r.bits?.add_seconds > 0) parts.push(r.bits.per + ' bits=+' + fmtSecsClient(r.bits.add_seconds));
+            if (r.sub) {
+              if (r.sub['1000'] > 0) parts.push('T1 Sub +' + fmtSecsClient(r.sub['1000']));
+              if (r.sub['2000'] > 0) parts.push('T2 Sub +' + fmtSecsClient(r.sub['2000']));
+              if (r.sub['3000'] > 0) parts.push('T3 Sub +' + fmtSecsClient(r.sub['3000']));
+            }
+            if (r.resub?.base_seconds > 0) parts.push('Resub +' + fmtSecsClient(r.resub.base_seconds));
+            if (r.gift_sub) {
+              if (r.gift_sub.matchSubTiers) { parts.push('Gift subs match sub tiers'); }
+              else {
+                if (r.gift_sub['1000'] > 0) parts.push('T1 Gift +' + fmtSecsClient(r.gift_sub['1000']));
+                if (r.gift_sub['2000'] > 0) parts.push('T2 Gift +' + fmtSecsClient(r.gift_sub['2000']));
+                if (r.gift_sub['3000'] > 0) parts.push('T3 Gift +' + fmtSecsClient(r.gift_sub['3000']));
+              }
+            }
+            if (r.charity?.per_usd > 0) parts.push('$1 charity=+' + fmtSecsClient(r.charity.per_usd));
+            if (r.thirdPartyTip?.per_unit > 0) {
+              var min = r.thirdPartyTip.min_amount > 0 ? '$' + r.thirdPartyTip.min_amount + '+' : '$1+';
+              parts.push('Tips ' + min + '=+' + fmtSecsClient(r.thirdPartyTip.per_unit));
+            }
+            if (r.follow?.enabled && r.follow?.add_seconds > 0) parts.push('Follow +' + fmtSecsClient(r.follow.add_seconds));
+            return 'Timer Rules: ' + (parts.length ? parts.join(' | ') : 'No rules configured');
+          }
+          function refreshVarValues() {
+            var vals = getVals();
             document.querySelectorAll('[data-var]').forEach(function(el) {
               var key = el.getAttribute('data-var');
               if (key in vals) el.textContent = 'Current value: ' + vals[key];
             });
+          }
+          function refreshPreview() {
+            var box = document.getElementById('r_cmd_preview_box');
+            var txt = document.getElementById('r_cmd_preview_text');
+            var custom = (document.getElementById('r_cmd_custom') || {}).value || '';
+            if (!box || !txt) return;
+            var output;
+            if (custom.trim()) {
+              var vals = getVals();
+              output = custom.replace(/\{(\w+)\}/g, function(m, k) { return k in vals ? vals[k] : m; });
+            } else {
+              output = buildAutoSummary();
+            }
+            if (!output) { box.style.display = 'none'; return; }
+            txt.textContent = output;
+            box.style.display = 'block';
           }
           // Run once rules are loaded (DEV_RULES is set in the rules fetch callback)
           // Poll briefly until DEV_RULES is available, then stop
@@ -1355,8 +1404,12 @@ export function renderOverlayConfigPage(options = {}) {
             if (window.DEV_RULES || ++varPollCount > 20) {
               clearInterval(varPoll);
               refreshVarValues();
+              refreshPreview();
             }
           }, 150);
+
+          var cmdCustom = document.getElementById('r_cmd_custom');
+          if (cmdCustom) cmdCustom.addEventListener('input', refreshPreview);
 
           var saveChatCmd = document.getElementById('saveChatCmd');
           if (saveChatCmd) {

@@ -494,7 +494,7 @@ export function renderOverlayConfigPage(options = {}) {
           <div class="control">
             <label>Custom message <span style="font-weight:400; opacity:.65;">(optional — leave blank to use the default)</span></label>
             <textarea id="r_cmd_custom" rows="3" maxlength="500" placeholder="Leave blank for the auto-generated summary, or write your own here." style="width:100%; resize:vertical; padding:6px 8px; border-radius:6px; border:1px solid rgba(255,255,255,0.15); background:rgba(255,255,255,0.05); color:inherit; font-family:inherit; font-size:13px; box-sizing:border-box;"></textarea>
-            <div style="margin-top:8px;">
+            <div style="margin-top:8px; grid-column: 1 / -1;">
               <div class="hint" style="margin-bottom:6px;">Available variables — hover any tag to see its description and current value:</div>
               <div id="cmdVarGrid" style="display:flex; flex-wrap:wrap; gap:5px; position:relative;">
                 <style>

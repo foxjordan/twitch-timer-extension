@@ -354,7 +354,11 @@ function ComponentApp() {
             channelId: currentAuth.channelId,
           }),
         })
-          .then(() => {
+          .then(async (res) => {
+            if (!res.ok) {
+              const data = await res.json().catch(() => ({}));
+              throw new Error(data.error || "TTS redemption failed");
+            }
             logEvent("tts_redeemed", { voice: pending.voiceId });
             setTtsMessage("");
             setTtsError(null);
@@ -363,7 +367,7 @@ function ComponentApp() {
             setTtsCooldown(true);
             setTimeout(() => setTtsCooldown(false), pending.cooldownMs || 10000);
           })
-          .catch(() => setTtsError("TTS redemption failed"));
+          .catch((err) => setTtsError(err?.message || "TTS redemption failed"));
       } else {
         fetch(`${EBS_BASE}/api/sounds/redeem`, {
           method: "POST",

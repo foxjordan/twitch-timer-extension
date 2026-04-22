@@ -870,7 +870,7 @@ function App() {
                 : ttsCooldown
                   ? "Cooldown..."
                   : ttsApproved
-                    ? `Approved ✓ — Confirm & Pay ${getCost(ttsConfig.tier)} Bits`
+                    ? `Approved ✓ — Confirm ${getCost(ttsConfig.tier)} Bits`
                     : `Send TTS — ${getCost(ttsConfig.tier)} Bits`}
             </button>
           </div>

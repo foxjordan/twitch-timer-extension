@@ -219,6 +219,8 @@ function App() {
   const [ttsVoice, setTtsVoice] = useState("");
   const [ttsMessage, setTtsMessage] = useState("");
   const [ttsValidating, setTtsValidating] = useState(false);
+  const [ttsApproved, setTtsApproved] = useState(false);
+  const ttsApprovalRef = useRef(null);
   const [ttsError, setTtsError] = useState(null);
   const [ttsCooldown, setTtsCooldown] = useState(false);
   const [previewingVoice, setPreviewingVoice] = useState(null);
@@ -375,7 +377,8 @@ function App() {
     window.Twitch.ext.bits.useBits(sound.tier);
   }
 
-  async function handleTtsSubmit() {
+  // Step 1: validate the message (async is fine — no useBits call here)
+  async function handleTtsValidate() {
     if (!bitsEnabled || !ttsConfig || ttsCooldown) return;
     const currentAuth = authRef.current;
     if (!currentAuth) return;
@@ -403,24 +406,36 @@ function App() {
 
       if (!data.approved) {
         setTtsError(data.reason || "Message was not approved");
-        setTtsValidating(false);
         return;
       }
 
-      // Store approval token and trigger Bits transaction
-      pendingRef.current = {
-        type: "tts",
+      ttsApprovalRef.current = {
         approvalToken: data.approvalToken,
         voiceId: ttsVoice,
         cooldownMs: ttsConfig.cooldownMs || 10000,
       };
-      logEvent("tts_redeem_started", { voice: ttsVoice });
-      window.Twitch.ext.bits.useBits(ttsConfig.tier);
+      setTtsApproved(true);
     } catch {
       setTtsError("Failed to validate message");
     } finally {
       setTtsValidating(false);
     }
+  }
+
+  // Step 2: pay with Bits — synchronous click handler, no await before useBits
+  function handleTtsPay() {
+    if (!ttsApproved || !ttsApprovalRef.current || !ttsConfig) return;
+    const approval = ttsApprovalRef.current;
+    pendingRef.current = {
+      type: "tts",
+      approvalToken: approval.approvalToken,
+      voiceId: approval.voiceId,
+      cooldownMs: approval.cooldownMs,
+    };
+    ttsApprovalRef.current = null;
+    setTtsApproved(false);
+    logEvent("tts_redeem_started", { voice: approval.voiceId });
+    window.Twitch.ext.bits.useBits(ttsConfig.tier);
   }
 
   function handlePreview(e, sound) {
@@ -795,7 +810,10 @@ function App() {
               </label>
               <textarea
                 value={ttsMessage}
-                onChange={(e) => setTtsMessage(e.target.value.slice(0, (ttsConfig.maxMessageLength || 300)))}
+                onChange={(e) => {
+                  setTtsMessage(e.target.value.slice(0, (ttsConfig.maxMessageLength || 300)));
+                  if (ttsApproved) { setTtsApproved(false); ttsApprovalRef.current = null; }
+                }}
                 maxLength={ttsConfig.maxMessageLength || 300}
                 rows={3}
                 placeholder="Type your message..."
@@ -815,16 +833,16 @@ function App() {
               />
             </div>
 
-            {/* Submit button */}
+            {/* Submit button — two-step: validate first, then pay synchronously */}
             <button
-              onClick={handleTtsSubmit}
+              onClick={ttsApproved ? handleTtsPay : handleTtsValidate}
               disabled={!bitsEnabled || ttsValidating || ttsCooldown || !ttsMessage.trim()}
               style={{
                 width: "100%",
                 padding: "8px 0",
                 borderRadius: 8,
                 border: "none",
-                background: ttsValidating || ttsCooldown ? "#555" : "#9146FF",
+                background: ttsValidating || ttsCooldown ? "#555" : ttsApproved ? "#10B981" : "#9146FF",
                 color: "#fff",
                 fontSize: 14,
                 fontWeight: 600,
@@ -841,7 +859,7 @@ function App() {
                   width: 10,
                   height: 10,
                   borderRadius: "50%",
-                  background: "linear-gradient(135deg, #9146FF, #772CE8)",
+                  background: ttsApproved ? "#fff" : "linear-gradient(135deg, #9146FF, #772CE8)",
                   border: "1px solid rgba(255,255,255,0.3)",
                   display: "inline-block",
                   flexShrink: 0,
@@ -851,7 +869,9 @@ function App() {
                 ? "Checking..."
                 : ttsCooldown
                   ? "Cooldown..."
-                  : `Send TTS - ${getCost(ttsConfig.tier)} Bits`}
+                  : ttsApproved
+                    ? `Approved ✓ — Confirm & Pay ${getCost(ttsConfig.tier)} Bits`
+                    : `Send TTS — ${getCost(ttsConfig.tier)} Bits`}
             </button>
           </div>
         )}

@@ -1688,7 +1688,10 @@ function startEventSubWS(broadcasterId, accessToken, onNotification, urlOverride
           observability.lastEventSubKeepaliveAt = nowIso;
           break;
         case "welcome":
-          if (ownerConn) ownerConn.lastWsMessageAt = Date.now();
+          if (ownerConn) {
+            ownerConn.lastWsMessageAt = Date.now();
+            ownerConn.reconnectAttempts = 0;
+          }
           observability.lastEventSubSessionId = status.sessionId || null;
           observability.lastEventSubConnectedAt = nowIso;
           break;
@@ -1744,20 +1747,33 @@ function startEventSubWS(broadcasterId, accessToken, onNotification, urlOverride
           observability.lastEventSubErrorMessage =
             status.message || "socket_error";
           logger.error("eventsub_socket_error", { broadcasterId, message: status.message });
+          if (ownerConn && status.message?.includes("429")) {
+            ownerConn.lastRateLimitedAt = Date.now();
+          }
           break;
         case "closed": {
           observability.lastEventSubErrorAt = nowIso;
           observability.lastEventSubErrorMessage = "socket_closed";
           logger.warn("eventsub_socket_closed", { broadcasterId, code: status.code });
 
-          // AUTO-RECONNECT: Schedule reconnection with jittered delay.
+          // AUTO-RECONNECT: Schedule reconnection with exponential backoff.
           // Skip if the connection already has a newer working WS (session_reconnect swap).
           if (ownerUserId) {
             const conn = broadcasterConnections.get(ownerUserId);
             const alreadyReplaced = conn?.ws && conn.ws.readyState === 1;
             if (conn && !conn.reconnectTimer && !alreadyReplaced) {
-              const delay = 5000 + Math.random() * 5000; // 5-10s jittered initial delay
-              logger.info("eventsub_scheduling_reconnect", { userId: ownerUserId, delayMs: Math.round(delay) });
+              conn.reconnectAttempts = (conn.reconnectAttempts || 0) + 1;
+              const wasRateLimited = conn.lastRateLimitedAt && (Date.now() - conn.lastRateLimitedAt < 15000);
+              let delay;
+              if (wasRateLimited) {
+                // 429: back off hard — 60-120s with jitter
+                delay = 60000 + Math.random() * 60000;
+              } else {
+                // Exponential backoff: 5s → 10s → 20s → 40s → 80s, cap 120s
+                const base = Math.min(120000, 5000 * Math.pow(2, conn.reconnectAttempts - 1));
+                delay = base + Math.random() * Math.min(base, 10000);
+              }
+              logger.info("eventsub_scheduling_reconnect", { userId: ownerUserId, delayMs: Math.round(delay), attempt: conn.reconnectAttempts, wasRateLimited: Boolean(wasRateLimited) });
               conn.reconnectTimer = setTimeout(() => {
                 conn.reconnectTimer = null;
                 startEventSubForUser(ownerUserId);

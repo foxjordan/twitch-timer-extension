@@ -36,6 +36,29 @@ export async function broadcastToChannel({ broadcasterId, type, payload }) {
   });
 }
 
+export async function sendBroadcasterChatMessage({ broadcasterId, accessToken, text }) {
+  const clientId = process.env.TWITCH_CLIENT_ID;
+  if (!clientId || !accessToken) return;
+
+  const res = await fetch('https://api.twitch.tv/helix/chat/messages', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      'Client-Id': clientId,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      broadcaster_id: broadcasterId,
+      sender_id: broadcasterId,
+      message: text,
+    }),
+  });
+  if (!res.ok) {
+    const body = await res.text();
+    logger.warn('broadcaster_chat_message_failed', { status: res.status, body, broadcasterId });
+  }
+}
+
 export async function sendExtensionChatMessage({ broadcasterId, text }) {
   const clientId = process.env.EXTENSION_CLIENT_ID;
   const secret = process.env.EXTENSION_SECRET;

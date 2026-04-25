@@ -4,7 +4,7 @@ import session from "express-session";
 import { v4 as uuidv4 } from "uuid";
 import { RULES } from "./rules.js";
 import { connectEventSubWS } from "./eventsub-ws.js";
-import { broadcastToChannel, sendExtensionChatMessage } from "./broadcast.js";
+import { broadcastToChannel, sendExtensionChatMessage, sendBroadcasterChatMessage } from "./broadcast.js";
 import { fetchUserDisplayName } from "./twitch_api.js";
 import fetch from "node-fetch";
 import crypto from "crypto";
@@ -1315,7 +1315,8 @@ async function handleChatCommand(event, broadcasterId) {
     ? applyCustomMessage(cmd.customMessage, rules)
     : buildRulesSummary(rules);
   logger.info("chat_command_firing", { broadcasterId, command: cmd.command, messageLength: message.length });
-  sendExtensionChatMessage({ broadcasterId, text: message }).catch((err) => {
+  const accessToken = await getValidAccessToken(broadcasterId).catch(() => null);
+  sendBroadcasterChatMessage({ broadcasterId, accessToken, text: message }).catch((err) => {
     logger.error("chat_command_send_failed", { broadcasterId, message: err?.message });
   });
 }

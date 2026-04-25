@@ -66,6 +66,7 @@ export async function sendExtensionChatMessage({ broadcasterId, text }) {
       status: res.status,
       body,
       broadcasterId,
+      extensionVersion: version,
     });
   }
 }

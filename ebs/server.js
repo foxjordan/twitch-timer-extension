@@ -1290,23 +1290,34 @@ async function handleChatCommand(event, broadcasterId) {
 
   const rules = getRules(broadcasterId);
   const cmd = rules.chatCommand;
-  if (!cmd?.enabled || !cmd?.command) return;
+  if (!cmd?.enabled || !cmd?.command) {
+    logger.info("chat_command_disabled", { broadcasterId, text, enabled: cmd?.enabled, command: cmd?.command });
+    return;
+  }
 
   const expectedCommand = ("!" + cmd.command).toLowerCase();
-  // Allow the command with or without trailing spaces/args
   const msgLower = text.toLowerCase();
-  if (msgLower !== expectedCommand && !msgLower.startsWith(expectedCommand + " ")) return;
+  if (msgLower !== expectedCommand && !msgLower.startsWith(expectedCommand + " ")) {
+    logger.info("chat_command_no_match", { broadcasterId, text, expectedCommand });
+    return;
+  }
 
   const cooldownMs = Math.max(0, Number(cmd.cooldownSeconds) || 30) * 1000;
   const now = Date.now();
   const lastAt = chatCommandCooldowns.get(broadcasterId) || 0;
-  if (cooldownMs > 0 && now - lastAt < cooldownMs) return;
+  if (cooldownMs > 0 && now - lastAt < cooldownMs) {
+    logger.info("chat_command_cooldown", { broadcasterId, remainingMs: cooldownMs - (now - lastAt) });
+    return;
+  }
   chatCommandCooldowns.set(broadcasterId, now);
 
   const message = cmd.customMessage?.trim()
     ? applyCustomMessage(cmd.customMessage, rules)
     : buildRulesSummary(rules);
-  sendExtensionChatMessage({ broadcasterId, text: message }).catch(() => {});
+  logger.info("chat_command_firing", { broadcasterId, command: cmd.command, messageLength: message.length });
+  sendExtensionChatMessage({ broadcasterId, text: message }).catch((err) => {
+    logger.error("chat_command_send_failed", { broadcasterId, message: err?.message });
+  });
 }
 
 // ---- EventSub integration ----

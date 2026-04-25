@@ -78,7 +78,7 @@ import { mountTtsRoutes, registerAudioFile } from "./routes_tts.js";
 import { synthesizeSpeech } from "./tts_provider.js";
 import { loadTtsSettings, getTtsSettings } from "./tts_store.js";
 import { loadVoices, getVoices } from "./tts_voices.js";
-import { persistTokens, loadTokens, getAllTokenUserIds, getUserAccessToken, refreshAccessToken } from "./twitch_tokens.js";
+import { persistTokens, loadTokens, getAllTokenUserIds, getUserAccessToken, getValidAccessToken, refreshAccessToken } from "./twitch_tokens.js";
 import { mountStreamElementsRoutes } from "./routes_streamelements.js";
 import {
   connectStreamElements,
@@ -834,11 +834,18 @@ async function startEventSubForUser(userId) {
     connection.reconnectTimer = null;
   }
 
+  // Refresh the token if expired before opening a new session
+  const freshToken = await getValidAccessToken(String(userId)).catch(() => null);
+  if (freshToken && freshToken !== connection.broadcasterToken) {
+    connection.broadcasterToken = freshToken;
+  }
+  const token = connection.broadcasterToken;
+
   try {
     // Start new WebSocket connection for this broadcaster
     const ws = await startEventSubWS(
       connection.broadcasterId,
-      connection.broadcasterToken,
+      token,
       (notification) => handleEventSub(notification, userId)
     );
     connection.ws = ws;

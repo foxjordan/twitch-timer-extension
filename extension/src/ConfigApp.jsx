@@ -397,9 +397,9 @@ function ConfigApp() {
         <ol style={{ margin: 0, paddingLeft: 18, fontSize: 12, lineHeight: 1.8, opacity: 0.85 }}>
           <li>Copy your <strong>OBS Overlay URL</strong> from the Settings section below.</li>
           <li>In OBS, add a <strong>Browser Source</strong> at 1920×1080 and paste the URL.</li>
-          <li>Use <strong>Create Alert</strong> to upload sounds and set their Bits price.</li>
+          <li>Use <strong>Create Alert</strong> to upload sounds and set their Bits amount.</li>
           <li>Make sure <strong>Enabled</strong> is checked so the viewer panel shows your alerts.</li>
-          <li>Viewers spend Bits in your Twitch panel to trigger sounds and TTS on stream.</li>
+          <li>Viewers use Bits in your Twitch panel to trigger sounds and TTS on stream.</li>
         </ol>
         <p style={{ margin: "8px 0 0", fontSize: 11, opacity: 0.5 }}>
           The overlay page must be open (in OBS or a browser) for alerts to play. An "Overlay not active" warning appears in the viewer panel when it is not connected.

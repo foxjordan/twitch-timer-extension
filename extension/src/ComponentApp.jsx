@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import ReactDOM from "react-dom/client";
 import { setupAnalytics, logEvent } from "./firebase.js";
+import { BrandedFooter } from "./BrandedFooter.jsx";
 
 const EBS_BASE = import.meta.env.VITE_EBS_BASE || "https://livestreamerhub.com";
 
@@ -607,6 +608,7 @@ function ComponentApp() {
 
   return (
     <div style={containerStyle}>
+      <div style={contentStyle}>
       {/* Header with scroll buttons */}
       <div style={headerStyle}>
         <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
@@ -736,9 +738,11 @@ function ComponentApp() {
             flex: 1,
             overflowY: "auto",
             overflowX: "hidden",
-            padding: "0 10px 10px",
+            padding: "0 10px 0",
             scrollbarWidth: "none",
             msOverflowStyle: "none",
+            display: "flex",
+            flexDirection: "column",
           }}
         >
           <div
@@ -773,6 +777,9 @@ function ComponentApp() {
               if (el) setTimeout(checkScroll, 100);
             }}
           />
+          {/* Spacer pushes footer to bottom when few alerts are shown */}
+          <div style={{ flex: 1 }} />
+          <BrandedFooter />
         </div>
       )}
 
@@ -842,7 +849,7 @@ function ComponentApp() {
             </div>
           </div>
 
-          {/* Message input — grows to fill available space */}
+          {/* Message input */}
           <div style={{ marginBottom: 6, flex: 1, display: "flex", flexDirection: "column", minHeight: 0 }}>
             <label style={{ fontSize: "clamp(9px, 2.4vw, 11px)", opacity: 0.7, display: "block", marginBottom: 2, flexShrink: 0 }}>
               Message ({ttsMessage.length}/{ttsConfig.maxMessageLength || 300})
@@ -914,10 +921,13 @@ function ComponentApp() {
                   ? `Approved ✓ — Confirm ${getCost(ttsConfig.tier)} Bits`
                   : `Send TTS — ${getCost(ttsConfig.tier)} Bits`}
           </button>
+          <div style={{ flex: 1 }} />
+          <BrandedFooter />
         </div>
       )}
 
       <style>{`::-webkit-scrollbar { display: none; }`}</style>
+      </div>
     </div>
   );
 }
@@ -925,9 +935,13 @@ function ComponentApp() {
 const containerStyle = {
   width: "100%",
   height: "100%",
+  background: "transparent",
+};
+
+const contentStyle = {
+  height: "100%",
   display: "flex",
   flexDirection: "column",
-  overflow: "hidden",
   background: "rgba(14,14,16,0.85)",
   backdropFilter: "blur(12px)",
   fontSize: "clamp(11px, 2.8vw, 15px)",

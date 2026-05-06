@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import ReactDOM from "react-dom/client";
 import { setupAnalytics, logEvent } from "./firebase.js";
+import { BrandedFooter } from "./BrandedFooter.jsx";
 
 const EBS_BASE = import.meta.env.VITE_EBS_BASE || "https://livestreamerhub.com";
 
@@ -875,6 +876,7 @@ function App() {
             </button>
           </div>
         )}
+        <BrandedFooter style={{ marginTop: 4 }} />
       </div>
     </div>
   );

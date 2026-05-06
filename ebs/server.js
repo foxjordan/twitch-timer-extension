@@ -1690,7 +1690,13 @@ function startEventSubWS(broadcasterId, accessToken, onNotification, urlOverride
   // Track last message time on the connection object for the keepalive watchdog
   const ownerConn = ownerUserId ? broadcasterConnections.get(ownerUserId) : null;
 
-  return connectEventSubWS({
+  // Capture ws identity so the 'closed' handler can tell whether this
+  // particular socket has already been replaced by a newer startEventSubForUser
+  // call. Checking readyState===1 (OPEN) was racy: the new WS could still be
+  // CONNECTING (readyState=0) when the old one fires 'close', causing a
+  // spurious reconnect that then kills the newly-connected WS in a tight loop.
+  let thisWs = null;
+  const wsPromise = connectEventSubWS({
     userAccessToken: accessToken,
     clientId,
     broadcasterId,
@@ -1776,10 +1782,11 @@ function startEventSubWS(broadcasterId, accessToken, onNotification, urlOverride
           logger.warn("eventsub_socket_closed", { broadcasterId, code: status.code });
 
           // AUTO-RECONNECT: Schedule reconnection with exponential backoff.
-          // Skip if the connection already has a newer working WS (session_reconnect swap).
+          // Skip if conn.ws has already been replaced by a newer socket — identity
+          // check is reliable even when the replacement is still CONNECTING (readyState=0).
           if (ownerUserId) {
             const conn = broadcasterConnections.get(ownerUserId);
-            const alreadyReplaced = conn?.ws && conn.ws.readyState === 1;
+            const alreadyReplaced = thisWs !== null && conn?.ws !== thisWs;
             if (conn && !conn.reconnectTimer && !alreadyReplaced) {
               conn.reconnectAttempts = (conn.reconnectAttempts || 0) + 1;
               const wasRateLimited = conn.lastRateLimitedAt && (Date.now() - conn.lastRateLimitedAt < 15000);
@@ -1806,6 +1813,8 @@ function startEventSubWS(broadcasterId, accessToken, onNotification, urlOverride
       }
     },
   });
+  wsPromise.then(ws => { thisWs = ws; });
+  return wsPromise;
 }
 
 // Keepalive watchdog: if no message received within 60s (2x the 30s keepalive),

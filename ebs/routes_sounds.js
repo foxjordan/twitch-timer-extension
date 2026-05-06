@@ -4,14 +4,100 @@ import { isSuperAdmin } from "./routes_admin.js";
 import jwt from "jsonwebtoken";
 import multer from "multer";
 import { rename, stat as fsStat, unlink as fsUnlink } from "fs/promises";
-import { createWriteStream } from "fs";
+import { createReadStream, createWriteStream } from "fs";
 import { execFile } from "child_process";
 import { promisify } from "util";
 import { pipeline } from "stream/promises";
 import path from "path";
+import os from "os";
 import fetch from "node-fetch";
+import {
+  r2Enabled,
+  r2SoundKey,
+  putR2Object,
+  deleteR2Object,
+  getR2PresignedUrl,
+  getR2ObjectStream,
+  copyR2Object,
+} from "./r2.js";
 
 const execFileAsync = promisify(execFile);
+
+// ===== R2-aware storage helpers =====
+
+// Upload a file from a local path to storage (R2 or local disk).
+// In R2 mode: streams to R2 then deletes the local temp file.
+// In disk mode: renames from tmpPath to the final path under SOUNDS_FILE_DIR/{uid}.
+async function uploadToStorage(uid, filename, tmpPath, mimeType) {
+  if (r2Enabled) {
+    const key = r2SoundKey(String(uid), filename);
+    const stream = createReadStream(tmpPath);
+    await putR2Object(key, stream, mimeType);
+    await fsUnlink(tmpPath).catch(() => {});
+  } else {
+    const destPath = path.resolve(SOUNDS_FILE_DIR, String(uid), filename);
+    await ensureSoundDir(uid);
+    await rename(tmpPath, destPath);
+  }
+}
+
+// Serve a sound file (audio or video) from storage.
+// In R2 mode: redirects to a presigned URL.
+// In disk mode: pipes the local file.
+async function serveFileFromStorage(res, uid, sound, cacheControl = 'no-store') {
+  if (r2Enabled) {
+    try {
+      const key = r2SoundKey(String(uid), sound.filename);
+      const url = await getR2PresignedUrl(key, 3600);
+      res.setHeader('Cache-Control', cacheControl);
+      return res.redirect(302, url);
+    } catch (err) {
+      if (!res.headersSent) res.status(500).json({ error: 'Storage error' });
+      return;
+    }
+  }
+  const filePath = getSoundFilePath(String(uid), sound);
+  res.setHeader('Content-Type', sound.mimeType || 'application/octet-stream');
+  res.setHeader('Cache-Control', cacheControl);
+  res.sendFile(filePath, (err) => {
+    if (err && !res.headersSent) res.status(404).json({ error: 'File not found' });
+  });
+}
+
+// Serve an image file from storage.
+async function serveImageFromStorage(res, uid, filename, cacheControl = 'public, max-age=3600') {
+  if (r2Enabled) {
+    try {
+      const key = r2SoundKey(String(uid), filename);
+      const url = await getR2PresignedUrl(key, 3600);
+      res.setHeader('Cache-Control', cacheControl);
+      return res.redirect(302, url);
+    } catch (err) {
+      if (!res.headersSent) res.status(500).json({ error: 'Storage error' });
+      return;
+    }
+  }
+  const filePath = path.resolve(SOUNDS_FILE_DIR, String(uid), filename);
+  res.setHeader('Cache-Control', cacheControl);
+  res.sendFile(filePath, (err) => {
+    if (err && !res.headersSent) res.status(404).json({ error: 'Image file not found' });
+  });
+}
+
+// Delete a file from storage (best-effort, silent on failure).
+async function deleteFileFromStorage(uid, filename) {
+  if (r2Enabled && filename) {
+    await deleteR2Object(r2SoundKey(String(uid), filename)).catch(() => {});
+  }
+  // Disk cleanup is handled by sounds_store deleteSound() via fsUnlink (silently fails in R2 mode)
+}
+
+// Download a file from R2 to a local temp path.
+async function downloadFromR2ToTemp(uid, filename, tempPath) {
+  const key = r2SoundKey(String(uid), filename);
+  const stream = await getR2ObjectStream(key);
+  await pipeline(stream, createWriteStream(tempPath));
+}
 
 /**
  * Compress a video file in-place with H.264 CRF 28.
@@ -102,8 +188,12 @@ const EXT_SECRET = process.env.EXTENSION_SECRET
   : null;
 
 // Multer setup for sound uploads
+// In R2 mode, upload files to the OS temp dir (always exists) instead of the
+// Fly volume, which may not have user subdirs if no disk storage is in use.
+const MULTER_TMP_DIR = r2Enabled ? os.tmpdir() : path.resolve(SOUNDS_FILE_DIR, "tmp");
+
 const upload = multer({
-  dest: path.resolve(SOUNDS_FILE_DIR, "tmp"),
+  dest: MULTER_TMP_DIR,
   limits: { fileSize: MAX_FILE_SIZE },
   fileFilter: (_req, file, cb) => {
     cb(null, ALLOWED_MIME_TYPES.includes(file.mimetype));
@@ -111,7 +201,7 @@ const upload = multer({
 });
 
 const imageUpload = multer({
-  dest: path.resolve(SOUNDS_FILE_DIR, "tmp"),
+  dest: MULTER_TMP_DIR,
   limits: { fileSize: MAX_IMAGE_SIZE },
   fileFilter: (_req, file, cb) => {
     cb(null, ALLOWED_IMAGE_MIME_TYPES.includes(file.mimetype));
@@ -119,7 +209,7 @@ const imageUpload = multer({
 });
 
 const videoUpload = multer({
-  dest: path.resolve(SOUNDS_FILE_DIR, "tmp"),
+  dest: MULTER_TMP_DIR,
   limits: { fileSize: MAX_VIDEO_FILE_SIZE },
   fileFilter: (_req, file, cb) => {
     cb(null, ALLOWED_VIDEO_MIME_TYPES.includes(file.mimetype));
@@ -221,12 +311,7 @@ export function mountSoundRoutes(app, deps = {}) {
       const soundId = `snd_${crypto.randomUUID().slice(0, 12)}`;
       const filename = generateFilename(uid, soundId, req.file.mimetype);
 
-      // Ensure user sound directory exists
-      await ensureSoundDir(uid);
-
-      // Move file from tmp to final location
-      const destPath = path.resolve(SOUNDS_FILE_DIR, String(uid), filename);
-      await rename(req.file.path, destPath);
+      await uploadToStorage(uid, filename, req.file.path, req.file.mimetype);
 
       const result = createSound(uid, {
         id: soundId,
@@ -243,11 +328,7 @@ export function mountSoundRoutes(app, deps = {}) {
       });
 
       if (result.error) {
-        // Clean up uploaded file
-        try {
-          const { unlink: unlinkFile } = await import("fs/promises");
-          await unlinkFile(destPath);
-        } catch {}
+        await deleteFileFromStorage(uid, filename);
         return res.status(400).json(result);
       }
 
@@ -305,10 +386,12 @@ export function mountSoundRoutes(app, deps = {}) {
         });
       }
 
-      // Download the clip video file
+      // Download the clip video file (to tmp dir in R2 mode, final dir in disk mode)
       const videoFilename = `${soundId}.mp4`;
-      await ensureSoundDir(uid);
-      const videoDestPath = path.resolve(SOUNDS_FILE_DIR, String(uid), videoFilename);
+      const videoDestPath = r2Enabled
+        ? path.resolve(MULTER_TMP_DIR, videoFilename)
+        : path.resolve(SOUNDS_FILE_DIR, String(uid), videoFilename);
+      if (!r2Enabled) await ensureSoundDir(uid);
       const dlResult = await downloadClipVideo(clipInfo.video_url, videoDestPath);
       if (!dlResult.ok) {
         return res.status(400).json({
@@ -331,21 +414,23 @@ export function mountSoundRoutes(app, deps = {}) {
       let finalFilename;
       let finalMimeType;
       let finalType;
+      let finalLocalPath;
 
       if (audioOnly) {
         // Extract audio only from the downloaded clip
         finalFilename = `${soundId}.m4a`;
         finalMimeType = "audio/mp4";
         finalType = "sound";
-        const audioDestPath = path.resolve(SOUNDS_FILE_DIR, String(uid), finalFilename);
+        finalLocalPath = r2Enabled
+          ? path.resolve(MULTER_TMP_DIR, finalFilename)
+          : path.resolve(SOUNDS_FILE_DIR, String(uid), finalFilename);
         try {
           const originalSize = sizeBytes;
-          sizeBytes = await extractAudio(videoDestPath, audioDestPath);
+          sizeBytes = await extractAudio(videoDestPath, finalLocalPath);
           logger.info("clip_audio_extracted", { userId: uid, soundId, originalSize, audioSize: sizeBytes });
         } catch (err) {
-          // Clean up both files on failure
           try { await fsUnlink(videoDestPath); } catch {}
-          try { await fsUnlink(audioDestPath); } catch {}
+          try { await fsUnlink(finalLocalPath); } catch {}
           logger.error("clip_audio_extract_failed", { userId: uid, soundId, message: err?.message });
           return res.status(500).json({ error: "Failed to extract audio from clip" });
         }
@@ -354,9 +439,10 @@ export function mountSoundRoutes(app, deps = {}) {
         finalFilename = videoFilename;
         finalMimeType = "video/mp4";
         finalType = "clip";
+        finalLocalPath = videoDestPath;
         try {
           const originalSize = sizeBytes;
-          sizeBytes = await compressVideo(videoDestPath);
+          sizeBytes = await compressVideo(finalLocalPath);
           logger.info("clip_compressed", { userId: uid, soundId, originalSize, compressedSize: sizeBytes });
         } catch (err) {
           logger.warn("clip_compress_failed", { userId: uid, soundId, message: err?.message });
@@ -364,9 +450,8 @@ export function mountSoundRoutes(app, deps = {}) {
       }
 
       // Sanity check: file should be at least a few KB
-      const finalPath = path.resolve(SOUNDS_FILE_DIR, String(uid), finalFilename);
       if (sizeBytes < 1024) {
-        try { await fsUnlink(finalPath); } catch {}
+        try { await fsUnlink(finalLocalPath); } catch {}
         return res.status(400).json({
           error: audioOnly
             ? "Extracted audio is too small. The clip may not contain an audio track."
@@ -382,15 +467,29 @@ export function mountSoundRoutes(app, deps = {}) {
 
       logger.info("clip_processed", { userId: uid, soundId, clipSlug, sizeBytes, audioOnly: !!audioOnly });
 
+      // Upload final clip/audio file to storage
+      if (r2Enabled) {
+        await putR2Object(r2SoundKey(String(uid), finalFilename), createReadStream(finalLocalPath), finalMimeType);
+        await fsUnlink(finalLocalPath).catch(() => {});
+      } else if (!r2Enabled && audioOnly) {
+        // Video file already removed by extractAudio; disk file is already in place
+      }
+
       // Download clip thumbnail as the card image
       let imageFilename = "";
       if (clipInfo.thumbnail_url) {
         try {
           imageFilename = generateImageFilename(soundId, "image/jpeg");
-          const imgPath = path.resolve(SOUNDS_FILE_DIR, String(uid), imageFilename);
+          const imgLocalPath = r2Enabled
+            ? path.resolve(MULTER_TMP_DIR, imageFilename)
+            : path.resolve(SOUNDS_FILE_DIR, String(uid), imageFilename);
           const imgRes = await fetch(clipInfo.thumbnail_url);
           if (imgRes.ok) {
-            await pipeline(imgRes.body, createWriteStream(imgPath));
+            await pipeline(imgRes.body, createWriteStream(imgLocalPath));
+            if (r2Enabled) {
+              await putR2Object(r2SoundKey(String(uid), imageFilename), createReadStream(imgLocalPath), "image/jpeg");
+              await fsUnlink(imgLocalPath).catch(() => {});
+            }
           } else {
             logger.warn("clip_thumbnail_download_failed", { userId: uid, soundId, status: imgRes.status });
             imageFilename = "";
@@ -453,8 +552,10 @@ export function mountSoundRoutes(app, deps = {}) {
       }
 
       const filename = `${sound.id}.mp4`;
-      await ensureSoundDir(uid);
-      const destPath = path.resolve(SOUNDS_FILE_DIR, String(uid), filename);
+      const destPath = r2Enabled
+        ? path.resolve(MULTER_TMP_DIR, filename)
+        : path.resolve(SOUNDS_FILE_DIR, String(uid), filename);
+      if (!r2Enabled) await ensureSoundDir(uid);
       const dlResult = await downloadClipVideo(clipInfo.video_url, destPath);
       if (!dlResult.ok) {
         return res.status(400).json({
@@ -481,6 +582,13 @@ export function mountSoundRoutes(app, deps = {}) {
         logger.info("clip_redownload_compressed", { userId: uid, soundId: sound.id, originalSize, compressedSize: sizeBytes });
       } catch (err) {
         logger.warn("clip_redownload_compress_failed", { userId: uid, soundId: sound.id, message: err?.message });
+      }
+
+      if (r2Enabled) {
+        // Delete old R2 object if it exists, then upload the new one
+        await deleteR2Object(r2SoundKey(String(uid), filename)).catch(() => {});
+        await putR2Object(r2SoundKey(String(uid), filename), createReadStream(destPath), "video/mp4");
+        await fsUnlink(destPath).catch(() => {});
       }
 
       updateSound(uid, sound.id, {
@@ -527,18 +635,16 @@ export function mountSoundRoutes(app, deps = {}) {
       const soundId = `snd_${crypto.randomUUID().slice(0, 12)}`;
       const filename = generateFilename(uid, soundId, req.file.mimetype);
 
-      await ensureSoundDir(uid);
-      const destPath = path.resolve(SOUNDS_FILE_DIR, String(uid), filename);
-      await rename(req.file.path, destPath);
-
-      // Compress video (falls back to original if compression fails or doesn't help)
+      // Compress video in-place while it's still in the multer temp location
       let sizeBytes = req.file.size;
       try {
-        sizeBytes = await compressVideo(destPath);
+        sizeBytes = await compressVideo(req.file.path);
         logger.info("video_compressed", { userId: uid, soundId, originalSize: req.file.size, compressedSize: sizeBytes });
       } catch (err) {
         logger.warn("video_compress_failed", { userId: uid, soundId, message: err?.message });
       }
+
+      await uploadToStorage(uid, filename, req.file.path, req.file.mimetype);
 
       const result = createSound(uid, {
         id: soundId,
@@ -556,7 +662,7 @@ export function mountSoundRoutes(app, deps = {}) {
       });
 
       if (result.error) {
-        try { await fsUnlink(destPath); } catch {}
+        await deleteFileFromStorage(uid, filename);
         return res.status(400).json(result);
       }
 
@@ -579,7 +685,7 @@ export function mountSoundRoutes(app, deps = {}) {
   });
 
   // Serve image for a library sound (from original owner's directory)
-  app.get("/api/sounds/library/:ownerUserId/:soundId/image", (req, res) => {
+  app.get("/api/sounds/library/:ownerUserId/:soundId/image", async (req, res) => {
     const uid = requireBroadcaster(req, res);
     if (!uid) return;
     if (!/^\w+$/.test(req.params.ownerUserId) || !/^\w+$/.test(req.params.soundId)) {
@@ -589,15 +695,11 @@ export function mountSoundRoutes(app, deps = {}) {
     if (!sound || !sound.shared || !sound.imageFilename) {
       return res.status(404).json({ error: "Image not found" });
     }
-    const filePath = path.resolve(SOUNDS_FILE_DIR, String(req.params.ownerUserId), sound.imageFilename);
-    res.setHeader("Cache-Control", "public, max-age=3600");
-    res.sendFile(filePath, (err) => {
-      if (err && !res.headersSent) res.status(404).json({ error: "Image file not found" });
-    });
+    await serveImageFromStorage(res, req.params.ownerUserId, sound.imageFilename);
   });
 
   // Serve audio preview for a library sound (from original owner's directory)
-  app.get("/api/sounds/library/:ownerUserId/:soundId/preview", (req, res) => {
+  app.get("/api/sounds/library/:ownerUserId/:soundId/preview", async (req, res) => {
     const uid = requireBroadcaster(req, res);
     if (!uid) return;
     if (!/^\w+$/.test(req.params.ownerUserId) || !/^\w+$/.test(req.params.soundId)) {
@@ -607,12 +709,8 @@ export function mountSoundRoutes(app, deps = {}) {
     if (!sound || !sound.shared) {
       return res.status(404).json({ error: "Sound not found or not shared" });
     }
-    const filePath = getSoundFilePath(req.params.ownerUserId, sound);
     res.setHeader("Content-Type", sound.mimeType || "audio/mpeg");
-    res.setHeader("Cache-Control", "public, max-age=3600");
-    res.sendFile(filePath, (err) => {
-      if (err && !res.headersSent) res.status(404).json({ error: "File not found" });
-    });
+    await serveFileFromStorage(res, req.params.ownerUserId, sound, "public, max-age=3600");
   });
 
   // Add a library sound to your own alerts (copies the file)
@@ -624,7 +722,16 @@ export function mountSoundRoutes(app, deps = {}) {
       return res.status(400).json({ error: "ownerUserId and soundId are required" });
     }
     try {
-      const result = await copySoundToUser(ownerUserId, soundId, uid);
+      const fileCopyFn = r2Enabled
+        ? async (srcFilename, destFilename) => {
+            const srcKey = r2SoundKey(String(ownerUserId), srcFilename);
+            const destKey = r2SoundKey(String(uid), destFilename);
+            await copyR2Object(srcKey, destKey);
+            const src = getSound(String(ownerUserId), soundId);
+            return { size: src?.sizeBytes || 0 };
+          }
+        : undefined;
+      const result = await copySoundToUser(ownerUserId, soundId, uid, { fileCopyFn });
       if (result.error) return res.status(400).json(result);
       logger.info("library_sound_added", { userId: uid, sourceUserId: ownerUserId, sourceSoundId: soundId, newSoundId: result.id });
       res.status(201).json({ sound: result });
@@ -642,6 +749,11 @@ export function mountSoundRoutes(app, deps = {}) {
     const { ownerUserId, soundId } = req.params;
     if (!/^[\w-]+$/.test(ownerUserId) || !/^[\w-]+$/.test(soundId)) {
       return res.status(400).json({ error: "Invalid parameters" });
+    }
+    const sound = getSound(ownerUserId, soundId);
+    if (sound) {
+      await deleteFileFromStorage(ownerUserId, sound.filename);
+      await deleteFileFromStorage(ownerUserId, sound.imageFilename);
     }
     const ok = await deleteSound(ownerUserId, soundId);
     if (!ok) return res.status(404).json({ error: "Sound not found" });
@@ -681,14 +793,15 @@ export function mountSoundRoutes(app, deps = {}) {
     try {
       // Delete old image if it exists
       if (sound.imageFilename) {
-        const oldPath = path.resolve(SOUNDS_FILE_DIR, String(uid), sound.imageFilename);
-        try { await fsUnlink(oldPath); } catch {}
+        await deleteFileFromStorage(uid, sound.imageFilename);
+        if (!r2Enabled) {
+          const oldPath = path.resolve(SOUNDS_FILE_DIR, String(uid), sound.imageFilename);
+          try { await fsUnlink(oldPath); } catch {}
+        }
       }
 
       const imageFilename = generateImageFilename(sound.id, req.file.mimetype);
-      await ensureSoundDir(uid);
-      const destPath = path.resolve(SOUNDS_FILE_DIR, String(uid), imageFilename);
-      await rename(req.file.path, destPath);
+      await uploadToStorage(uid, imageFilename, req.file.path, req.file.mimetype);
 
       const updated = updateSound(uid, sound.id, { imageFilename });
       logger.info("sound_image_uploaded", { userId: uid, soundId: sound.id, imageFilename });
@@ -708,8 +821,11 @@ export function mountSoundRoutes(app, deps = {}) {
     if (!sound) return res.status(404).json({ error: "Sound not found" });
 
     if (sound.imageFilename) {
-      const imgPath = path.resolve(SOUNDS_FILE_DIR, String(uid), sound.imageFilename);
-      try { await fsUnlink(imgPath); } catch {}
+      await deleteFileFromStorage(uid, sound.imageFilename);
+      if (!r2Enabled) {
+        const imgPath = path.resolve(SOUNDS_FILE_DIR, String(uid), sound.imageFilename);
+        try { await fsUnlink(imgPath); } catch {}
+      }
     }
 
     const updated = updateSound(uid, sound.id, { imageFilename: "" });
@@ -717,26 +833,25 @@ export function mountSoundRoutes(app, deps = {}) {
   });
 
   // Serve sound image for admin preview (session/JWT auth)
-  app.get("/api/sounds/:soundId/image", (req, res) => {
+  app.get("/api/sounds/:soundId/image", async (req, res) => {
     const uid = requireBroadcaster(req, res);
     if (!uid) return;
     const sound = getSound(uid, req.params.soundId);
     if (!sound || !sound.imageFilename) {
       return res.status(404).json({ error: "Image not found" });
     }
-    const filePath = path.resolve(SOUNDS_FILE_DIR, String(uid), sound.imageFilename);
-    res.setHeader("Cache-Control", "no-store");
-    res.sendFile(filePath, (err) => {
-      if (err && !res.headersSent) {
-        res.status(404).json({ error: "Image file not found" });
-      }
-    });
+    await serveImageFromStorage(res, uid, sound.imageFilename, "no-store");
   });
 
   // Delete a sound
   app.delete("/api/sounds/:soundId", async (req, res) => {
     const uid = requireBroadcaster(req, res);
     if (!uid) return;
+    const sound = getSound(uid, req.params.soundId);
+    if (sound) {
+      await deleteFileFromStorage(uid, sound.filename);
+      await deleteFileFromStorage(uid, sound.imageFilename);
+    }
     const ok = await deleteSound(uid, req.params.soundId);
     if (!ok) return res.status(404).json({ error: "Sound not found" });
     logger.info("sound_deleted", {
@@ -793,19 +908,13 @@ export function mountSoundRoutes(app, deps = {}) {
   });
 
   // Serve sound file for admin preview/trim (session auth)
-  app.get("/api/sounds/:soundId/audio", (req, res) => {
+  app.get("/api/sounds/:soundId/audio", async (req, res) => {
     const uid = requireBroadcaster(req, res);
     if (!uid) return;
     const sound = getSound(uid, req.params.soundId);
     if (!sound) return res.status(404).json({ error: "Sound not found" });
-    const filePath = getSoundFilePath(uid, sound);
     res.setHeader("Content-Type", sound.mimeType);
-    res.setHeader("Cache-Control", "no-store");
-    res.sendFile(filePath, (err) => {
-      if (err && !res.headersSent) {
-        res.status(404).json({ error: "Sound file not found" });
-      }
-    });
+    await serveFileFromStorage(res, uid, sound, "no-store");
   });
 
   // Get audio duration for a sound (for trim UI)
@@ -815,14 +924,19 @@ export function mountSoundRoutes(app, deps = {}) {
     const sound = getSound(uid, req.params.soundId);
     if (!sound) return res.status(404).json({ error: "Sound not found" });
 
-    const filePath = getSoundFilePath(uid, sound);
+    let probeTarget;
+    if (r2Enabled) {
+      probeTarget = await getR2PresignedUrl(r2SoundKey(String(uid), sound.filename), 300);
+    } else {
+      probeTarget = getSoundFilePath(uid, sound);
+    }
     try {
       const { stdout } = await execFileAsync("ffprobe", [
         "-v", "error",
         "-show_entries", "format=duration",
         "-of", "json",
-        filePath,
-      ], { timeout: 5000 });
+        probeTarget,
+      ], { timeout: 10000 });
       const info = JSON.parse(stdout);
       const duration = parseFloat(info.format?.duration || "0");
       res.json({ duration });
@@ -849,11 +963,18 @@ export function mountSoundRoutes(app, deps = {}) {
       return res.status(400).json({ error: "Trimmed clip must be at least 0.5 seconds" });
     }
 
-    const filePath = getSoundFilePath(uid, sound);
     const ext = path.extname(sound.filename) || ".mp3";
-    const tmpPath = filePath + ".trim_tmp" + ext;
+    const localTmpBase = path.resolve(MULTER_TMP_DIR, `${sound.id}_trim_${Date.now()}`);
+    // For disk mode: operate on the final file in-place (existing behavior)
+    // For R2 mode: download to a temp file, trim, re-upload
+    const filePath = r2Enabled ? localTmpBase + ext : getSoundFilePath(uid, sound);
+    const tmpPath = r2Enabled ? localTmpBase + ".trim_tmp" + ext : filePath + ".trim_tmp" + ext;
 
     try {
+      if (r2Enabled) {
+        await downloadFromR2ToTemp(uid, sound.filename, filePath);
+      }
+
       // Try stream copy first (fast, no re-encode)
       let usedCopy = true;
       try {
@@ -882,7 +1003,17 @@ export function mountSoundRoutes(app, deps = {}) {
         throw new Error("ffmpeg produced an empty file");
       }
 
-      // Replace original atomically
+      if (r2Enabled) {
+        // Upload trimmed file to R2 under the original filename, then clean up locals
+        await putR2Object(r2SoundKey(String(uid), sound.filename), createReadStream(tmpPath), sound.mimeType);
+        await fsUnlink(tmpPath).catch(() => {});
+        await fsUnlink(filePath).catch(() => {});
+        const updated = updateSound(uid, sound.id, { sizeBytes: tmpStat.size });
+        logger.info("sound_trimmed", { userId: uid, soundId: sound.id, trimStart, trimEnd, newSize: tmpStat.size, usedCopy });
+        return res.json({ sound: updated });
+      }
+
+      // Disk mode: replace original atomically
       await rename(tmpPath, filePath);
 
       // Update file size in sound record
@@ -900,8 +1031,9 @@ export function mountSoundRoutes(app, deps = {}) {
 
       res.json({ sound: updated });
     } catch (err) {
-      // Clean up temp file if it exists
+      // Clean up temp files if they exist
       try { await fsUnlink(tmpPath); } catch {}
+      if (r2Enabled) try { await fsUnlink(filePath); } catch {}
       const detail = err?.stderr || err?.message || "Unknown error";
       logger.error("sound_trim_failed", { userId: uid, soundId: req.params.soundId, detail });
       res.status(500).json({ error: "Trim failed: " + detail });
@@ -911,7 +1043,7 @@ export function mountSoundRoutes(app, deps = {}) {
   // ===== Public endpoints =====
 
   // Serve sound image (Extension JWT auth — any viewer/broadcaster/mod)
-  app.get("/api/sounds/image/:soundId", (req, res) => {
+  app.get("/api/sounds/image/:soundId", async (req, res) => {
     const claims = requireExtensionAuth(req, res);
     if (!claims) return;
     const channelId = req.query.channelId || claims.channel_id;
@@ -921,18 +1053,11 @@ export function mountSoundRoutes(app, deps = {}) {
     if (!sound || !sound.imageFilename) {
       return res.status(404).json({ error: "Image not found" });
     }
-
-    const filePath = path.resolve(SOUNDS_FILE_DIR, String(channelId), sound.imageFilename);
-    res.setHeader("Cache-Control", "public, max-age=3600");
-    res.sendFile(filePath, (err) => {
-      if (err && !res.headersSent) {
-        res.status(404).json({ error: "Image file not found" });
-      }
-    });
+    await serveImageFromStorage(res, channelId, sound.imageFilename);
   });
 
   // Preview a sound/video/clip (Extension JWT auth — any viewer/broadcaster/mod)
-  app.get("/api/sounds/preview/:soundId", (req, res) => {
+  app.get("/api/sounds/preview/:soundId", async (req, res) => {
     const claims = requireExtensionAuth(req, res);
     if (!claims) return;
     const channelId = req.query.channelId || claims.channel_id;
@@ -949,15 +1074,8 @@ export function mountSoundRoutes(app, deps = {}) {
       return res.status(404).json({ error: "Clip video not downloaded" });
     }
 
-    // Sound, video, and clip (with file) types: serve the file
-    const filePath = getSoundFilePath(String(channelId), sound);
     res.setHeader("Content-Type", sound.mimeType || "video/mp4");
-    res.setHeader("Cache-Control", "public, max-age=3600");
-    res.sendFile(filePath, (err) => {
-      if (err && !res.headersSent) {
-        res.status(404).json({ error: "File not found" });
-      }
-    });
+    await serveFileFromStorage(res, channelId, sound, "public, max-age=3600");
   });
 
   // Get enabled sounds for a channel (viewer panel)
@@ -979,7 +1097,7 @@ export function mountSoundRoutes(app, deps = {}) {
   });
 
   // Serve sound/video file (for overlay playback)
-  app.get("/api/sounds/file/:soundId", (req, res) => {
+  app.get("/api/sounds/file/:soundId", async (req, res) => {
     if (!requireOverlayAuth(req, res)) return;
 
     // Find the sound across all users (keyed by overlay key → userId)
@@ -1004,15 +1122,8 @@ export function mountSoundRoutes(app, deps = {}) {
       return res.status(404).json({ error: "Clip video not downloaded" });
     }
 
-    // Sound, video, and clip (with downloaded file) types: serve the file
-    const filePath = getSoundFilePath(String(uid), sound);
     res.setHeader("Content-Type", sound.mimeType || "video/mp4");
-    res.setHeader("Cache-Control", "public, max-age=86400");
-    res.sendFile(filePath, (err) => {
-      if (err && !res.headersSent) {
-        res.status(404).json({ error: "File not found" });
-      }
-    });
+    await serveFileFromStorage(res, uid, sound, "public, max-age=86400");
   });
 
   // Redeem a Bits transaction for a sound alert

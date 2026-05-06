@@ -424,7 +424,7 @@ export function getSharedLibrary(requestingUserId = null) {
   });
 }
 
-export async function copySoundToUser(sourceUid, sourceSoundId, destUid) {
+export async function copySoundToUser(sourceUid, sourceSoundId, destUid, { fileCopyFn } = {}) {
   const sourceUser = soundAlertsByUser.get(String(sourceUid));
   if (!sourceUser) return { error: "Source user not found" };
   const sourceSound = sourceUser.sounds.get(String(sourceSoundId));
@@ -445,12 +445,16 @@ export async function copySoundToUser(sourceUid, sourceSoundId, destUid) {
   const destPath = path.resolve(destDir, newFilename);
 
   let fileStat;
-  try {
-    await copyFile(srcPath, destPath);
-    fileStat = await stat(destPath);
-  } catch (err) {
-    try { await unlink(destPath); } catch {}
-    throw err;
+  if (fileCopyFn) {
+    fileStat = await fileCopyFn(sourceSound.filename, newFilename);
+  } else {
+    try {
+      await copyFile(srcPath, destPath);
+      fileStat = await stat(destPath);
+    } catch (err) {
+      try { await unlink(destPath); } catch {}
+      throw err;
+    }
   }
 
   const newSound = normalizeSound({

@@ -1,4 +1,5 @@
-import { S3Client } from '@aws-sdk/client-s3';
+import { S3Client, PutObjectCommand, DeleteObjectCommand, GetObjectCommand, CopyObjectCommand } from '@aws-sdk/client-s3';
+import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 
 const accountId = process.env.R2_ACCOUNT_ID;
 const accessKeyId = process.env.R2_ACCESS_KEY_ID;
@@ -18,3 +19,42 @@ export const r2 = r2Enabled
       credentials: { accessKeyId, secretAccessKey },
     })
   : null;
+
+export function r2SoundKey(userId, filename) {
+  return `sounds/${userId}/${filename}`;
+}
+
+export async function putR2Object(key, body, contentType) {
+  const cmd = new PutObjectCommand({
+    Bucket: r2Bucket,
+    Key: key,
+    Body: body,
+    ContentType: contentType,
+  });
+  return r2.send(cmd);
+}
+
+export async function deleteR2Object(key) {
+  const cmd = new DeleteObjectCommand({ Bucket: r2Bucket, Key: key });
+  return r2.send(cmd);
+}
+
+export async function getR2PresignedUrl(key, expiresIn = 3600) {
+  const cmd = new GetObjectCommand({ Bucket: r2Bucket, Key: key });
+  return getSignedUrl(r2, cmd, { expiresIn });
+}
+
+export async function getR2ObjectStream(key) {
+  const cmd = new GetObjectCommand({ Bucket: r2Bucket, Key: key });
+  const response = await r2.send(cmd);
+  return response.Body;
+}
+
+export async function copyR2Object(sourceKey, destKey) {
+  const cmd = new CopyObjectCommand({
+    Bucket: r2Bucket,
+    CopySource: `${r2Bucket}/${sourceKey}`,
+    Key: destKey,
+  });
+  return r2.send(cmd);
+}

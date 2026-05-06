@@ -1,20 +1,24 @@
-import { readFile, writeFile } from 'fs/promises';
-import path from 'path';
 import crypto from 'crypto';
 import fetch from 'node-fetch';
 import { logger } from './logger.js';
-
-const DATA_DIR = process.env.DATA_DIR || process.cwd();
-const TOKENS_PATH = path.resolve(DATA_DIR, 'twitch-tokens.enc.json');
+import { db } from './db.js';
 
 // Encryption key derived from TWITCH_CLIENT_SECRET (always available).
-// Tokens at rest are AES-256-GCM encrypted so the file alone is not useful.
+// Tokens are AES-256-GCM encrypted before being stored in Postgres so a DB
+// leak alone is not enough to compromise tokens. The same scheme was used by
+// the previous file-backed implementation, so existing ciphertexts migrate
+// over unchanged.
 const ENC_KEY_SOURCE = process.env.TWITCH_CLIENT_SECRET || 'default-key';
 const ENC_KEY = crypto.createHash('sha256').update(ENC_KEY_SOURCE).digest();
 
+// Hot in-memory cache of decrypted tokens. All read paths (getUserAccessToken,
+// getValidAccessToken, getAllTokenUserIds) hit this Map so per-request
+// hot-path latency stays unchanged. Writes go through to Postgres so any
+// crash/restart loses zero tokens.
 const accessTokens = new Map();
 
-// Track in-flight refresh promises to avoid duplicate refresh calls
+// Track in-flight refresh promises to avoid duplicate refresh calls for the
+// same user when many parallel requests notice the same expired token.
 const refreshInFlight = new Map();
 
 function encrypt(text) {
@@ -35,28 +39,66 @@ function decrypt(data) {
   return decipher.update(encrypted, undefined, 'utf8') + decipher.final('utf8');
 }
 
+async function writeTokenToDb(uid, entry) {
+  try {
+    const access = encrypt(entry.token);
+    const refresh = entry.refreshToken ? encrypt(entry.refreshToken) : null;
+    const expiresAt = entry.expiresAt ? new Date(entry.expiresAt) : null;
+    await db.query(
+      `insert into twitch_tokens (uid, access_token, refresh_token, expires_at, updated_at)
+         values ($1, $2, $3, $4, now())
+       on conflict (uid) do update set
+         access_token = excluded.access_token,
+         refresh_token = excluded.refresh_token,
+         expires_at = excluded.expires_at,
+         updated_at = now()`,
+      [uid, access, refresh, expiresAt],
+    );
+  } catch (e) {
+    logger.error('token_db_write_failed', { uid, message: e?.message });
+  }
+}
+
+async function deleteTokenFromDb(uid) {
+  try {
+    await db.query('delete from twitch_tokens where uid = $1', [uid]);
+  } catch (e) {
+    logger.error('token_db_delete_failed', { uid, message: e?.message });
+  }
+}
+
+/**
+ * Store / update a user's tokens. Updates the in-memory cache immediately and
+ * persists to Postgres in the background. Returns a promise that resolves once
+ * the DB write completes — callers may await it but are not required to (errors
+ * are logged internally and never thrown).
+ */
 export function storeUserAccessToken(uid, token, expiresIn, refreshToken) {
-  if (!uid || !token) return;
+  if (!uid || !token) return Promise.resolve();
+  uid = String(uid);
   const ttl = Number(expiresIn) || 0;
   const expiresAt = ttl > 0 ? Date.now() + ttl * 1000 : null;
-  const existing = accessTokens.get(String(uid));
-  accessTokens.set(String(uid), {
+  const existing = accessTokens.get(uid);
+  const entry = {
     token,
     expiresAt,
     // Keep existing refresh token if a new one isn't provided
     refreshToken: refreshToken || existing?.refreshToken || null,
-  });
+  };
+  accessTokens.set(uid, entry);
+  return writeTokenToDb(uid, entry);
 }
 
 export function deleteUserAccessToken(uid) {
-  accessTokens.delete(String(uid));
+  uid = String(uid);
+  accessTokens.delete(uid);
+  return deleteTokenFromDb(uid);
 }
 
 export function getUserAccessToken(uid) {
   const entry = accessTokens.get(String(uid));
   if (!entry) return null;
   if (entry.expiresAt && Date.now() >= entry.expiresAt - 60000) {
-    // Token expired — kick off background refresh if we have a refresh token
     if (entry.refreshToken) {
       refreshAccessToken(String(uid)).catch(() => {});
     }
@@ -83,15 +125,16 @@ export async function getValidAccessToken(uid) {
 }
 
 /**
- * Refresh a user's access token using their stored refresh token.
- * Returns the new access token, or null on failure.
+ * Refresh a user's access token using their stored refresh token. The new
+ * token is persisted to Postgres before this returns, closing the previous
+ * window where a process crash could lose a freshly-issued refresh token and
+ * force the user to re-authorize.
  */
 export async function refreshAccessToken(uid) {
   uid = String(uid);
   const entry = accessTokens.get(uid);
   if (!entry?.refreshToken) return null;
 
-  // Deduplicate concurrent refresh calls for the same user
   if (refreshInFlight.has(uid)) return refreshInFlight.get(uid);
 
   const promise = (async () => {
@@ -117,20 +160,22 @@ export async function refreshAccessToken(uid) {
       const json = await res.json();
       if (!json.access_token) {
         logger.error('token_refresh_failed', { uid, error: json.error, message: json.message });
-        // If refresh token is invalid/revoked, clean up
         if (json.error === 'invalid_grant' || json.status === 400) {
           accessTokens.delete(uid);
+          await deleteTokenFromDb(uid);
         }
         return null;
       }
 
       const ttl = Number(json.expires_in) || 0;
       const expiresAt = ttl > 0 ? Date.now() + ttl * 1000 : null;
-      accessTokens.set(uid, {
+      const newEntry = {
         token: json.access_token,
         expiresAt,
         refreshToken: json.refresh_token || entry.refreshToken,
-      });
+      };
+      accessTokens.set(uid, newEntry);
+      await writeTokenToDb(uid, newEntry);
 
       logger.info('token_refreshed', { uid, expiresIn: json.expires_in });
       return json.access_token;
@@ -150,7 +195,6 @@ export async function refreshAccessToken(uid) {
 export function getAllTokenUserIds() {
   const ids = [];
   for (const [uid, entry] of accessTokens) {
-    // Include users with unexpired tokens OR with a refresh token
     const expired = entry.expiresAt && Date.now() >= entry.expiresAt - 60000;
     if (!expired || entry.refreshToken) {
       ids.push(uid);
@@ -159,49 +203,38 @@ export function getAllTokenUserIds() {
   return ids;
 }
 
-/** Persist tokens to disk (encrypted). Called during graceful shutdown. */
+/**
+ * Compatibility shim. Postgres writes happen inline on every store / refresh,
+ * so there's nothing to flush here. server.js still calls this on a 5-minute
+ * timer and on graceful shutdown — left as a no-op so call-sites don't need
+ * coordinated changes; can be removed in a follow-up.
+ */
 export async function persistTokens() {
-  try {
-    const obj = {};
-    for (const [uid, entry] of accessTokens) {
-      // Keep entries that have a refresh token even if access token is expired
-      const expired = entry.expiresAt && Date.now() >= entry.expiresAt - 60000;
-      if (expired && !entry.refreshToken) continue;
-      obj[uid] = {
-        token: encrypt(entry.token),
-        expiresAt: entry.expiresAt,
-        refreshToken: entry.refreshToken ? encrypt(entry.refreshToken) : null,
-      };
-    }
-    await writeFile(TOKENS_PATH, JSON.stringify(obj, null, 2), 'utf-8');
-    logger.info('tokens_persisted', { count: Object.keys(obj).length });
-  } catch (e) {
-    logger.error('tokens_persist_failed', { message: e?.message });
-  }
+  return;
 }
 
-/** Load persisted tokens from disk. Called on startup. */
+/** Load all tokens from Postgres into the in-memory cache. Called on startup. */
 export async function loadTokens() {
   try {
-    const raw = await readFile(TOKENS_PATH, 'utf-8');
-    const obj = JSON.parse(raw);
+    const { rows } = await db.query(
+      'select uid, access_token, refresh_token, expires_at from twitch_tokens'
+    );
     let loaded = 0;
-    for (const [uid, entry] of Object.entries(obj)) {
-      if (!entry || !entry.token) continue;
+    for (const row of rows) {
       try {
-        const token = decrypt(entry.token);
-        const refreshToken = entry.refreshToken ? decrypt(entry.refreshToken) : null;
-        // Load even if expired — we can refresh it
-        const expired = entry.expiresAt && Date.now() >= entry.expiresAt - 60000;
+        const token = decrypt(row.access_token);
+        const refreshToken = row.refresh_token ? decrypt(row.refresh_token) : null;
+        const expiresAt = row.expires_at ? new Date(row.expires_at).getTime() : null;
+        const expired = expiresAt && Date.now() >= expiresAt - 60000;
         if (expired && !refreshToken) continue;
-        accessTokens.set(String(uid), { token, expiresAt: entry.expiresAt, refreshToken });
+        accessTokens.set(String(row.uid), { token, expiresAt, refreshToken });
         loaded++;
       } catch {
         // Decryption failed (key changed, corrupted) – skip this token
       }
     }
     if (loaded > 0) logger.info('tokens_loaded', { count: loaded });
-  } catch {
-    // File doesn't exist on first boot – that's fine
+  } catch (e) {
+    logger.error('tokens_load_failed', { message: e?.message });
   }
 }

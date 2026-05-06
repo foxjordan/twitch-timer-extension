@@ -13,6 +13,7 @@ import { synthesizeSpeech } from "./tts_provider.js";
 import { fetchUserDisplayName } from "./twitch_api.js";
 import { isViewerBanned, checkBlockedTerms } from "./twitch_moderation.js";
 import { VALID_TIERS } from "./tiers.js";
+import { logTtsEvent } from "./alert_events_store.js";
 
 const EXT_SECRET = process.env.EXTENSION_SECRET
   ? Buffer.from(process.env.EXTENSION_SECRET, "base64")
@@ -144,11 +145,14 @@ export function mountTtsRoutes(app, deps = {}) {
       audioFiles.set(fileId, { path: filePath, createdAt: Date.now() });
 
       const voice = getVoices().find((v) => v.id === voiceId);
+      const trimmedMessage = message.trim().slice(0, 300);
+      const voiceName = voice?.name || voiceId;
+      logTtsEvent({ channelId: uid, voiceId, voiceName, message: trimmedMessage, eventKind: 'test' });
       if (typeof onTtsAlert === "function") {
         onTtsAlert({
           channelId: uid,
-          message: message.trim().slice(0, 300),
-          voiceName: voice?.name || voiceId,
+          message: trimmedMessage,
+          voiceName,
           voiceId,
           fileId,
           volume: getTtsSettings(uid).volume,
@@ -230,9 +234,13 @@ export function mountTtsRoutes(app, deps = {}) {
     }
 
     const uid = String(channelId);
+    const viewerUserId = claims.user_id;
+    // Shared base for all rejection log entries in this handler
+    const ttsLogBase = { channelId: uid, viewerUserId, voiceId, message, eventKind: 'rejected' };
 
     // Check TTS accessible
     if (!isTtsAccessible(uid)) {
+      logTtsEvent({ ...ttsLogBase, rejectionReason: 'tts_not_available' });
       return res.json({ approved: false, reason: "TTS is not available on this channel" });
     }
 
@@ -240,33 +248,38 @@ export function mountTtsRoutes(app, deps = {}) {
 
     // Check TTS enabled
     if (!settings.enabled) {
+      logTtsEvent({ ...ttsLogBase, rejectionReason: 'tts_disabled' });
       return res.json({ approved: false, reason: "TTS is not enabled on this channel" });
     }
 
     // Check if viewer is banned/timed-out in this channel (Twitch Moderation API)
     try {
-      const viewerBanned = await isViewerBanned(uid, claims.user_id);
+      const viewerBanned = await isViewerBanned(uid, viewerUserId);
       if (viewerBanned) {
+        logTtsEvent({ ...ttsLogBase, rejectionReason: 'viewer_banned' });
         return res.json({ approved: false, reason: "You are currently banned or timed out in this channel" });
       }
     } catch (err) {
       // Non-blocking: if the API call fails, continue with local moderation
-      logger.warn("twitch_ban_check_failed", { channelId: uid, viewerUserId: claims.user_id, message: err?.message });
+      logger.warn("twitch_ban_check_failed", { channelId: uid, viewerUserId, message: err?.message });
     }
 
     // Check voice allowed
     if (!settings.allowedVoices.includes(voiceId)) {
+      logTtsEvent({ ...ttsLogBase, rejectionReason: 'voice_unavailable' });
       return res.json({ approved: false, reason: "Selected voice is not available" });
     }
 
     // Check voice valid
     if (!isValidVoice(voiceId)) {
+      logTtsEvent({ ...ttsLogBase, rejectionReason: 'invalid_voice' });
       return res.json({ approved: false, reason: "Invalid voice" });
     }
 
     // Check message length
     const trimmed = message.trim();
     if (trimmed.length === 0 || trimmed.length > settings.maxMessageLength) {
+      logTtsEvent({ ...ttsLogBase, rejectionReason: 'message_length' });
       return res.json({ approved: false, reason: `Message must be between 1 and ${settings.maxMessageLength} characters` });
     }
 
@@ -274,6 +287,7 @@ export function mountTtsRoutes(app, deps = {}) {
     const globalMod = getGlobalTtsConfig().moderation;
     const modResult = moderateMessage(trimmed, settings.bannedWords, settings.moderationEnabled, globalMod);
     if (!modResult.approved) {
+      logTtsEvent({ ...ttsLogBase, message: trimmed, rejectionReason: modResult.reason });
       return res.json({ approved: false, reason: modResult.reason });
     }
 
@@ -281,6 +295,7 @@ export function mountTtsRoutes(app, deps = {}) {
     try {
       const blockedResult = await checkBlockedTerms(uid, trimmed);
       if (blockedResult.blocked) {
+        logTtsEvent({ ...ttsLogBase, message: trimmed, rejectionReason: 'blocked_term' });
         return res.json({ approved: false, reason: "Message contains a blocked word" });
       }
     } catch (err) {

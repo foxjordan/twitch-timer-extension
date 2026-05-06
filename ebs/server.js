@@ -80,6 +80,7 @@ import { loadTtsSettings, getTtsSettings } from "./tts_store.js";
 import { loadVoices, getVoices } from "./tts_voices.js";
 import { persistTokens, loadTokens, getAllTokenUserIds, getUserAccessToken, getValidAccessToken, refreshAccessToken } from "./twitch_tokens.js";
 import { mountStreamElementsRoutes } from "./routes_streamelements.js";
+import { logSoundEvent, logTtsEvent } from "./alert_events_store.js";
 import {
   connectStreamElements,
   disconnectStreamElements,
@@ -912,6 +913,7 @@ mountSoundRoutes(app, {
   getSessionUserId: (req) => req.session?.twitchUser?.id,
   getUserIdForKey,
   onSoundAlert: ({ channelId, soundId, soundName, tier, txId, viewerUserId, type, clipSlug, volume }) => {
+    logSoundEvent({ channelId, viewerUserId, soundId, soundName, alertType: type, tier, txId, clipSlug, eventKind: 'played' });
     const logEntry = addLogEntry({
       type: "sound_alert",
       userId: String(channelId),
@@ -1003,6 +1005,7 @@ mountTtsRoutes(app, {
   getSessionUserId: (req) => req.session?.twitchUser?.id,
   getUserIdForKey,
   onTtsAlert: ({ channelId, message, voiceName, voiceId, fileId, volume, txId, viewerUserId, viewerDisplayName, tier }) => {
+    logTtsEvent({ channelId, viewerUserId, voiceId, voiceName, message, tier, txId, eventKind: 'played' });
     addLogEntry({
       type: "tts_alert",
       userId: String(channelId),

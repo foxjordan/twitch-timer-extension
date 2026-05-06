@@ -20,6 +20,7 @@ import {
   getR2ObjectStream,
   copyR2Object,
 } from "./r2.js";
+import { logSoundEvent } from "./alert_events_store.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -899,6 +900,7 @@ export function mountSoundRoutes(app, deps = {}) {
     if (!uid) return;
     const sound = getSound(uid, req.params.soundId);
     if (!sound) return res.status(404).json({ error: "Sound not found" });
+    logSoundEvent({ channelId: uid, soundId: sound.id, soundName: sound.name, alertType: sound.type || 'sound', clipSlug: sound.clipSlug, eventKind: 'test' });
     notify(String(uid), sound.id, sound.name, sound.tier, null, null, {
       type: sound.type || "sound",
       clipSlug: sound.clipSlug || "",
@@ -1147,31 +1149,35 @@ export function mountSoundRoutes(app, deps = {}) {
       return res.status(400).json({ error: "Invalid transaction receipt" });
     }
 
+    // Extract receipt data and txId early so they're available for failure logging below
+    const receiptData = txClaims.data || txClaims;
+    const txId = receiptData.transactionId || receiptData.transactionID || receiptData.id;
+    const viewerUserId = claims.user_id;
+
     // 3. Validate sound exists and is enabled
     const sound = getSound(String(channelId), soundId);
     if (!sound || !sound.enabled) {
+      logSoundEvent({ channelId, viewerUserId, soundId, soundName: sound?.name, alertType: sound?.type, txId, eventKind: 'failed', failureReason: 'sound_not_found' });
       return res.status(404).json({ error: "Sound not found or disabled" });
     }
 
     const settings = getSoundSettings(String(channelId));
     if (!settings.enabled) {
+      logSoundEvent({ channelId, viewerUserId, soundId, soundName: sound.name, alertType: sound.type, tier: sound.tier, txId, eventKind: 'failed', failureReason: 'alerts_disabled' });
       return res.status(400).json({ error: "Sound alerts are disabled" });
     }
 
     // 4. Verify SKU matches sound tier
-    const receiptData = txClaims.data || txClaims;
     const receiptSku =
       receiptData.product?.sku || receiptData.product?.domainID;
     if (receiptSku && receiptSku !== sound.tier) {
+      logSoundEvent({ channelId, viewerUserId, soundId, soundName: sound.name, alertType: sound.type, tier: sound.tier, txId, eventKind: 'failed', failureReason: 'sku_mismatch' });
       return res.status(400).json({ error: "Product SKU mismatch" });
     }
 
     // 5. Deduplicate by transactionId
-    const txId =
-      receiptData.transactionId ||
-      receiptData.transactionID ||
-      receiptData.id;
     if (txId && typeof deduplicateTx === "function" && deduplicateTx(txId)) {
+      logSoundEvent({ channelId, viewerUserId, soundId, soundName: sound.name, alertType: sound.type, tier: sound.tier, txId, eventKind: 'failed', failureReason: 'duplicate' });
       return res.json({ ok: true, sound: { id: sound.id, name: sound.name }, duplicate: true });
     }
 
@@ -1182,10 +1188,10 @@ export function mountSoundRoutes(app, deps = {}) {
       soundName: sound.name,
       tier: sound.tier,
       txId,
-      viewerUserId: claims.user_id,
+      viewerUserId,
     });
 
-    notify(String(channelId), sound.id, sound.name, sound.tier, txId, claims.user_id, {
+    notify(String(channelId), sound.id, sound.name, sound.tier, txId, viewerUserId, {
       type: sound.type || "sound",
       clipSlug: sound.clipSlug || "",
       volume: sound.volume || 80,

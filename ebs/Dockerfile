@@ -1,19 +1,20 @@
 # syntax=docker/dockerfile:1
 FROM node:20-alpine
 
-# Build context is the repo root (fly deploy runs from root)
+# Build context is the ebs/ directory itself (fly.toml lives here, so
+# `cd ebs && fly deploy` makes ebs/ the context). Paths below are relative
+# to that context.
 WORKDIR /app
 
 # Install ffmpeg for video/audio compression and trimming
 RUN apk add --no-cache ffmpeg
 
 # Install prod deps first for better layer caching
-COPY ebs/package*.json ./
-# Install deps (no dev dependencies)
+COPY package*.json ./
 RUN npm install --omit=dev
 
 # Copy EBS source
-COPY ebs/ ./
+COPY . ./
 
 # Create data dir (volume may mount here in Fly)
 ENV DATA_DIR=/data

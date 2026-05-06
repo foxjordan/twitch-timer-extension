@@ -5,4 +5,8 @@ overlay-*.json
 twitch-tokens.enc.json
 user-profiles.json
 *.enc.json
+.env
+.env.local
+.env.*.local
+.git
 

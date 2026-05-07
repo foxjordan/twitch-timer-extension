@@ -81,6 +81,7 @@ import { loadVoices, getVoices } from "./tts_voices.js";
 import { persistTokens, loadTokens, getAllTokenUserIds, getUserAccessToken, getValidAccessToken, refreshAccessToken } from "./twitch_tokens.js";
 import { mountStreamElementsRoutes } from "./routes_streamelements.js";
 import { logSoundEvent, logTtsEvent } from "./alert_events_store.js";
+import * as Sentry from "@sentry/node";
 import {
   connectStreamElements,
   disconnectStreamElements,
@@ -1999,6 +2000,9 @@ async function gracefulShutdown(signal) {
 }
 process.on("SIGTERM", () => gracefulShutdown("SIGTERM"));
 process.on("SIGINT", () => gracefulShutdown("SIGINT"));
+
+// Must be registered after all routes so Sentry can capture Express errors
+Sentry.setupExpressErrorHandler(app);
 
 const port = process.env.PORT || 8080;
 app.listen(port, () => console.log(`EBS listening on :${port} (boot ${SERVER_BOOT_ID})`));

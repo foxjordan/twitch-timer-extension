@@ -20,4 +20,4 @@ COPY . ./
 ENV DATA_DIR=/data
 RUN mkdir -p /data
 EXPOSE 8080
-CMD ["node", "server.js"]
+CMD ["node", "--import", "./instrument.js", "server.js"]

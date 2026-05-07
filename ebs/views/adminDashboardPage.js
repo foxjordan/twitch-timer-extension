@@ -102,6 +102,15 @@ export function renderAdminDashboardPage(options = {}) {
       .log-toolbar .log-status { font-size: 12px; color: var(--text-muted); }
       .tour-btn { position: fixed; bottom: 20px; right: 20px; background: #9146ff; color: #fff; border: none; padding: 8px 16px; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; z-index: 10; opacity: 0.85; transition: opacity 0.15s; }
       .tour-btn:hover { opacity: 1; }
+      .analytics-sku-badge { display:inline-block; padding:1px 7px; border-radius:999px; font-size:11px; font-weight:600; margin-right:4px; }
+      .analytics-sku-sound { background:#9146ff33; color:#bf94ff; }
+      .analytics-sku-tts   { background:#0ea5e933; color:#38bdf8; }
+      .analytics-bar { height:6px; border-radius:3px; background:#9146ff; display:inline-block; min-width:2px; vertical-align:middle; }
+      .analytics-streamer-row { cursor:pointer; transition:background .1s; }
+      .analytics-streamer-row:hover td { background:var(--surface-muted); }
+      .analytics-streamer-row.selected td { background:#9146ff22; }
+      .detail-section { margin-bottom:14px; }
+      .detail-section h3 { font-size:13px; font-weight:700; margin:0 0 8px; color:var(--text-muted); text-transform:uppercase; letter-spacing:.04em; }
       ${THEME_TOGGLE_STYLES}
       ${GLOBAL_HEADER_STYLES}
     </style>
@@ -125,6 +134,7 @@ export function renderAdminDashboardPage(options = {}) {
           <button class="sidebar-nav-item" data-section="test-alerts">Test Alerts</button>
           <button class="sidebar-nav-item" data-section="event-logs">Event Logs</button>
           <button class="sidebar-nav-item" data-section="broadcasters">Broadcasters</button>
+          <button class="sidebar-nav-item" data-section="analytics">Analytics</button>
         </div>
       </nav>
       <div class="content-area">
@@ -273,6 +283,31 @@ export function renderAdminDashboardPage(options = {}) {
         </div>
       </div>
       </div>
+
+      <div class="section-page" data-section="analytics">
+      <div class="overview-grid" id="analyticsStats">
+        <div class="stat-card"><div class="stat-value" id="anSoundBits">--</div><div class="stat-label">Sound Alert Bits</div></div>
+        <div class="stat-card"><div class="stat-value" id="anTtsBits">--</div><div class="stat-label">TTS Bits</div></div>
+        <div class="stat-card"><div class="stat-value" id="anSoundPlayed">--</div><div class="stat-label">Sound Plays</div></div>
+        <div class="stat-card"><div class="stat-value" id="anTtsPlayed">--</div><div class="stat-label">TTS Plays</div></div>
+        <div class="stat-card"><div class="stat-value" id="anFailedCount">--</div><div class="stat-label">Failed Redemptions</div></div>
+        <div class="stat-card"><div class="stat-value" id="anRejectedCount">--</div><div class="stat-label">TTS Rejections</div></div>
+      </div>
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:20px; margin-bottom:20px;">
+        <div class="table-card">
+          <h2>Top SKUs</h2>
+          <div id="analyticsSkuContainer"><div class="empty-state">Loading...</div></div>
+        </div>
+        <div class="table-card" id="analyticsStreamerDetail" style="display:none;">
+          <h2 id="analyticsStreamerDetailTitle">Streamer Detail</h2>
+          <div id="analyticsStreamerDetailBody"></div>
+        </div>
+      </div>
+      <div class="table-card">
+        <h2>Per-Streamer Breakdown <span class="refresh-info" id="analyticsRefreshInfo"></span></h2>
+        <div id="analyticsStreamersContainer"><div class="empty-state">Loading...</div></div>
+      </div>
+      </div><!-- /section analytics -->
 
       </div><!-- /content-area -->
     </main>
@@ -1153,6 +1188,226 @@ export function renderAdminDashboardPage(options = {}) {
           origPopulateTest(users);
           populateLogBroadcasters();
         };
+      })();
+    </script>
+    <script>
+      (function() {
+        var analyticsLoaded = false;
+        var selectedStreamer = null;
+
+        function fmtBits(n) {
+          if (n == null) return '--';
+          if (n >= 1000000) return (n / 1000000).toFixed(1).replace(/\.0$/, '') + 'M';
+          if (n >= 1000) return (n / 1000).toFixed(1).replace(/\.0$/, '') + 'K';
+          return String(n);
+        }
+
+        function fmtDate(iso) {
+          if (!iso) return '--';
+          return new Date(iso).toLocaleString();
+        }
+
+        function makeEmptyState(msg, padding) {
+          var d = document.createElement('div');
+          d.className = 'empty-state';
+          if (padding) d.style.padding = padding;
+          d.textContent = msg;
+          return d;
+        }
+
+        function renderSkuTable(topSkus) {
+          var container = document.getElementById('analyticsSkuContainer');
+          container.textContent = '';
+          if (!topSkus || topSkus.length === 0) {
+            container.appendChild(makeEmptyState('No data yet.'));
+            return;
+          }
+          var maxCount = topSkus.reduce(function(m, r) { return Math.max(m, r.count); }, 0);
+          var table = document.createElement('table');
+          var thead = document.createElement('thead');
+          var hr = document.createElement('tr');
+          ['Type', 'Bits', 'Count', ''].forEach(function(h) {
+            var th = document.createElement('th'); th.textContent = h; hr.appendChild(th);
+          });
+          thead.appendChild(hr); table.appendChild(thead);
+          var tbody = document.createElement('tbody');
+          topSkus.forEach(function(row) {
+            var tr = document.createElement('tr');
+            var tdType = document.createElement('td');
+            var badge = document.createElement('span');
+            badge.className = 'analytics-sku-badge analytics-sku-' + row.src;
+            badge.textContent = row.src === 'tts' ? 'TTS' : 'Sound';
+            tdType.appendChild(badge);
+            var tdBits = document.createElement('td');
+            tdBits.style.fontWeight = '600';
+            tdBits.textContent = row.bitsAmount + ' Bits';
+            var tdCount = document.createElement('td');
+            tdCount.textContent = row.count.toLocaleString();
+            var tdBar = document.createElement('td');
+            var bar = document.createElement('span');
+            bar.className = 'analytics-bar';
+            bar.style.width = Math.max(4, Math.round((row.count / maxCount) * 100)) + 'px';
+            tdBar.appendChild(bar);
+            tr.appendChild(tdType); tr.appendChild(tdBits); tr.appendChild(tdCount); tr.appendChild(tdBar);
+            tbody.appendChild(tr);
+          });
+          table.appendChild(tbody);
+          container.appendChild(table);
+        }
+
+        function renderStreamersTable(streamers) {
+          var container = document.getElementById('analyticsStreamersContainer');
+          container.textContent = '';
+          if (!streamers || streamers.length === 0) {
+            container.appendChild(makeEmptyState('No data yet.'));
+            return;
+          }
+          var table = document.createElement('table');
+          var thead = document.createElement('thead');
+          var hr = document.createElement('tr');
+          ['Streamer', 'Sound Bits', 'TTS Bits', 'Total Bits', 'Sound Plays', 'TTS Plays'].forEach(function(h) {
+            var th = document.createElement('th'); th.textContent = h; hr.appendChild(th);
+          });
+          thead.appendChild(hr); table.appendChild(thead);
+          var tbody = document.createElement('tbody');
+          streamers.forEach(function(row) {
+            var tr = document.createElement('tr');
+            tr.className = 'analytics-streamer-row';
+            if (selectedStreamer === row.channelId) tr.classList.add('selected');
+            var tdName = document.createElement('td');
+            var nameDiv = document.createElement('div');
+            nameDiv.style.fontWeight = '600';
+            nameDiv.textContent = row.displayName || row.channelId;
+            var idDiv = document.createElement('div');
+            idDiv.className = 'mono';
+            idDiv.textContent = row.channelId;
+            tdName.appendChild(nameDiv); tdName.appendChild(idDiv);
+            tr.appendChild(tdName);
+            [row.soundBits, row.ttsBits, row.totalBits, row.soundCount, row.ttsCount].forEach(function(v, i) {
+              var td = document.createElement('td');
+              td.textContent = i < 3 ? fmtBits(v) : (v || 0).toLocaleString();
+              if (i === 2) td.style.fontWeight = '700';
+              tr.appendChild(td);
+            });
+            tr.addEventListener('click', function() {
+              selectedStreamer = row.channelId;
+              renderStreamersTable(streamers);
+              fetchStreamerDetail(row.channelId, row.displayName || row.channelId);
+            });
+            tbody.appendChild(tr);
+          });
+          table.appendChild(tbody);
+          container.appendChild(table);
+        }
+
+        function makeDetailTable(headers, rows, cellFn) {
+          var tbl = document.createElement('table');
+          var thead = document.createElement('thead');
+          var hr = document.createElement('tr');
+          headers.forEach(function(h) { var th = document.createElement('th'); th.textContent = h; hr.appendChild(th); });
+          thead.appendChild(hr); tbl.appendChild(thead);
+          var tbody = document.createElement('tbody');
+          rows.forEach(function(row) {
+            var tr = document.createElement('tr');
+            cellFn(row).forEach(function(cell) { tr.appendChild(cell); });
+            tbody.appendChild(tr);
+          });
+          tbl.appendChild(tbody);
+          return tbl;
+        }
+
+        function td(text, opts) {
+          var el = document.createElement('td');
+          el.textContent = text || '--';
+          if (opts && opts.bold) el.style.fontWeight = '600';
+          if (opts && opts.mono) el.className = 'mono';
+          return el;
+        }
+
+        function fetchStreamerDetail(channelId, displayName) {
+          var detailCard = document.getElementById('analyticsStreamerDetail');
+          var detailTitle = document.getElementById('analyticsStreamerDetailTitle');
+          var detailBody = document.getElementById('analyticsStreamerDetailBody');
+          detailCard.style.display = '';
+          detailTitle.textContent = displayName;
+          detailBody.textContent = '';
+          detailBody.appendChild(makeEmptyState('Loading...'));
+          fetch('/api/admin/analytics/' + encodeURIComponent(channelId), { credentials: 'same-origin' })
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+              detailBody.textContent = '';
+
+              var s1 = document.createElement('div'); s1.className = 'detail-section';
+              var h1 = document.createElement('h3'); h1.textContent = 'Top Sounds'; s1.appendChild(h1);
+              if (data.topSounds && data.topSounds.length > 0) {
+                s1.appendChild(makeDetailTable(['Sound', 'Plays', 'Total Bits'], data.topSounds, function(row) {
+                  return [td(row.sound_name || row.sound_id, {bold:true}), td((row.count||0).toLocaleString()), td(fmtBits(row.totalBits))];
+                }));
+              } else { s1.appendChild(makeEmptyState('No sound plays yet.', '12px 0')); }
+              detailBody.appendChild(s1);
+
+              var s2 = document.createElement('div'); s2.className = 'detail-section';
+              var h2 = document.createElement('h3'); h2.textContent = 'Recent Sound Plays'; s2.appendChild(h2);
+              if (data.recentSoundEvents && data.recentSoundEvents.length > 0) {
+                s2.appendChild(makeDetailTable(['Sound', 'Bits', 'Viewer', 'When'], data.recentSoundEvents, function(row) {
+                  return [
+                    td(row.sound_name),
+                    td(row.bits_amount != null ? row.bits_amount + ' Bits' : '--'),
+                    td(row.viewer_user_id, {mono:true}),
+                    td(fmtDate(row.created_at)),
+                  ];
+                }));
+              } else { s2.appendChild(makeEmptyState('None yet.', '12px 0')); }
+              detailBody.appendChild(s2);
+
+              var s3 = document.createElement('div'); s3.className = 'detail-section';
+              var h3el = document.createElement('h3'); h3el.textContent = 'Recent TTS Plays'; s3.appendChild(h3el);
+              if (data.recentTtsEvents && data.recentTtsEvents.length > 0) {
+                s3.appendChild(makeDetailTable(['Voice', 'Bits', 'Viewer', 'When'], data.recentTtsEvents, function(row) {
+                  return [
+                    td(row.voice_name),
+                    td(row.bits_amount != null ? row.bits_amount + ' Bits' : '--'),
+                    td(row.viewer_user_id, {mono:true}),
+                    td(fmtDate(row.created_at)),
+                  ];
+                }));
+              } else { s3.appendChild(makeEmptyState('None yet.', '12px 0')); }
+              detailBody.appendChild(s3);
+            })
+            .catch(function() {
+              detailBody.textContent = '';
+              detailBody.appendChild(makeEmptyState('Failed to load detail.'));
+            });
+        }
+
+        function fetchAnalytics() {
+          fetch('/api/admin/analytics', { credentials: 'same-origin' })
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+              if (data.error) return;
+              document.getElementById('anSoundBits').textContent = fmtBits(data.sound.totalBits);
+              document.getElementById('anTtsBits').textContent = fmtBits(data.tts.totalBits);
+              document.getElementById('anSoundPlayed').textContent = (data.sound.playedCount || 0).toLocaleString();
+              document.getElementById('anTtsPlayed').textContent = (data.tts.playedCount || 0).toLocaleString();
+              document.getElementById('anFailedCount').textContent = (data.sound.failedCount || 0).toLocaleString();
+              document.getElementById('anRejectedCount').textContent = (data.tts.rejectedCount || 0).toLocaleString();
+              renderSkuTable(data.topSkus);
+              renderStreamersTable(data.streamers);
+              document.getElementById('analyticsRefreshInfo').textContent = 'Updated ' + new Date().toLocaleTimeString();
+              analyticsLoaded = true;
+            })
+            .catch(function() {
+              document.getElementById('analyticsRefreshInfo').textContent = 'Load failed';
+            });
+        }
+
+        document.querySelectorAll('.sidebar-nav-item').forEach(function(btn) {
+          btn.addEventListener('click', function() {
+            if (btn.getAttribute('data-section') === 'analytics' && !analyticsLoaded) {
+              fetchAnalytics();
+            }
+          });
+        });
       })();
     </script>
     <button class="tour-btn" id="tourBtn" title="Show guided tour">Take A Tour</button>

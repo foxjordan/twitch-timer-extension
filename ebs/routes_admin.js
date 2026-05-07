@@ -1,5 +1,6 @@
 import { renderAdminDashboardPage } from "./views/adminDashboardPage.js";
 import { renderSoundConfigPage } from "./views/soundConfigPage.js";
+import { db } from "./db.js";
 import { getBan, banUser, unbanUser } from "./bans.js";
 import { getLogEntries } from "./event_log.js";
 import { getSubscription, isPro } from "./subscription_store.js";
@@ -443,5 +444,148 @@ export function mountAdminRoutes(app, ctx) {
 
     const result = await deleteAllUserData(uid, ctx.deletionCtx || {});
     res.json({ ok: true, userId: uid, deleted: result.deleted });
+  });
+
+  app.get("/api/admin/analytics", async (req, res) => {
+    if (!req.session?.isAdmin || !isSuperAdmin(req)) {
+      return res.status(403).json({ error: "Access denied" });
+    }
+    try {
+      const [soundRes, ttsRes, skuRes, streamerRes] = await Promise.all([
+        db.query(`
+          SELECT
+            COALESCE(SUM(bits_amount), 0)::bigint AS total_bits,
+            COUNT(*) FILTER (WHERE event_kind = 'played')::int AS played_count,
+            COUNT(*) FILTER (WHERE event_kind = 'test')::int   AS test_count,
+            COUNT(*) FILTER (WHERE event_kind = 'failed')::int AS failed_count
+          FROM sound_alert_events
+        `),
+        db.query(`
+          SELECT
+            COALESCE(SUM(bits_amount), 0)::bigint AS total_bits,
+            COUNT(*) FILTER (WHERE event_kind = 'played')::int   AS played_count,
+            COUNT(*) FILTER (WHERE event_kind = 'test')::int     AS test_count,
+            COUNT(*) FILTER (WHERE event_kind = 'rejected')::int AS rejected_count
+          FROM tts_events
+        `),
+        db.query(`
+          SELECT bits_amount, src, COUNT(*)::int AS count
+          FROM (
+            SELECT bits_amount, 'sound' AS src
+              FROM sound_alert_events
+             WHERE event_kind = 'played' AND bits_amount IS NOT NULL
+            UNION ALL
+            SELECT bits_amount, 'tts' AS src
+              FROM tts_events
+             WHERE event_kind = 'played' AND bits_amount IS NOT NULL
+          ) combined
+          GROUP BY bits_amount, src
+          ORDER BY count DESC
+          LIMIT 20
+        `),
+        db.query(`
+          SELECT
+            channel_id,
+            COALESCE(SUM(CASE WHEN src = 'sound' THEN bits_amount ELSE 0 END), 0)::bigint AS sound_bits,
+            COALESCE(SUM(CASE WHEN src = 'tts'   THEN bits_amount ELSE 0 END), 0)::bigint AS tts_bits,
+            COALESCE(SUM(bits_amount), 0)::bigint AS total_bits,
+            COUNT(*) FILTER (WHERE src = 'sound')::int AS sound_count,
+            COUNT(*) FILTER (WHERE src = 'tts')::int   AS tts_count
+          FROM (
+            SELECT channel_id, bits_amount, 'sound' AS src
+              FROM sound_alert_events WHERE event_kind = 'played'
+            UNION ALL
+            SELECT channel_id, bits_amount, 'tts' AS src
+              FROM tts_events WHERE event_kind = 'played'
+          ) combined
+          GROUP BY channel_id
+          ORDER BY total_bits DESC
+        `),
+      ]);
+
+      const s = soundRes.rows[0];
+      const t = ttsRes.rows[0];
+
+      const streamers = streamerRes.rows.map((row) => {
+        const conn = getBroadcasterConnection(row.channel_id);
+        const profile = getUserProfile ? getUserProfile(row.channel_id) : null;
+        return {
+          channelId: row.channel_id,
+          displayName: conn?.broadcasterLogin || profile?.displayName || profile?.login || row.channel_id,
+          soundBits: Number(row.sound_bits),
+          ttsBits: Number(row.tts_bits),
+          totalBits: Number(row.total_bits),
+          soundCount: row.sound_count,
+          ttsCount: row.tts_count,
+        };
+      });
+
+      res.json({
+        sound: {
+          totalBits: Number(s.total_bits),
+          playedCount: s.played_count,
+          testCount: s.test_count,
+          failedCount: s.failed_count,
+        },
+        tts: {
+          totalBits: Number(t.total_bits),
+          playedCount: t.played_count,
+          testCount: t.test_count,
+          rejectedCount: t.rejected_count,
+        },
+        topSkus: skuRes.rows.map((r) => ({
+          bitsAmount: r.bits_amount,
+          src: r.src,
+          count: r.count,
+        })),
+        streamers,
+      });
+    } catch (err) {
+      res.status(500).json({ error: err?.message || "Query failed" });
+    }
+  });
+
+  app.get("/api/admin/analytics/:userId", async (req, res) => {
+    if (!req.session?.isAdmin || !isSuperAdmin(req)) {
+      return res.status(403).json({ error: "Access denied" });
+    }
+    const uid = String(req.params.userId);
+    try {
+      const [topSoundsRes, recentSoundRes, recentTtsRes] = await Promise.all([
+        db.query(
+          `SELECT sound_id, sound_name, COUNT(*)::int AS count,
+                  COALESCE(SUM(bits_amount), 0)::bigint AS total_bits
+             FROM sound_alert_events
+            WHERE channel_id = $1 AND event_kind = 'played'
+            GROUP BY sound_id, sound_name
+            ORDER BY count DESC
+            LIMIT 10`,
+          [uid],
+        ),
+        db.query(
+          `SELECT sound_name, alert_type, bits_amount, viewer_user_id, created_at
+             FROM sound_alert_events
+            WHERE channel_id = $1 AND event_kind = 'played'
+            ORDER BY created_at DESC
+            LIMIT 15`,
+          [uid],
+        ),
+        db.query(
+          `SELECT voice_name, bits_amount, viewer_user_id, created_at
+             FROM tts_events
+            WHERE channel_id = $1 AND event_kind = 'played'
+            ORDER BY created_at DESC
+            LIMIT 15`,
+          [uid],
+        ),
+      ]);
+      res.json({
+        topSounds: topSoundsRes.rows.map((r) => ({ ...r, totalBits: Number(r.total_bits) })),
+        recentSoundEvents: recentSoundRes.rows,
+        recentTtsEvents: recentTtsRes.rows,
+      });
+    } catch (err) {
+      res.status(500).json({ error: err?.message || "Query failed" });
+    }
   });
 }

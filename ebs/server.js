@@ -914,7 +914,7 @@ mountSoundRoutes(app, {
   getSessionUserId: (req) => req.session?.twitchUser?.id,
   getUserIdForKey,
   onSoundAlert: ({ channelId, soundId, soundName, tier, txId, viewerUserId, type, clipSlug, volume }) => {
-    logSoundEvent({ channelId, viewerUserId, soundId, soundName, alertType: type, tier, txId, clipSlug, eventKind: 'played' });
+    logSoundEvent({ channelId, viewerUserId, soundId, soundName, alertType: type, tier, txId, clipSlug, eventKind: txId?.startsWith('test_') ? 'test' : 'played' });
     const logEntry = addLogEntry({
       type: "sound_alert",
       userId: String(channelId),
@@ -1006,7 +1006,7 @@ mountTtsRoutes(app, {
   getSessionUserId: (req) => req.session?.twitchUser?.id,
   getUserIdForKey,
   onTtsAlert: ({ channelId, message, voiceName, voiceId, fileId, volume, txId, viewerUserId, viewerDisplayName, tier }) => {
-    logTtsEvent({ channelId, viewerUserId, voiceId, voiceName, message, tier, txId, eventKind: 'played' });
+    logTtsEvent({ channelId, viewerUserId, voiceId, voiceName, message, tier, txId, eventKind: txId?.startsWith('test_') ? 'test' : 'played' });
     addLogEntry({
       type: "tts_alert",
       userId: String(channelId),

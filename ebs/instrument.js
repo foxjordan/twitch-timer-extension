@@ -12,3 +12,8 @@ Sentry.init({
   // Disable if SENTRY_DSN is not set (Sentry silently no-ops anyway, but be explicit).
   enabled: Boolean(process.env.SENTRY_DSN),
 });
+
+// TODO: remove after confirming Sentry pipeline works end-to-end
+if (process.env.SENTRY_DSN) {
+  Sentry.captureMessage('ebs_startup_test', 'info');
+}

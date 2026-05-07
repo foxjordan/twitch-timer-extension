@@ -900,7 +900,6 @@ export function mountSoundRoutes(app, deps = {}) {
     if (!uid) return;
     const sound = getSound(uid, req.params.soundId);
     if (!sound) return res.status(404).json({ error: "Sound not found" });
-    logSoundEvent({ channelId: uid, soundId: sound.id, soundName: sound.name, alertType: sound.type || 'sound', clipSlug: sound.clipSlug, eventKind: 'test' });
     notify(String(uid), sound.id, sound.name, sound.tier, null, null, {
       type: sound.type || "sound",
       clipSlug: sound.clipSlug || "",

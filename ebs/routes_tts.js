@@ -147,7 +147,6 @@ export function mountTtsRoutes(app, deps = {}) {
       const voice = getVoices().find((v) => v.id === voiceId);
       const trimmedMessage = message.trim().slice(0, 300);
       const voiceName = voice?.name || voiceId;
-      logTtsEvent({ channelId: uid, voiceId, voiceName, message: trimmedMessage, eventKind: 'test' });
       if (typeof onTtsAlert === "function") {
         onTtsAlert({
           channelId: uid,

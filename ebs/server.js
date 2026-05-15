@@ -1473,30 +1473,43 @@ async function handleEventSub(notification, expectedUserId = null) {
   // ---- Sub dedup: channel.subscribe vs channel.subscription.message ----
   // Twitch behaviour is inconsistent: resubs sometimes fire BOTH events
   // (causing double time), sometimes only channel.subscription.message.
-  // Defer channel.subscribe by 5s. If channel.subscription.message arrives
-  // in that window for the same user, cancel the deferred subscribe and
-  // only count the message. If no message arrives, the deferred subscribe
-  // processes normally.
+  // Defer channel.subscribe by 7s. If channel.subscription.message arrives
+  // within that window, cancel the deferred subscribe (fast path). If the
+  // subscribe fires first and the message arrives within 45s, subtract the
+  // already-applied seconds retroactively (late path). Gap observed at 8s+.
   const subUserId = e.user_id || e.user_login || "";
   if (subType === "channel.subscribe" && subUserId && !(e.is_gift || e.was_gift)) {
     const dedupKey = `${timerUid}:${subUserId}`;
     const existing = pendingSubscribes.get(dedupKey);
     if (existing) clearTimeout(existing.timer);
     pendingSubscribes.set(dedupKey, {
-      timer: setTimeout(() => {
+      timer: setTimeout(async () => {
         pendingSubscribes.delete(dedupKey);
-        processEventTimer(notification, timerUid, id, now);
-      }, 5000),
+        const applied = await processEventTimer(notification, timerUid, id, now);
+        if (applied > 0) {
+          recentlyAppliedSubscribes.set(dedupKey, { appliedSeconds: applied });
+          setTimeout(() => recentlyAppliedSubscribes.delete(dedupKey), 45000);
+        }
+      }, 7000),
     });
     return;
   }
   if (subType === "channel.subscription.message" && subUserId) {
     const dedupKey = `${timerUid}:${subUserId}`;
-    const existing = pendingSubscribes.get(dedupKey);
-    if (existing) {
-      clearTimeout(existing.timer);
+    const pending = pendingSubscribes.get(dedupKey);
+    if (pending) {
+      // Fast path: subscribe hasn't fired yet — cancel it
+      clearTimeout(pending.timer);
       pendingSubscribes.delete(dedupKey);
       logger.info("sub_dedup_cancelled", { broadcasterId: timerUid, userId: subUserId });
+    } else {
+      // Late path: subscribe already fired — retroactively subtract its contribution
+      const recent = recentlyAppliedSubscribes.get(dedupKey);
+      if (recent) {
+        recentlyAppliedSubscribes.delete(dedupKey);
+        addSeconds(timerUid, -recent.appliedSeconds);
+        logger.info("sub_dedup_retroactive", { broadcasterId: timerUid, userId: subUserId, subtracted: recent.appliedSeconds });
+      }
     }
   }
 
@@ -1510,6 +1523,8 @@ async function handleEventSub(notification, expectedUserId = null) {
 
 // Pending channel.subscribe events awaiting possible channel.subscription.message dedup
 const pendingSubscribes = new Map();
+// Subscribes that already fired — keyed by `${timerUid}:${subUserId}`, TTL 45s
+const recentlyAppliedSubscribes = new Map();
 
 async function processEventTimer(notification, timerUid, id, now) {
   const subType = notification?.payload?.subscription?.type;
@@ -1597,6 +1612,8 @@ async function processEventTimer(notification, timerUid, id, now) {
   } catch (err) {
     logger.error("goal_auto_apply_failed", { message: err?.message });
   }
+
+  return appliedSeconds;
 }
 
 // ---- StreamElements tip handler ----

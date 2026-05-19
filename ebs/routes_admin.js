@@ -1,6 +1,8 @@
 import { renderAdminDashboardPage } from "./views/adminDashboardPage.js";
 import { renderSoundConfigPage } from "./views/soundConfigPage.js";
 import { db } from "./db.js";
+import { r2Enabled, r2ObjectExists, putR2Object, r2SoundKey } from "./r2.js";
+import { SOUNDS_FILE_DIR } from "./sounds_store.js";
 import { getBan, banUser, unbanUser } from "./bans.js";
 import { getLogEntries } from "./event_log.js";
 import { getSubscription, isPro } from "./subscription_store.js";
@@ -11,7 +13,7 @@ import { synthesizeSpeech } from "./tts_provider.js";
 import { VALID_TIERS, TIER_LABELS, TIER_COSTS } from "./tiers.js";
 import crypto from "crypto";
 import path from "path";
-import { writeFile, mkdir } from "fs/promises";
+import { readFile, writeFile, mkdir } from "fs/promises";
 import { existsSync } from "fs";
 
 const DATA_DIR = process.env.DATA_DIR || process.cwd();
@@ -587,5 +589,53 @@ export function mountAdminRoutes(app, ctx) {
     } catch (err) {
       res.status(500).json({ error: err?.message || "Query failed" });
     }
+  });
+
+  app.post("/api/admin/migrate-sounds-to-r2", async (req, res) => {
+    if (!req.session?.isAdmin || !isSuperAdmin(req)) {
+      return res.status(403).json({ error: "Access denied" });
+    }
+
+    if (!r2Enabled) {
+      return res.status(400).json({ error: "R2 is not configured" });
+    }
+
+    const results = { migrated: [], alreadyPresent: [], missing: [], errors: [] };
+
+    for (const uid of getAllUserIds()) {
+      const sounds = listSounds(uid);
+      for (const sound of sounds) {
+        if (!sound.filename) continue;
+        const key = r2SoundKey(String(uid), sound.filename);
+        try {
+          const exists = await r2ObjectExists(key);
+          if (exists) {
+            results.alreadyPresent.push({ uid, soundId: sound.id, name: sound.name, key });
+            continue;
+          }
+          const diskPath = path.resolve(SOUNDS_FILE_DIR, String(uid), sound.filename);
+          if (!existsSync(diskPath)) {
+            results.missing.push({ uid, soundId: sound.id, name: sound.name, key });
+            continue;
+          }
+          const buf = await readFile(diskPath);
+          await putR2Object(key, buf, sound.mimeType || "audio/mpeg");
+          results.migrated.push({ uid, soundId: sound.id, name: sound.name, key });
+        } catch (err) {
+          results.errors.push({ uid, soundId: sound.id, name: sound.name, key, error: err?.message });
+        }
+      }
+    }
+
+    res.json({
+      ok: true,
+      summary: {
+        migrated: results.migrated.length,
+        alreadyPresent: results.alreadyPresent.length,
+        missing: results.missing.length,
+        errors: results.errors.length,
+      },
+      details: results,
+    });
   });
 }

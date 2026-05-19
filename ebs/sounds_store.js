@@ -166,7 +166,7 @@ function normalizeSound(raw = {}) {
     enabled: typeof raw.enabled === "boolean" ? raw.enabled : true,
     volume: sanitizeNumber(raw.volume, 80, 0, 100),
     cooldownMs: sanitizeNumber(raw.cooldownMs, 5000, 0, 60000),
-    shared: typeof raw.shared === "boolean" ? raw.shared : true,
+    shared: typeof raw.shared === "boolean" ? raw.shared : false,
     sourceUserId: sanitizeString(raw.sourceUserId, ""),
     sourceSoundId: sanitizeString(raw.sourceSoundId, ""),
     createdAt: raw.createdAt || now,
@@ -430,6 +430,8 @@ export async function copySoundToUser(sourceUid, sourceSoundId, destUid, { fileC
   const sourceSound = sourceUser.sounds.get(String(sourceSoundId));
   if (!sourceSound || !sourceSound.shared) return { error: "Sound not found or not shared" };
   if (sourceSound.type !== "sound") return { error: "Only audio sounds can be added from the library" };
+
+  if (String(sourceUid) === String(destUid)) return { error: "Cannot add your own sound to your own alerts" };
 
   const destUser = ensureUser(destUid);
   if (destUser.sounds.size >= MAX_SOUNDS_PER_USER) {

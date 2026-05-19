@@ -1,4 +1,4 @@
-import { S3Client, PutObjectCommand, DeleteObjectCommand, GetObjectCommand, CopyObjectCommand } from '@aws-sdk/client-s3';
+import { S3Client, PutObjectCommand, DeleteObjectCommand, GetObjectCommand, CopyObjectCommand, HeadObjectCommand } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 
 const accountId = process.env.R2_ACCOUNT_ID;
@@ -48,6 +48,16 @@ export async function getR2ObjectStream(key) {
   const cmd = new GetObjectCommand({ Bucket: r2Bucket, Key: key });
   const response = await r2.send(cmd);
   return response.Body;
+}
+
+export async function r2ObjectExists(key) {
+  try {
+    await r2.send(new HeadObjectCommand({ Bucket: r2Bucket, Key: key }));
+    return true;
+  } catch (err) {
+    if (err?.name === 'NotFound' || err?.$metadata?.httpStatusCode === 404) return false;
+    throw err;
+  }
 }
 
 export async function copyR2Object(sourceKey, destKey) {

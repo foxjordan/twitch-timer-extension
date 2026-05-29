@@ -49,6 +49,16 @@ function verifyExtensionJwt(req) {
   }
 }
 
+// Per-viewer cooldown: channelId:userId -> last approved timestamp
+const viewerTtsCooldowns = new Map();
+const VIEWER_TTS_COOLDOWN_MS = 30_000; // 30 seconds between approvals per viewer per channel
+setInterval(() => {
+  const cutoff = Date.now() - VIEWER_TTS_COOLDOWN_MS * 2;
+  for (const [k, ts] of viewerTtsCooldowns.entries()) {
+    if (ts < cutoff) viewerTtsCooldowns.delete(k);
+  }
+}, 5 * 60 * 1000);
+
 export function mountTtsRoutes(app, deps = {}) {
   const {
     requireOverlayAuth,
@@ -136,8 +146,18 @@ export function mountTtsRoutes(app, deps = {}) {
       return res.status(400).json({ error: "Invalid voice" });
     }
 
+    const trimmedMessage = message.trim().slice(0, 300);
+
+    // Run the same moderation as the viewer path so test results are accurate
+    const settings = getTtsSettings(uid);
+    const globalMod = getGlobalTtsConfig().moderation;
+    const modResult = moderateMessage(trimmedMessage, settings.bannedWords, settings.moderationEnabled, globalMod);
+    if (!modResult.approved) {
+      return res.status(400).json({ error: `Moderation rejected: ${modResult.reason}` });
+    }
+
     try {
-      const audioBuffer = await synthesizeSpeech(message.trim().slice(0, 300), voiceId);
+      const audioBuffer = await synthesizeSpeech(trimmedMessage, voiceId);
       const fileId = `tts_${crypto.randomUUID().slice(0, 12)}`;
       await ensureTtsAudioDir();
       const filePath = path.resolve(TTS_AUDIO_DIR, `${fileId}.mp3`);
@@ -145,7 +165,6 @@ export function mountTtsRoutes(app, deps = {}) {
       audioFiles.set(fileId, { path: filePath, createdAt: Date.now() });
 
       const voice = getVoices().find((v) => v.id === voiceId);
-      const trimmedMessage = message.trim().slice(0, 300);
       const voiceName = voice?.name || voiceId;
       if (typeof onTtsAlert === "function") {
         onTtsAlert({
@@ -154,7 +173,7 @@ export function mountTtsRoutes(app, deps = {}) {
           voiceName,
           voiceId,
           fileId,
-          volume: getTtsSettings(uid).volume,
+          volume: settings.volume,
           txId: null,
           viewerUserId: null,
         });
@@ -302,8 +321,17 @@ export function mountTtsRoutes(app, deps = {}) {
       logger.warn("twitch_blocked_terms_check_failed", { channelId: uid, message: err?.message });
     }
 
+    // Per-viewer rate limit: prevent spamming before Bits are spent
+    const cooldownKey = `${uid}:${viewerUserId}`;
+    const lastApproved = viewerTtsCooldowns.get(cooldownKey) || 0;
+    const remaining = VIEWER_TTS_COOLDOWN_MS - (Date.now() - lastApproved);
+    if (remaining > 0) {
+      return res.json({ approved: false, reason: `Please wait ${Math.ceil(remaining / 1000)} seconds before sending another TTS message` });
+    }
+
     // Create approval token
     const approvalToken = createApprovalToken(uid, claims.user_id, voiceId, trimmed);
+    viewerTtsCooldowns.set(cooldownKey, Date.now());
     res.json({ approved: true, approvalToken });
   });
 

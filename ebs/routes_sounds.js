@@ -248,6 +248,8 @@ export function mountSoundRoutes(app, deps = {}) {
     requireOverlayAuth,
     getSessionUserId,
     onSoundAlert,
+    onRemoveAlert,
+    pendingAlerts,
     deduplicateTx,
   } = deps;
 
@@ -892,6 +894,27 @@ export function mountSoundRoutes(app, deps = {}) {
     res.json({
       url: `${base}/overlay/sounds?key=${encodeURIComponent(key)}`,
     });
+  });
+
+  // Alert queue — returns pending (unplayed) alerts for the broadcaster's channel
+  app.get("/api/sounds/queue", (req, res) => {
+    const uid = requireBroadcaster(req, res);
+    if (!uid) return;
+    const now = Date.now();
+    const queue = (pendingAlerts?.get(String(uid)) || []).filter(a => a.expiresAt > now);
+    res.json({ queue });
+  });
+
+  // Remove a specific alert from the queue and send remove_alert SSE to the overlay
+  app.post("/api/sounds/queue/remove", (req, res) => {
+    const uid = requireBroadcaster(req, res);
+    if (!uid) return;
+    const { alertId } = req.body || {};
+    if (!alertId) return res.status(400).json({ error: "alertId required" });
+    if (typeof onRemoveAlert === "function") {
+      onRemoveAlert({ channelId: uid, alertId });
+    }
+    res.json({ ok: true });
   });
 
   // Test a sound alert (admin only, no Bits required)

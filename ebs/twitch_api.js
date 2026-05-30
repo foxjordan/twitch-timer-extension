@@ -56,7 +56,7 @@ async function resolveHelixToken(userId) {
   return getAppAccessToken();
 }
 
-export async function fetchUserDisplayName(userId) {
+export async function fetchUserDisplayName(userId, channelId = null) {
   if (!userId) return null;
   const uid = String(userId);
 
@@ -65,10 +65,10 @@ export async function fetchUserDisplayName(userId) {
   if (cached && Date.now() < cached.expiresAt) return cached.name;
 
   const clientId = process.env.TWITCH_CLIENT_ID;
-  // Use broadcaster token or any available app token
-  const broadcasterId = process.env.BROADCASTER_USER_ID;
+  // Prefer the channel's own stored token so we don't depend on a global env var
+  const tokenChannelId = channelId || process.env.BROADCASTER_USER_ID;
   const token =
-    (broadcasterId && await getValidAccessToken(broadcasterId)) ||
+    (tokenChannelId && await getValidAccessToken(String(tokenChannelId))) ||
     process.env.BROADCASTER_USER_TOKEN ||
     null;
   if (!clientId || !token) return null;

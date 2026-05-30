@@ -388,6 +388,20 @@ export function renderSoundAlertOverlayPage() {
             skipCurrent();
           });
 
+          es.addEventListener('remove_alert', function(ev) {
+            try {
+              var data = JSON.parse(ev.data);
+              if (!data.alertId) return;
+              var idx = alertQueue.findIndex(function(a) { return a.alertId === data.alertId; });
+              if (idx !== -1) {
+                alertQueue.splice(idx, 1);
+              } else if (isPlaying) {
+                // If it's the currently playing item, skip it
+                skipCurrent();
+              }
+            } catch (e) {}
+          });
+
           es.addEventListener('sound_settings', function(ev) {
             try {
               var data = JSON.parse(ev.data);

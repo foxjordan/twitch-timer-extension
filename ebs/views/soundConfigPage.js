@@ -205,6 +205,7 @@ export function renderSoundConfigPage(options = {}) {
           <button class="sidebar-nav-item" data-section="library">Community Library</button>
           <button class="sidebar-nav-item" data-section="settings">Settings</button>
           <button class="sidebar-nav-item" data-section="tts">Text-to-Speech</button>
+          <button class="sidebar-nav-item" data-section="queue">Queue</button>
           <button class="sidebar-nav-item" data-section="history">Alert History</button>
         </div>
       </nav>
@@ -453,6 +454,19 @@ export function renderSoundConfigPage(options = {}) {
             </div>
           </div>
         </div>
+      </div>
+      </div>
+
+      <div class="section-page" data-section="queue">
+      <div class="card" id="alertQueueCard">
+        <h2>Alert Queue <span id="queueCount" style="font-size:13px; font-weight:400; color:var(--text-muted);"></span></h2>
+        <p class="hint" style="margin-bottom:10px;">Alerts waiting to play on your overlay. Use Skip to remove an alert from the queue.</p>
+        <div style="display:flex; gap:8px; margin-bottom:12px;">
+          <button id="queueRefreshBtn" class="secondary" style="font-size:12px; padding:4px 10px;">Refresh</button>
+          <button id="queueSkipAllBtn" class="secondary" style="font-size:12px; padding:4px 10px; color:#ef4444; border-color:#ef4444;">Skip All</button>
+        </div>
+        <div id="alertQueueList"></div>
+        <div id="alertQueueEmpty" class="hint" style="display:none;">Queue is empty.</div>
       </div>
       </div>
 
@@ -1697,6 +1711,119 @@ export function renderSoundConfigPage(options = {}) {
             setBusy(saveTtsBtnEl, false);
           });
         }
+
+        // ===== Alert Queue =====
+        var alertQueueListEl = document.getElementById('alertQueueList');
+        var alertQueueEmptyEl = document.getElementById('alertQueueEmpty');
+        var queueCountEl = document.getElementById('queueCount');
+        var queueRefreshBtn = document.getElementById('queueRefreshBtn');
+        var queueSkipAllBtn = document.getElementById('queueSkipAllBtn');
+        var queueAutoRefreshInterval = null;
+
+        function timeAgoShort(ms) {
+          var s = Math.floor((Date.now() - ms) / 1000);
+          if (s < 60) return s + 's ago';
+          return Math.floor(s / 60) + 'm ago';
+        }
+
+        function renderQueue(queue) {
+          alertQueueListEl.textContent = '';
+          if (!queue || queue.length === 0) {
+            if (alertQueueEmptyEl) alertQueueEmptyEl.style.display = '';
+            if (queueCountEl) queueCountEl.textContent = '';
+            return;
+          }
+          if (alertQueueEmptyEl) alertQueueEmptyEl.style.display = 'none';
+          if (queueCountEl) queueCountEl.textContent = '(' + queue.length + ')';
+
+          queue.forEach(function(item, idx) {
+            var row = document.createElement('div');
+            row.style.cssText = 'display:flex; align-items:center; gap:10px; padding:8px 0; border-bottom:1px solid var(--surface-border);';
+
+            var badge = document.createElement('span');
+            badge.style.cssText = 'flex-shrink:0; padding:2px 7px; border-radius:4px; font-size:11px; font-weight:700; letter-spacing:.03em;';
+            if (item.type === 'tts') {
+              badge.textContent = 'TTS';
+              badge.style.background = '#0ea5e933';
+              badge.style.color = '#38bdf8';
+            } else {
+              badge.textContent = item.type === 'clip' ? 'CLIP' : item.type === 'video' ? 'VIDEO' : 'SOUND';
+              badge.style.background = '#9146ff33';
+              badge.style.color = '#bf94ff';
+            }
+
+            var info = document.createElement('div');
+            info.style.cssText = 'flex:1; min-width:0;';
+
+            var nameDiv = document.createElement('div');
+            nameDiv.style.cssText = 'font-weight:600; font-size:13px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;';
+            nameDiv.textContent = item.soundName || '--';
+            info.appendChild(nameDiv);
+
+            var meta = document.createElement('div');
+            meta.style.cssText = 'font-size:11px; color:var(--text-muted); margin-top:2px;';
+            var parts = [];
+            if (item.bitsAmount) parts.push(item.bitsAmount + ' Bits');
+            if (item.viewerDisplayName) parts.push('by ' + item.viewerDisplayName);
+            else if (item.viewerUserId) parts.push('by user ' + item.viewerUserId);
+            parts.push(timeAgoShort(item.enqueuedAt));
+            meta.textContent = parts.join(' · ');
+            info.appendChild(meta);
+
+            var skipBtn = document.createElement('button');
+            skipBtn.className = 'secondary';
+            skipBtn.style.cssText = 'flex-shrink:0; font-size:11px; padding:3px 10px; color:#ef4444; border-color:#ef4444;';
+            skipBtn.textContent = idx === 0 ? 'Skip' : 'Remove';
+            skipBtn.addEventListener('click', function() {
+              skipBtn.disabled = true;
+              skipBtn.textContent = '...';
+              fetch(API_BASE + '/queue/remove', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ alertId: item.alertId }),
+              }).then(function() { fetchQueue(); }).catch(function() {
+                skipBtn.disabled = false;
+                skipBtn.textContent = idx === 0 ? 'Skip' : 'Remove';
+              });
+            });
+
+            row.appendChild(badge);
+            row.appendChild(info);
+            row.appendChild(skipBtn);
+            alertQueueListEl.appendChild(row);
+          });
+        }
+
+        function fetchQueue() {
+          fetch(API_BASE + '/queue', { credentials: 'same-origin' })
+            .then(function(r) { return r.json(); })
+            .then(function(data) { renderQueue(data.queue || []); })
+            .catch(function() {});
+        }
+
+        if (queueRefreshBtn) queueRefreshBtn.addEventListener('click', fetchQueue);
+        if (queueSkipAllBtn) {
+          queueSkipAllBtn.addEventListener('click', function() {
+            fetch('/api/tts/skip', { method: 'POST', credentials: 'same-origin' })
+              .then(function() { fetchQueue(); });
+          });
+        }
+
+        document.querySelectorAll('.sidebar-nav-item').forEach(function(btn) {
+          btn.addEventListener('click', function() {
+            if (btn.getAttribute('data-section') === 'queue') {
+              fetchQueue();
+              if (!queueAutoRefreshInterval) {
+                queueAutoRefreshInterval = setInterval(fetchQueue, 4000);
+              }
+            } else {
+              if (queueAutoRefreshInterval) {
+                clearInterval(queueAutoRefreshInterval);
+                queueAutoRefreshInterval = null;
+              }
+            }
+          });
+        });
 
         // ===== Alert History & Overlay Status =====
         var alertHistoryListEl = document.getElementById('alertHistoryList');

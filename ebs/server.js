@@ -343,6 +343,19 @@ setInterval(() => {
   }
 }, 10 * 60 * 1000);
 
+// Per-channel pending alert queue: channelId -> [{ alertId, type, soundName, viewerUserId, viewerDisplayName, bitsAmount, enqueuedAt, expiresAt }]
+export const pendingAlerts = new Map();
+const ALERT_QUEUE_TTL_MS = 10 * 60 * 1000; // items expire after 10 minutes
+
+// Cleanup expired queue items every minute
+setInterval(() => {
+  const now = Date.now();
+  for (const [cid, queue] of pendingAlerts.entries()) {
+    const fresh = queue.filter(a => a.expiresAt > now);
+    if (fresh.length !== queue.length) pendingAlerts.set(cid, fresh);
+  }
+}, 60 * 1000);
+
 // Basic health endpoint
 app.get("/healthz", (_req, res) => {
   // Check if ANY EventSub connections are active
@@ -913,10 +926,42 @@ mountSoundRoutes(app, {
   requireOverlayAuth,
   getSessionUserId: (req) => req.session?.twitchUser?.id,
   getUserIdForKey,
+  pendingAlerts,
+  onRemoveAlert: ({ channelId, alertId }) => {
+    const cq = pendingAlerts.get(String(channelId));
+    if (cq) {
+      const idx = cq.findIndex(a => a.alertId === alertId);
+      if (idx !== -1) cq.splice(idx, 1);
+    }
+    const payload = JSON.stringify({ alertId, ts: Date.now() });
+    for (const client of Array.from(sseClients)) {
+      if (client.timerUserId && String(client.timerUserId) !== String(channelId)) continue;
+      try {
+        client.res.write("event: remove_alert\n");
+        client.res.write(`data: ${payload}\n\n`);
+      } catch { sseClients.delete(client); }
+    }
+  },
   onSoundAlert: ({ channelId, soundId, soundName, tier, txId, viewerUserId, type, clipSlug, volume }) => {
     if (txId && !txId.startsWith('test_')) {
       logSoundEvent({ channelId, viewerUserId, soundId, soundName, alertType: type, tier, txId, clipSlug, eventKind: 'played' });
     }
+    const alertId = crypto.randomUUID().slice(0, 12);
+    const bitsAmount = tier ? (Number(tier.replace(/^[^_]+_/, '')) || null) : null;
+    const queueItem = {
+      alertId,
+      type: type || 'sound',
+      soundName,
+      soundId,
+      viewerUserId: viewerUserId || null,
+      viewerDisplayName: null,
+      bitsAmount,
+      enqueuedAt: Date.now(),
+      expiresAt: Date.now() + ALERT_QUEUE_TTL_MS,
+    };
+    const cq = pendingAlerts.get(String(channelId)) || [];
+    cq.push(queueItem);
+    pendingAlerts.set(String(channelId), cq);
     const logEntry = addLogEntry({
       type: "sound_alert",
       userId: String(channelId),
@@ -928,6 +973,7 @@ mountSoundRoutes(app, {
       txId: txId || undefined,
     });
     const payload = JSON.stringify({
+      alertId,
       soundId,
       soundName,
       channelId,
@@ -985,8 +1031,11 @@ mountSoundRoutes(app, {
     if (viewerUserId && tier) {
       const bits = tier.replace("sound_", "");
       (async () => {
-        const displayName = await fetchUserDisplayName(viewerUserId);
-        if (displayName) logEntry.viewerDisplayName = displayName;
+        const displayName = await fetchUserDisplayName(viewerUserId, channelId);
+        if (displayName) {
+          logEntry.viewerDisplayName = displayName;
+          queueItem.viewerDisplayName = displayName;
+        }
         const who = displayName || `User ${viewerUserId}`;
         await sendExtensionChatMessage({
           broadcasterId: channelId,
@@ -1011,6 +1060,21 @@ mountTtsRoutes(app, {
     if (txId && !txId.startsWith('test_')) {
       logTtsEvent({ channelId, viewerUserId, voiceId, voiceName, message, tier, txId, eventKind: 'played' });
     }
+    const alertId = crypto.randomUUID().slice(0, 12);
+    const bitsAmount = tier ? (Number(tier.replace(/^[^_]+_/, '')) || null) : null;
+    const cq = pendingAlerts.get(String(channelId)) || [];
+    cq.push({
+      alertId,
+      type: 'tts',
+      soundName: message ? message.slice(0, 60) : 'TTS',
+      soundId: null,
+      viewerUserId: viewerUserId || null,
+      viewerDisplayName: viewerDisplayName || null,
+      bitsAmount,
+      enqueuedAt: Date.now(),
+      expiresAt: Date.now() + ALERT_QUEUE_TTL_MS,
+    });
+    pendingAlerts.set(String(channelId), cq);
     addLogEntry({
       type: "tts_alert",
       userId: String(channelId),
@@ -1023,6 +1087,7 @@ mountTtsRoutes(app, {
       txId: txId || undefined,
     });
     const payload = JSON.stringify({
+      alertId,
       type: "tts",
       message,
       voiceName,
@@ -1079,7 +1144,7 @@ mountTtsRoutes(app, {
     if (viewerUserId && tier) {
       const bits = tier.replace("sound_", "");
       (async () => {
-        const displayName = await fetchUserDisplayName(viewerUserId);
+        const displayName = await fetchUserDisplayName(viewerUserId, channelId);
         const who = displayName || `User ${viewerUserId}`;
         const voice = voiceName ? ` (${voiceName})` : "";
         await sendExtensionChatMessage({
@@ -1090,6 +1155,7 @@ mountTtsRoutes(app, {
     }
   },
   onSkipAlert: ({ channelId }) => {
+    pendingAlerts.delete(String(channelId));
     const payload = JSON.stringify({ ts: Date.now() });
     for (const client of Array.from(sseClients)) {
       if (client.timerUserId && String(client.timerUserId) !== String(channelId)) continue;

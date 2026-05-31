@@ -45,6 +45,7 @@ function ConfigApp() {
   const [ttsMinTier, setTtsMinTier] = useState("sound_300");
   const [ttsBannedWordsText, setTtsBannedWordsText] = useState("");
   const [previewingVoice, setPreviewingVoice] = useState(null);
+  const [extConfig, setExtConfig] = useState({ features: { tts: true, videoClips: true, communityLibrary: true } });
   const previewAudioRef = useRef(null);
 
   const headers = useCallback(
@@ -88,6 +89,14 @@ function ConfigApp() {
         .then((data) => {
           if (data.url) setOverlayUrl(data.url);
         })
+        .catch(() => {});
+
+      // Fetch remote feature config
+      fetch(`${EBS_BASE}/api/ext/config?channelId=${authData.channelId}`, {
+        headers: { Authorization: `Bearer ${authData.token}` },
+      })
+        .then((r) => r.json())
+        .then((data) => { if (data.features) setExtConfig(data); })
         .catch(() => {});
 
       // Fetch TTS settings

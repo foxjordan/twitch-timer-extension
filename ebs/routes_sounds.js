@@ -896,6 +896,21 @@ export function mountSoundRoutes(app, deps = {}) {
     });
   });
 
+  // Public extension config — feature flags for viewer/broadcaster panel
+  app.get("/api/ext/config", (req, res) => {
+    const channelId = req.query.channelId;
+    if (!channelId) return res.status(400).json({ error: "channelId required" });
+    const uid = String(channelId);
+    const soundSettings = getSoundSettings(uid);
+    res.json({
+      features: {
+        tts: true,           // toggled per-channel via TTS settings — placeholder for now
+        videoClips: Boolean(soundSettings?.videoClipsEnabled),
+        communityLibrary: true,
+      },
+    });
+  });
+
   // Alert queue — returns pending (unplayed) alerts for the broadcaster's channel
   app.get("/api/sounds/queue", (req, res) => {
     const uid = requireBroadcaster(req, res);

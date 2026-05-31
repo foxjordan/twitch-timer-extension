@@ -226,6 +226,7 @@ function App() {
   const [ttsCooldown, setTtsCooldown] = useState(false);
   const [previewingVoice, setPreviewingVoice] = useState(null);
   const [overlayConnected, setOverlayConnected] = useState(null); // null = unknown, true/false
+  const [extConfig, setExtConfig] = useState({ features: { tts: true, videoClips: true, communityLibrary: true } });
 
   const fetchSounds = useCallback((token, channelId) => {
     fetch(`${EBS_BASE}/api/sounds/public?channelId=${channelId}`, {
@@ -275,6 +276,14 @@ function App() {
             if (data.voices?.length > 0) setTtsVoice(data.voices[0].id);
           }
         })
+        .catch(() => {});
+
+      // Fetch remote feature config
+      fetch(`${EBS_BASE}/api/ext/config?channelId=${authData.channelId}`, {
+        headers: { Authorization: `Bearer ${authData.token}` },
+      })
+        .then((r) => r.json())
+        .then((data) => { if (data.features) setExtConfig(data); })
         .catch(() => {});
 
       // Check overlay connection status

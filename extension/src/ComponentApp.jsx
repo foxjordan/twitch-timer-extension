@@ -264,6 +264,7 @@ function ComponentApp() {
   const [ttsCooldown, setTtsCooldown] = useState(false);
   const [previewingVoice, setPreviewingVoice] = useState(null);
   const [overlayConnected, setOverlayConnected] = useState(null);
+  const [extConfig, setExtConfig] = useState({ features: { tts: true, videoClips: true, communityLibrary: true } });
   const gridRef = useRef(null);
   const [canScrollUp, setCanScrollUp] = useState(false);
   const [canScrollDown, setCanScrollDown] = useState(false);
@@ -329,6 +330,14 @@ function ComponentApp() {
             if (data.voices?.length > 0) setTtsVoice(data.voices[0].id);
           }
         })
+        .catch(() => {});
+
+      // Fetch remote feature config
+      fetch(`${EBS_BASE}/api/ext/config?channelId=${authData.channelId}`, {
+        headers: { Authorization: `Bearer ${authData.token}` },
+      })
+        .then((r) => r.json())
+        .then((data) => { if (data.features) setExtConfig(data); })
         .catch(() => {});
 
       // Check overlay connection status

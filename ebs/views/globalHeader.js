@@ -181,6 +181,7 @@ export function renderGlobalHeader(options = {}) {
     showLogout = false,
     showUtilitiesLink = false,
     showAdminLink = false,
+    showManageLink = false,
     feedbackUrl = "https://docs.google.com/forms/d/e/1FAIpQLSdanikaYMRTjwm9TS5HQ4zMMc8tiDRbz9dqyrJ00Zl518hxbw/viewform?usp=dialog",
   } = options;
 
@@ -189,12 +190,16 @@ export function renderGlobalHeader(options = {}) {
   const soundsHref = `${base}/sounds/config`;
   const utilitiesHref = `${base}/utilities`;
   const adminHref = `${base}/admin`;
+  const manageHref = `${base}/manage`;
 
   const navLinks = [
     { href: homeHref, label: "Home", key: "home" },
     { href: configHref, label: "Countdown", key: "config" },
     { href: soundsHref, label: "Sound Alerts", key: "sounds" },
     { href: `${base}/goals/config`, label: "Goals", key: "goals" },
+    ...(showManageLink
+      ? [{ href: manageHref, label: "Manage Channels", key: "manage" }]
+      : []),
     ...(showUtilitiesLink
       ? [{ href: utilitiesHref, label: "Extras (WIP)", key: "utilities" }]
       : []),

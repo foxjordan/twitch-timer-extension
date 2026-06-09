@@ -185,6 +185,7 @@ export function renderSoundConfigPage(options = {}) {
       showLogout: true,
       showUtilitiesLink: true,
       showAdminLink,
+      showManageLink: true,
     })}
 
     <!-- Floating extension promo -->

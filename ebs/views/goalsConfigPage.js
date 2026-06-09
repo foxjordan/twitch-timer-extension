@@ -179,6 +179,7 @@ export function renderGoalsConfigPage(options = {}) {
       showLogout: true,
       showUtilitiesLink: true,
       showAdminLink,
+      showManageLink: true,
     })}
     <main>
       ${delegateMode ? `<div style="background:#f59e0b22; border:2px solid #f59e0b; border-radius:10px; padding:12px 18px; margin-bottom:16px; display:flex; align-items:center; gap:12px; font-size:13px; font-weight:500;">

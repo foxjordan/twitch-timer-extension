@@ -173,6 +173,7 @@ export function renderOverlayConfigPage(options = {}) {
       showLogout: true,
       showUtilitiesLink: true,
       showAdminLink,
+      showManageLink: true,
     })}
     <div class="page-content">
       <!-- Browser Source URL -->
@@ -202,6 +203,7 @@ export function renderOverlayConfigPage(options = {}) {
           <button class="sidebar-nav-item" data-section="styles">Styles</button>
           <button class="sidebar-nav-item" data-section="rules">Rules</button>
           <button class="sidebar-nav-item" data-section="log-debug">Log & Debug</button>
+          ${!delegateMode ? `<button class="sidebar-nav-item" data-section="delegates">Delegates</button>` : ''}
         </div>
       </nav>
       <div class="content-area">
@@ -587,6 +589,23 @@ export function renderOverlayConfigPage(options = {}) {
         </div>
       </div><!-- end debug panel -->
       </div><!-- end log-debug section-page -->
+
+      ${!delegateMode ? `
+      <div class="section-page" data-section="delegates">
+      <div class="panel">
+        <div style="padding:12px; font-size:15px; font-weight:600;">Delegates</div>
+        <div style="padding:0 12px 12px;">
+          <p style="font-size:13px; color:var(--text-muted); margin:0 0 14px;">Delegates can manage your Sound Alerts, Timer Rules, and Goals settings. Add a Twitch username below. They must log in at <strong>livestreamerhub.com</strong> and navigate to <strong>Manage Channels</strong>.</p>
+          <div style="display:flex; gap:8px; margin-bottom:18px; flex-wrap:wrap;">
+            <input type="text" id="delegateLoginInput" placeholder="Twitch username" style="flex:1; min-width:180px; padding:8px 12px; border-radius:8px; border:1px solid var(--surface-border); background:var(--input-bg); color:var(--text-color); font-size:13px;">
+            <button id="delegateAddBtn" style="padding:8px 16px;">Add</button>
+            <span id="delegateAddStatus" style="align-self:center; font-size:12px; display:none;"></span>
+          </div>
+          <div id="delegateList"><div style="color:var(--text-muted);font-size:13px;">Loading...</div></div>
+        </div>
+      </div>
+      </div>
+      ` : ''}
 
       </div><!-- end content-area -->
       </main>
@@ -1583,6 +1602,93 @@ export function renderOverlayConfigPage(options = {}) {
       refresh();
       saveStyle();
     </script>
+    ${!delegateMode ? `<script>
+      (function() {
+        var delegateListEl = document.getElementById('delegateList');
+        var delegateAddBtn = document.getElementById('delegateAddBtn');
+        var delegateLoginInput = document.getElementById('delegateLoginInput');
+        var delegateAddStatus = document.getElementById('delegateAddStatus');
+        if (!delegateListEl) return;
+
+        function makeEmptyState(msg) {
+          var d = document.createElement('div'); d.style.cssText = 'color:var(--text-muted);font-size:13px;'; d.textContent = msg; return d;
+        }
+
+        function renderDelegates(delegates) {
+          delegateListEl.textContent = '';
+          if (!delegates || delegates.length === 0) {
+            delegateListEl.appendChild(makeEmptyState('No delegates yet.'));
+            return;
+          }
+          delegates.forEach(function(d) {
+            var row = document.createElement('div');
+            row.style.cssText = 'display:flex; align-items:center; gap:10px; padding:8px 0; border-bottom:1px solid var(--surface-border);';
+            var info = document.createElement('div'); info.style.flex = '1';
+            var name = document.createElement('div'); name.style.cssText = 'font-weight:600; font-size:13px;'; name.textContent = d.displayName || d.userId;
+            var id = document.createElement('div'); id.style.cssText = 'font-size:11px; color:var(--text-muted); font-family:ui-monospace,monospace;'; id.textContent = d.userId;
+            info.appendChild(name); info.appendChild(id);
+            var removeBtn = document.createElement('button');
+            removeBtn.className = 'secondary';
+            removeBtn.style.cssText = 'font-size:11px; padding:3px 10px; color:#ef4444; border-color:#ef4444;';
+            removeBtn.textContent = 'Remove';
+            removeBtn.addEventListener('click', function() {
+              removeBtn.disabled = true;
+              fetch('/api/delegate/' + encodeURIComponent(d.userId), { method: 'DELETE', credentials: 'same-origin' })
+                .then(function() { fetchDelegates(); })
+                .catch(function() { removeBtn.disabled = false; });
+            });
+            row.appendChild(info); row.appendChild(removeBtn);
+            delegateListEl.appendChild(row);
+          });
+        }
+
+        function fetchDelegates() {
+          fetch('/api/delegate/list', { credentials: 'same-origin' })
+            .then(function(r) { return r.json(); })
+            .then(function(data) { renderDelegates(data.delegates || []); })
+            .catch(function() { delegateListEl.textContent = ''; delegateListEl.appendChild(makeEmptyState('Failed to load.')); });
+        }
+
+        if (delegateAddBtn) {
+          delegateAddBtn.addEventListener('click', function() {
+            var login = delegateLoginInput ? delegateLoginInput.value.trim() : '';
+            if (!login) return;
+            delegateAddBtn.disabled = true;
+            delegateAddStatus.style.display = 'inline';
+            delegateAddStatus.style.color = 'var(--text-muted)';
+            delegateAddStatus.textContent = 'Adding...';
+            fetch('/api/delegate/add', {
+              method: 'POST', credentials: 'same-origin',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ login: login }),
+            })
+              .then(function(r) { return r.json(); })
+              .then(function(data) {
+                if (data.error) {
+                  delegateAddStatus.style.color = '#ef4444';
+                  delegateAddStatus.textContent = data.error;
+                } else {
+                  delegateLoginInput.value = '';
+                  delegateAddStatus.style.color = '#22c55e';
+                  delegateAddStatus.textContent = (data.displayName || login) + ' added.';
+                  fetchDelegates();
+                }
+              })
+              .catch(function() {
+                delegateAddStatus.style.color = '#ef4444';
+                delegateAddStatus.textContent = 'Request failed.';
+              })
+              .finally(function() { delegateAddBtn.disabled = false; setTimeout(function() { delegateAddStatus.style.display = 'none'; }, 3000); });
+          });
+        }
+
+        document.querySelectorAll('.sidebar-nav-item').forEach(function(btn) {
+          btn.addEventListener('click', function() {
+            if (btn.getAttribute('data-section') === 'delegates') fetchDelegates();
+          });
+        });
+      })();
+    </script>` : ''}
     <button class="tour-btn" id="tourBtn" title="Show guided tour">Take A Tour</button>
     <script src="https://cdn.jsdelivr.net/npm/driver.js@1.3.1/dist/driver.js.iife.js"></script>
     <script>

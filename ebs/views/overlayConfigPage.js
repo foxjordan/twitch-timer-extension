@@ -16,6 +16,8 @@ export function renderOverlayConfigPage(options = {}) {
     rulesSnapshot,
     initialQuery = {},
     showAdminLink = false,
+    delegateMode = false,
+    managedByName = '',
   } = options;
 
   const defSecs = Number(settings.defaultInitialSeconds || 0);
@@ -203,6 +205,12 @@ export function renderOverlayConfigPage(options = {}) {
         </div>
       </nav>
       <div class="content-area">
+      ${delegateMode ? `<div style="background:#f59e0b22; border:2px solid #f59e0b; border-radius:10px; padding:12px 18px; margin-bottom:16px; display:flex; align-items:center; gap:12px; font-size:13px; font-weight:500;">
+        <span style="font-size:20px; flex-shrink:0;">⚠️</span>
+        <div style="flex:1;">You are managing <strong>${managedByName}</strong>'s timer rules — changes will affect <strong>their</strong> channel.</div>
+        <a href="/manage" style="flex-shrink:0; padding:5px 14px; border-radius:7px; background:#f59e0b; color:#000; font-size:12px; font-weight:700; text-decoration:none;">Switch Channel</a>
+        <a href="/sounds/config?clearDelegate=1" style="flex-shrink:0; padding:5px 14px; border-radius:7px; border:1px solid #f59e0b; color:#f59e0b; font-size:12px; font-weight:600; text-decoration:none;">My Channel</a>
+      </div>` : ''}
 
       <div class="section-page active" data-section="controls">
       <div class="panel" style="padding: 16px;">

@@ -15,6 +15,8 @@ export function renderSoundConfigPage(options = {}) {
   const ttsApiBase = String(options.ttsApiBase || "/api/tts/settings");
   const isAdminMode = Boolean(options.isAdminMode);
   const managedUserName = String(options.managedUserName || "");
+  const delegateMode = Boolean(options.delegateMode);
+  const managedByName = String(options.managedByName || "");
   const termsUrl = `${base}/terms`;
   const privacyUrl = `${base}/privacy`;
   const gdprUrl = `${base}/gdpr`;
@@ -207,9 +209,18 @@ export function renderSoundConfigPage(options = {}) {
           <button class="sidebar-nav-item" data-section="tts">Text-to-Speech</button>
           <button class="sidebar-nav-item" data-section="queue">Queue</button>
           <button class="sidebar-nav-item" data-section="history">Alert History</button>
+          ${!delegateMode ? `<button class="sidebar-nav-item" data-section="delegates">Delegates</button>` : ''}
         </div>
       </nav>
       <div class="content-area">
+      ${delegateMode ? `
+      <div style="background:#f59e0b22; border:2px solid #f59e0b; border-radius:10px; padding:12px 18px; margin-bottom:16px; display:flex; align-items:center; gap:12px; font-size:13px; font-weight:500;">
+        <span style="font-size:20px; flex-shrink:0;">⚠️</span>
+        <div style="flex:1;">You are managing <strong>${managedByName}</strong>'s settings — changes will affect <strong>their</strong> channel, not yours.</div>
+        <a href="/manage" style="flex-shrink:0; padding:5px 14px; border-radius:7px; background:#f59e0b; color:#000; font-size:12px; font-weight:700; text-decoration:none;">Switch Channel</a>
+        <a href="/sounds/config?clearDelegate=1" style="flex-shrink:0; padding:5px 14px; border-radius:7px; border:1px solid #f59e0b; color:#f59e0b; font-size:12px; font-weight:600; text-decoration:none;">My Channel</a>
+      </div>
+      ` : ''}
       ${isAdminMode ? `
       <div style="background:#9146ff22; border:1px solid #9146ff55; border-radius:10px; padding:10px 16px; margin-bottom:16px; display:flex; align-items:center; gap:10px; font-size:13px;">
         <a href="/admin" style="color:#9146ff; text-decoration:none; font-weight:600;">&larr; Back to Dashboard</a>
@@ -483,6 +494,21 @@ export function renderSoundConfigPage(options = {}) {
         <div id="alertHistoryEmpty" class="hint" style="display:none;">No alerts yet.</div>
       </div>
       </div>
+
+      ${!delegateMode ? `
+      <div class="section-page" data-section="delegates">
+      <div class="card">
+        <h2>Delegates</h2>
+        <p class="hint" style="margin-bottom:14px;">Delegates can manage your Sound Alerts, Timer Rules, and Goals settings. Add a Twitch username below. They must log in at <strong>livestreamerhub.com</strong> and navigate to <strong>Manage Channels</strong>.</p>
+        <div style="display:flex; gap:8px; margin-bottom:18px;">
+          <input type="text" id="delegateLoginInput" placeholder="Twitch username" style="flex:1; padding:8px 12px; border-radius:8px; border:1px solid var(--surface-border); background:var(--surface-muted); color:var(--text-color); font-size:13px;">
+          <button id="delegateAddBtn" class="btn-save" style="padding:8px 16px;">Add</button>
+          <span id="delegateAddStatus" style="align-self:center; font-size:12px; display:none;"></span>
+        </div>
+        <div id="delegateList"><div class="empty-state">Loading...</div></div>
+      </div>
+      </div>
+      ` : ''}
 
       </div><!-- /content-area -->
     </main>
@@ -1978,6 +2004,93 @@ export function renderSoundConfigPage(options = {}) {
         fetchOverlayStatus();
       })();
     </script>
+    ${!delegateMode ? `<script>
+      (function() {
+        var delegateListEl = document.getElementById('delegateList');
+        var delegateAddBtn = document.getElementById('delegateAddBtn');
+        var delegateLoginInput = document.getElementById('delegateLoginInput');
+        var delegateAddStatus = document.getElementById('delegateAddStatus');
+        if (!delegateListEl) return;
+
+        function makeEmptyState(msg) {
+          var d = document.createElement('div'); d.className = 'empty-state'; d.textContent = msg; return d;
+        }
+
+        function renderDelegates(delegates) {
+          delegateListEl.textContent = '';
+          if (!delegates || delegates.length === 0) {
+            delegateListEl.appendChild(makeEmptyState('No delegates yet.'));
+            return;
+          }
+          delegates.forEach(function(d) {
+            var row = document.createElement('div');
+            row.style.cssText = 'display:flex; align-items:center; gap:10px; padding:8px 0; border-bottom:1px solid var(--surface-border);';
+            var info = document.createElement('div'); info.style.flex = '1';
+            var name = document.createElement('div'); name.style.fontWeight = '600'; name.style.fontSize = '13px'; name.textContent = d.displayName || d.userId;
+            var id = document.createElement('div'); id.className = 'mono'; id.style.fontSize = '11px'; id.style.color = 'var(--text-muted)'; id.textContent = d.userId;
+            info.appendChild(name); info.appendChild(id);
+            var removeBtn = document.createElement('button');
+            removeBtn.className = 'secondary';
+            removeBtn.style.cssText = 'font-size:11px; padding:3px 10px; color:#ef4444; border-color:#ef4444;';
+            removeBtn.textContent = 'Remove';
+            removeBtn.addEventListener('click', function() {
+              removeBtn.disabled = true;
+              fetch('/api/delegate/' + encodeURIComponent(d.userId), { method: 'DELETE', credentials: 'same-origin' })
+                .then(function() { fetchDelegates(); })
+                .catch(function() { removeBtn.disabled = false; });
+            });
+            row.appendChild(info); row.appendChild(removeBtn);
+            delegateListEl.appendChild(row);
+          });
+        }
+
+        function fetchDelegates() {
+          fetch('/api/delegate/list', { credentials: 'same-origin' })
+            .then(function(r) { return r.json(); })
+            .then(function(data) { renderDelegates(data.delegates || []); })
+            .catch(function() { delegateListEl.appendChild(makeEmptyState('Failed to load.')); });
+        }
+
+        if (delegateAddBtn) {
+          delegateAddBtn.addEventListener('click', function() {
+            var login = delegateLoginInput ? delegateLoginInput.value.trim() : '';
+            if (!login) return;
+            delegateAddBtn.disabled = true;
+            delegateAddStatus.style.display = 'inline';
+            delegateAddStatus.style.color = 'var(--text-muted)';
+            delegateAddStatus.textContent = 'Adding...';
+            fetch('/api/delegate/add', {
+              method: 'POST', credentials: 'same-origin',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ login: login }),
+            })
+              .then(function(r) { return r.json(); })
+              .then(function(data) {
+                if (data.error) {
+                  delegateAddStatus.style.color = '#ef4444';
+                  delegateAddStatus.textContent = data.error;
+                } else {
+                  delegateLoginInput.value = '';
+                  delegateAddStatus.style.color = '#22c55e';
+                  delegateAddStatus.textContent = (data.displayName || login) + ' added.';
+                  fetchDelegates();
+                }
+              })
+              .catch(function() {
+                delegateAddStatus.style.color = '#ef4444';
+                delegateAddStatus.textContent = 'Request failed.';
+              })
+              .finally(function() { delegateAddBtn.disabled = false; setTimeout(function() { delegateAddStatus.style.display = 'none'; }, 3000); });
+          });
+        }
+
+        document.querySelectorAll('.sidebar-nav-item').forEach(function(btn) {
+          btn.addEventListener('click', function() {
+            if (btn.getAttribute('data-section') === 'delegates') fetchDelegates();
+          });
+        });
+      })();
+    </script>` : ''}
     <button class="tour-btn" id="tourBtn" title="Show guided tour">Take A Tour</button>
     <script src="https://cdn.jsdelivr.net/npm/driver.js@1.3.1/dist/driver.js.iife.js"></script>
     <script>

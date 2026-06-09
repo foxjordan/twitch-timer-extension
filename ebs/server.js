@@ -49,6 +49,8 @@ import { mountTimerRoutes } from "./routes_timer.js";
 import { mountAuthRoutes } from "./routes_auth.js";
 import { mountOverlayApiRoutes } from "./routes_overlay_api.js";
 import { mountOverlayPageRoutes } from "./routes_overlay_page.js";
+import { mountDelegateRoutes } from "./routes_delegate.js";
+import { isDelegate } from "./delegate_store.js";
 import { mountHomePageRoutes } from "./routes_home_page.js";
 import { mountGoalRoutes } from "./routes_goals.js";
 import { logger, requestLogger, setLoggerContext } from "./logger.js";
@@ -129,6 +131,34 @@ app.use((req, res, next) => {
     // Allow logout so banned users can still sign out
     if (req.path === "/auth/logout") return next();
     return res.status(403).json({ error: "Your account has been suspended" });
+  }
+  next();
+});
+
+// Re-verify delegate relationship on every session that has managingAs set.
+// Checks at most once per 60 seconds to avoid a DB hit on every request.
+// If delegation was revoked: API requests get a 403; page requests silently
+// drop the delegate context so the user sees their own settings instead.
+app.use(async (req, res, next) => {
+  const managingAs = req.session?.managingAs;
+  const selfId = req.session?.twitchUser?.id;
+  if (!managingAs || !selfId || managingAs === selfId) return next();
+  const verifiedAt = req.session.delegateVerifiedAt || 0;
+  if (Date.now() - verifiedAt < 60_000) return next();
+  try {
+    const valid = await isDelegate(managingAs, selfId);
+    if (!valid) {
+      req.session.managingAs = null;
+      req.session.managingAsName = null;
+      req.session.delegateVerifiedAt = null;
+      if (req.path.startsWith('/api/')) {
+        return res.status(403).json({ error: 'Delegate access has been revoked' });
+      }
+    } else {
+      req.session.delegateVerifiedAt = Date.now();
+    }
+  } catch {
+    // DB unavailable — fail open (don't block the request) but don't refresh cache
   }
   next();
 });
@@ -631,6 +661,7 @@ function sanitizeWheelOptions(list) {
 }
 
 function resolveGoalUserIdFromRequest(req) {
+  if (req?.session?.managingAs) return String(req.session.managingAs);
   if (req?.session?.twitchUser?.id) return String(req.session.twitchUser.id);
   const key =
     req?.query && typeof req.query.key !== "undefined"
@@ -644,6 +675,7 @@ function resolveGoalUserIdFromRequest(req) {
 }
 
 function resolveTimerUserIdFromRequest(req) {
+  if (req?.session?.managingAs) return String(req.session.managingAs);
   if (req?.session?.twitchUser?.id) return String(req.session.twitchUser.id);
   const key =
     req?.query && typeof req.query.key !== "undefined"
@@ -918,13 +950,13 @@ mountOverlayApiRoutes(app, {
 mountGoalRoutes(app, {
   requireOverlayAuth,
   resolveOverlayUserId: resolveGoalUserIdFromRequest,
-  getSessionUserId: (req) => req.session?.twitchUser?.id,
+  getSessionUserId: (req) => req.session?.managingAs || req.session?.twitchUser?.id,
   onGoalsChanged: (uid) => broadcastGoalSnapshot(uid),
 });
 
 mountSoundRoutes(app, {
   requireOverlayAuth,
-  getSessionUserId: (req) => req.session?.twitchUser?.id,
+  getSessionUserId: (req) => req.session?.managingAs || req.session?.twitchUser?.id,
   getUserIdForKey,
   pendingAlerts,
   onRemoveAlert: ({ channelId, alertId }) => {
@@ -1054,7 +1086,7 @@ mountSoundRoutes(app, {
 
 mountTtsRoutes(app, {
   requireOverlayAuth,
-  getSessionUserId: (req) => req.session?.twitchUser?.id,
+  getSessionUserId: (req) => req.session?.managingAs || req.session?.twitchUser?.id,
   getUserIdForKey,
   onTtsAlert: ({ channelId, message, voiceName, voiceId, fileId, volume, txId, viewerUserId, viewerDisplayName, tier }) => {
     if (txId && !txId.startsWith('test_')) {
@@ -1188,7 +1220,10 @@ mountOverlayPageRoutes(app, {
   getUserSettings,
   getRules,
   getSavedStyle,
+  getUserProfile,
 });
+
+mountDelegateRoutes(app, { getUserProfile });
 
 mountHomePageRoutes(app);
 

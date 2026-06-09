@@ -62,6 +62,8 @@ export function renderGoalsConfigPage(options = {}) {
   const userKey = String(options.userKey || "");
   const settings = options.settings || {};
   const showAdminLink = Boolean(options.showAdminLink);
+  const delegateMode = Boolean(options.delegateMode);
+  const managedByName = String(options.managedByName || "");
 
   const privacyUrl = `${base}/privacy`;
   const gdprUrl = `${base}/gdpr`;
@@ -179,6 +181,12 @@ export function renderGoalsConfigPage(options = {}) {
       showAdminLink,
     })}
     <main>
+      ${delegateMode ? `<div style="background:#f59e0b22; border:2px solid #f59e0b; border-radius:10px; padding:12px 18px; margin-bottom:16px; display:flex; align-items:center; gap:12px; font-size:13px; font-weight:500;">
+        <span style="font-size:20px; flex-shrink:0;">⚠️</span>
+        <div style="flex:1;">You are managing <strong>${managedByName}</strong>'s goals — changes will affect <strong>their</strong> channel.</div>
+        <a href="/manage" style="flex-shrink:0; padding:5px 14px; border-radius:7px; background:#f59e0b; color:#000; font-size:12px; font-weight:700; text-decoration:none;">Switch Channel</a>
+        <a href="/sounds/config?clearDelegate=1" style="flex-shrink:0; padding:5px 14px; border-radius:7px; border:1px solid #f59e0b; color:#f59e0b; font-size:12px; font-weight:600; text-decoration:none;">My Channel</a>
+      </div>` : ''}
       <h1>Goal Tracking Bars</h1>
       <p class="subtitle">
         Create persistent goal bars for subs, bits, or mixed fundraisers. Customize the layout, auto-counting rules, and copy goal-specific Browser Source URLs for OBS or Streamlabs.

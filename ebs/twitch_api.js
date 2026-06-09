@@ -96,6 +96,31 @@ export async function fetchUserDisplayName(userId, channelId = null) {
   }
 }
 
+// Look up a Twitch user ID by login name. Returns { id, displayName } or null.
+export async function lookupUserByLogin(login, channelId = null) {
+  if (!login) return null;
+  const clientId = process.env.TWITCH_CLIENT_ID;
+  const tokenChannelId = channelId || process.env.BROADCASTER_USER_ID;
+  const token =
+    (tokenChannelId && await getValidAccessToken(String(tokenChannelId))) ||
+    process.env.BROADCASTER_USER_TOKEN ||
+    await getAppAccessToken();
+  if (!clientId || !token) return null;
+  try {
+    const res = await fetch(
+      `https://api.twitch.tv/helix/users?login=${encodeURIComponent(login)}`,
+      { headers: { 'Client-Id': clientId, Authorization: `Bearer ${token}` } },
+    );
+    if (!res.ok) return null;
+    const json = await res.json();
+    const user = json.data?.[0];
+    if (!user) return null;
+    return { id: user.id, displayName: user.display_name || user.login };
+  } catch {
+    return null;
+  }
+}
+
 export async function fetchActiveSubscriberCount({ broadcasterId }) {
   const id = broadcasterId ? String(broadcasterId) : null;
   if (!id) return null;

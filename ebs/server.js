@@ -1068,9 +1068,11 @@ mountSoundRoutes(app, {
           logEntry.viewerDisplayName = displayName;
           queueItem.viewerDisplayName = displayName;
         }
-        const who = displayName || `User ${viewerUserId}`;
-        await sendExtensionChatMessage({
+        const who = displayName || viewerUserId;
+        const accessToken = await getValidAccessToken(String(channelId)).catch(() => null);
+        await sendBroadcasterChatMessage({
           broadcasterId: channelId,
+          accessToken,
           text: `${who} played "${soundName}" for ${bits} Bits!`,
         });
       })().catch(() => {});
@@ -1177,10 +1179,12 @@ mountTtsRoutes(app, {
       const bits = tier.replace("sound_", "");
       (async () => {
         const displayName = await fetchUserDisplayName(viewerUserId, channelId);
-        const who = displayName || `User ${viewerUserId}`;
+        const who = displayName || viewerUserId;
         const voice = voiceName ? ` (${voiceName})` : "";
-        await sendExtensionChatMessage({
+        const accessToken = await getValidAccessToken(String(channelId)).catch(() => null);
+        await sendBroadcasterChatMessage({
           broadcasterId: channelId,
+          accessToken,
           text: `${who} used ${bits} Bits to say${voice}: "${message}"`,
         });
       })().catch(() => {});

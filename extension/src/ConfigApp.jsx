@@ -12,7 +12,7 @@ import { VALID_TIERS } from "./tiers.js";
 function getTtsTiers(minTier) {
   const minIdx = VALID_TIERS.indexOf(minTier || "sound_300");
   const startIdx = minIdx >= 0 ? minIdx : 0;
-  return VALID_TIERS.slice(startIdx).map((sku) => ({ sku, label: TIER_LABELS[sku] }));
+  return VALID_TIERS.slice(startId).map((sku) => ({ sku, label: TIER_LABELS[sku] }));
 }
 
 function ConfigApp() {

@@ -66,6 +66,30 @@ async function serveFileFromStorage(res, uid, sound, cacheControl = 'no-store') 
   });
 }
 
+// Proxy a sound file through the EBS (no redirect). Required for the Twitch
+// extension preview endpoint: connect-src allows livestreamerhub.com but not
+// the R2 domain, so a redirect would be blocked by CSP.
+async function proxyFileFromStorage(res, uid, sound, cacheControl = 'no-store') {
+  if (r2Enabled) {
+    try {
+      const key = r2SoundKey(String(uid), sound.filename);
+      const stream = await getR2ObjectStream(key);
+      res.setHeader('Content-Type', sound.mimeType || 'application/octet-stream');
+      res.setHeader('Cache-Control', cacheControl);
+      await pipeline(stream, res);
+    } catch (err) {
+      if (!res.headersSent) res.status(500).json({ error: 'Storage error' });
+    }
+    return;
+  }
+  const filePath = getSoundFilePath(String(uid), sound);
+  res.setHeader('Content-Type', sound.mimeType || 'application/octet-stream');
+  res.setHeader('Cache-Control', cacheControl);
+  res.sendFile(filePath, (err) => {
+    if (err && !res.headersSent) res.status(404).json({ error: 'File not found' });
+  });
+}
+
 // Serve an image file from storage.
 async function serveImageFromStorage(res, uid, filename, cacheControl = 'public, max-age=3600') {
   if (r2Enabled) {
@@ -1172,9 +1196,8 @@ export function mountSoundRoutes(app, deps = {}) {
       return res.status(404).json({ error: "Clip video not downloaded" });
     }
 
-    res.setHeader("Content-Type", sound.mimeType || "video/mp4");
     res.setHeader("Referrer-Policy", "no-referrer");
-    await serveFileFromStorage(res, channelId, sound, "public, max-age=3600");
+    await proxyFileFromStorage(res, channelId, sound, "public, max-age=3600");
   });
 
   // Get enabled sounds for a channel (viewer panel)

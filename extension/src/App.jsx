@@ -276,7 +276,7 @@ function App() {
   const [previewing, setPreviewing] = useState(null);
   const [justSampled, setJustSampled] = useState(null);
   const previewAudioRef = useRef(null);
-  const previewTokensRef = useRef({});
+  const previewBlobsRef = useRef({});
 
   // TTS state
   const [activeTab, setActiveTab] = useState("sounds");
@@ -513,17 +513,20 @@ function App() {
     window.Twitch.ext.bits.useBits(ttsConfig.tier);
   }
 
-  function prefetchPreviewToken(sound) {
+  function prefetchPreviewAudio(sound) {
     const currentAuth = authRef.current;
     if (!currentAuth || (sound.type || "sound") === "clip") return;
-    const cached = previewTokensRef.current[sound.id];
-    if (cached && cached.expiresAt > Date.now() + 5000) return;
-    fetch(`${EBS_BASE}/api/sounds/preview-token/${sound.id}?channelId=${currentAuth.channelId}`, {
+    if (previewBlobsRef.current[sound.id]) return;
+    // fetch() uses connect-src, not media-src — no CSP issue with external domains
+    fetch(`${EBS_BASE}/api/sounds/preview/${sound.id}?channelId=${currentAuth.channelId}`, {
       headers: { Authorization: `Bearer ${currentAuth.token}` },
     })
-      .then((r) => r.ok ? r.json() : null)
-      .then((data) => { if (data?.token) previewTokensRef.current[sound.id] = data; })
-      .catch(() => {});
+      .then((r) => r.ok ? r.blob() : Promise.reject(r.status))
+      .then((blob) => {
+        previewBlobsRef.current[sound.id] = URL.createObjectURL(blob);
+        console.log("[preview] blob ready for", sound.id);
+      })
+      .catch((err) => console.warn("[preview] prefetch failed", sound.id, err));
   }
 
   function handlePreview(e, sound) {
@@ -541,16 +544,18 @@ function App() {
       }
     }
 
-    const tokenData = previewTokensRef.current[sound.id];
-    if (!tokenData || tokenData.expiresAt <= Date.now()) return;
+    const blobUrl = previewBlobsRef.current[sound.id];
+    if (!blobUrl) {
+      console.warn("[preview] blob not ready for", sound.id);
+      return;
+    }
 
     setPreviewing(sound.id);
     logEvent("sound_preview", { sound_name: sound.name });
 
-    // Use short-lived preview token in URL — full JWT stays header-only.
-    // play() is called synchronously within the gesture to satisfy Twitch sandbox.
-    const src = `${EBS_BASE}/api/sounds/preview/${sound.id}?channelId=${currentAuth.channelId}&pt=${encodeURIComponent(tokenData.token)}`;
-    const audio = new Audio(src);
+    // blob: URL satisfies media-src CSP; play() is synchronous within gesture
+    console.log("[preview] playing blob for", sound.id);
+    const audio = new Audio(blobUrl);
     audio.volume = 0.5;
     previewAudioRef.current = audio;
     audio.onended = () => {
@@ -559,11 +564,13 @@ function App() {
       setJustSampled(sound.id);
       setTimeout(() => setJustSampled((prev) => (prev === sound.id ? null : prev)), 6000);
     };
-    audio.onerror = () => {
+    audio.onerror = (e) => {
+      console.error("[preview] audio error", e, audio.error);
       setPreviewing(null);
       previewAudioRef.current = null;
     };
-    audio.play().catch(() => {
+    audio.play().catch((err) => {
+      console.error("[preview] play() rejected", err);
       setPreviewing(null);
       previewAudioRef.current = null;
     });
@@ -811,7 +818,7 @@ function App() {
                   disabled={disabled}
                   onRedeem={handleSoundClick}
                   onPreview={handlePreview}
-                  onHover={prefetchPreviewToken}
+                  onHover={prefetchPreviewAudio}
                   isPreviewPlaying={previewing === sound.id}
                   showSendPrompt={justSampled === sound.id}
                   onDismissSample={() => setJustSampled(null)}

@@ -2,6 +2,7 @@ import { logger } from "./logger.js";
 import { isPro } from "./subscription_store.js";
 import { isSuperAdmin } from "./routes_admin.js";
 import jwt from "jsonwebtoken";
+import { createHmac, timingSafeEqual } from "crypto";
 import multer from "multer";
 import { rename, stat as fsStat, unlink as fsUnlink } from "fs/promises";
 import { createReadStream, createWriteStream } from "fs";
@@ -240,6 +241,37 @@ function verifyExtensionJwt(req) {
     return jwt.verify(token, EXT_SECRET, { algorithms: ["HS256"] });
   } catch {
     return null;
+  }
+}
+
+// Short-lived preview tokens: signed with HMAC so full JWT never appears in audio URLs.
+const PREVIEW_TOKEN_TTL_MS = 2 * 60 * 1000; // 2 minutes
+
+function getPreviewSecret() {
+  const base = process.env.EXTENSION_SECRET || process.env.SESSION_SECRET || "preview";
+  return createHmac("sha256", base).update("sound-preview-v1").digest();
+}
+
+function generatePreviewToken(soundId, channelId) {
+  const expiresAt = Date.now() + PREVIEW_TOKEN_TTL_MS;
+  const msg = `${soundId}:${channelId}:${expiresAt}`;
+  const mac = createHmac("sha256", getPreviewSecret()).update(msg).digest("base64url");
+  return { token: `${expiresAt}.${mac}`, expiresAt };
+}
+
+function verifyPreviewToken(pt, soundId, channelId) {
+  if (!pt) return false;
+  const dot = pt.indexOf(".");
+  if (dot < 0) return false;
+  const expiresAt = Number(pt.slice(0, dot));
+  if (!expiresAt || Date.now() > expiresAt) return false;
+  const mac = pt.slice(dot + 1);
+  const msg = `${soundId}:${channelId}:${expiresAt}`;
+  const expected = createHmac("sha256", getPreviewSecret()).update(msg).digest("base64url");
+  try {
+    return timingSafeEqual(Buffer.from(mac, "base64url"), Buffer.from(expected, "base64url"));
+  } catch {
+    return false;
   }
 }
 
@@ -1095,15 +1127,42 @@ export function mountSoundRoutes(app, deps = {}) {
     await serveImageFromStorage(res, channelId, sound.imageFilename);
   });
 
-  // Preview a sound/video/clip (Extension JWT auth — any viewer/broadcaster/mod)
-  app.get("/api/sounds/preview/:soundId", async (req, res) => {
+  // Issue a short-lived preview token for a specific sound (requires Bearer JWT).
+  // The extension fetches this on hover so the full JWT never appears in audio URLs.
+  app.get("/api/sounds/preview-token/:soundId", (req, res) => {
     const claims = requireExtensionAuth(req, res);
     if (!claims) return;
     const channelId = req.query.channelId || claims.channel_id;
-    if (!channelId) {
-      return res.status(400).json({ error: "channelId required" });
+    if (!channelId) return res.status(400).json({ error: "channelId required" });
+    const soundId = req.params.soundId;
+    const sound = getSound(String(channelId), soundId);
+    if (!sound || !sound.enabled) return res.status(404).json({ error: "Sound not found" });
+    if ((sound.type || "sound") === "clip") return res.status(400).json({ error: "Clips are not previewable" });
+    const { token, expiresAt } = generatePreviewToken(soundId, channelId);
+    res.setHeader("Cache-Control", "no-store");
+    res.json({ token, expiresAt });
+  });
+
+  // Preview a sound/video (accepts short-lived ?pt= token OR Bearer JWT)
+  app.get("/api/sounds/preview/:soundId", async (req, res) => {
+    const soundId = req.params.soundId;
+    let channelId = req.query.channelId;
+
+    if (req.query.pt) {
+      // Short-lived HMAC preview token path
+      if (!channelId) return res.status(400).json({ error: "channelId required" });
+      if (!verifyPreviewToken(req.query.pt, soundId, channelId)) {
+        return res.status(401).json({ error: "Invalid or expired preview token" });
+      }
+    } else {
+      // Fallback: full Extension JWT (e.g. direct API calls, not audio src)
+      const claims = requireExtensionAuth(req, res);
+      if (!claims) return;
+      channelId = channelId || claims.channel_id;
+      if (!channelId) return res.status(400).json({ error: "channelId required" });
     }
-    const sound = getSound(String(channelId), req.params.soundId);
+
+    const sound = getSound(String(channelId), soundId);
     if (!sound || !sound.enabled) {
       return res.status(404).json({ error: "Sound not found or disabled" });
     }
@@ -1114,6 +1173,7 @@ export function mountSoundRoutes(app, deps = {}) {
     }
 
     res.setHeader("Content-Type", sound.mimeType || "video/mp4");
+    res.setHeader("Referrer-Policy", "no-referrer");
     await serveFileFromStorage(res, channelId, sound, "public, max-age=3600");
   });
 

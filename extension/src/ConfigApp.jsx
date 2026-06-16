@@ -387,20 +387,6 @@ function ConfigApp() {
     <div style={styles.container}>
       <h2 style={styles.heading}>Livestreamer Alerts</h2>
 
-      <div style={styles.hubBanner}>
-        <span style={{ fontSize: 14 }}>
-          Unlock more features and manage everything in one place at{" "}
-          <a
-            href="https://livestreamerhub.com"
-            target="_blank"
-            rel="noopener noreferrer"
-            style={styles.hubLink}
-          >
-            livestreamerhub.com
-          </a>
-        </span>
-      </div>
-
       {/* Setup Guide */}
       <div style={{ ...styles.card, marginBottom: 12 }}>
         <h3 style={{ ...styles.subHeading, marginBottom: 8 }}>Quick Setup</h3>
@@ -1256,19 +1242,6 @@ const styles = {
     fontSize: 22,
     fontWeight: 700,
     marginBottom: 16,
-  },
-  hubBanner: {
-    background: "linear-gradient(135deg, rgba(145,70,255,0.15), rgba(145,70,255,0.05))",
-    border: "1px solid rgba(145,70,255,0.3)",
-    borderRadius: 10,
-    padding: "10px 16px",
-    marginBottom: 14,
-    textAlign: "center",
-  },
-  hubLink: {
-    color: "#bf94ff",
-    fontWeight: 600,
-    textDecoration: "none",
   },
   subHeading: {
     fontSize: 15,

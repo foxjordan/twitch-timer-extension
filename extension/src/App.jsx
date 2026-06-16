@@ -64,7 +64,10 @@ function SoundCard({
   disabled,
   onRedeem,
   onPreview,
+  onHover,
   isPreviewPlaying,
+  showSendPrompt = false,
+  onDismissSample = () => {},
   getCost,
 }) {
   const [hovered, setHovered] = useState(false);
@@ -72,8 +75,12 @@ function SoundCard({
 
   return (
     <div
-      onClick={() => !disabled && onRedeem(sound)}
-      onMouseEnter={() => setHovered(true)}
+      onClick={() => {
+        if (disabled) return;
+        if (showSendPrompt) { onDismissSample(); return; }
+        onRedeem(sound);
+      }}
+      onMouseEnter={() => { setHovered(true); onHover?.(sound); }}
       onMouseLeave={() => setHovered(false)}
       style={{
         display: "flex",
@@ -134,8 +141,8 @@ function SoundCard({
             />
           )}
         </div>
-        {/* Preview overlay on hover (sound/video types only) */}
-        {hovered && !disabled && (sound.type || "sound") !== "clip" && (
+        {/* Preview overlay \u2014 visible on hover or while sampling */}
+        {(hovered || isPreviewPlaying) && !disabled && !showSendPrompt && (sound.type || "sound") !== "clip" && (
           <div
             data-preview="true"
             onClick={(e) => {
@@ -146,16 +153,71 @@ function SoundCard({
               position: "absolute",
               inset: 0,
               display: "flex",
+              flexDirection: "column",
               alignItems: "center",
               justifyContent: "center",
-              background: "rgba(0,0,0,0.5)",
+              gap: 3,
+              background: "rgba(0,0,0,0.55)",
               borderRadius: 8,
               cursor: "pointer",
             }}
           >
-            <span style={{ fontSize: 18, color: "#fff" }}>
+            <span style={{ fontSize: 18, color: "#fff", lineHeight: 1 }}>
               {isPreviewPlaying ? "\u25A0" : "\u25B6"}
             </span>
+            <span style={{ fontSize: 10, color: "#fff", fontWeight: 600, opacity: 0.9, letterSpacing: "0.02em" }}>
+              {isPreviewPlaying ? "Sampling\u2026" : "Sample"}
+            </span>
+          </div>
+        )}
+        {/* Send-alert prompt after sample finishes */}
+        {showSendPrompt && !isPreviewPlaying && (
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              position: "absolute",
+              inset: 0,
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: 5,
+              background: "rgba(0,0,0,0.82)",
+              borderRadius: 8,
+              padding: 4,
+            }}
+          >
+            <span style={{ fontSize: 10, color: "#bf94ff", fontWeight: 700 }}>Like it?</span>
+            <button
+              onClick={(e) => { e.stopPropagation(); onRedeem(sound); onDismissSample(); }}
+              style={{
+                background: "#9146FF",
+                color: "#fff",
+                border: "none",
+                borderRadius: 6,
+                fontSize: 10,
+                fontWeight: 700,
+                padding: "4px 0",
+                cursor: "pointer",
+                width: "85%",
+              }}
+            >
+              Use {getCost(sound.tier)} Bits
+            </button>
+            <button
+              onClick={(e) => { e.stopPropagation(); onDismissSample(); }}
+              style={{
+                background: "transparent",
+                color: "rgba(255,255,255,0.5)",
+                border: "none",
+                fontSize: 10,
+                padding: "2px 0",
+                cursor: "pointer",
+                textDecoration: "underline",
+              }}
+            >
+              Not now
+            </button>
           </div>
         )}
       </div>
@@ -212,7 +274,9 @@ function App() {
   const [cooldowns, setCooldowns] = useState({});
   const [lastPlayed, setLastPlayed] = useState(null);
   const [previewing, setPreviewing] = useState(null);
+  const [justSampled, setJustSampled] = useState(null);
   const previewAudioRef = useRef(null);
+  const previewTokensRef = useRef({});
 
   // TTS state
   const [activeTab, setActiveTab] = useState("sounds");
@@ -379,6 +443,7 @@ function App() {
 
   function handleSoundClick(sound) {
     if (!bitsEnabled) return;
+    setJustSampled(null);
     pendingRef.current = { type: "sound", ...sound };
     logEvent("sound_redeem_started", {
       sound_name: sound.name,
@@ -448,12 +513,23 @@ function App() {
     window.Twitch.ext.bits.useBits(ttsConfig.tier);
   }
 
+  function prefetchPreviewToken(sound) {
+    const currentAuth = authRef.current;
+    if (!currentAuth || (sound.type || "sound") === "clip") return;
+    const cached = previewTokensRef.current[sound.id];
+    if (cached && cached.expiresAt > Date.now() + 5000) return;
+    fetch(`${EBS_BASE}/api/sounds/preview-token/${sound.id}?channelId=${currentAuth.channelId}`, {
+      headers: { Authorization: `Bearer ${currentAuth.token}` },
+    })
+      .then((r) => r.ok ? r.json() : null)
+      .then((data) => { if (data?.token) previewTokensRef.current[sound.id] = data; })
+      .catch(() => {});
+  }
+
   function handlePreview(e, sound) {
     e.stopPropagation();
     const currentAuth = authRef.current;
     if (!currentAuth) return;
-
-    // Skip preview for clip types
     if ((sound.type || "sound") === "clip") return;
 
     if (previewAudioRef.current) {
@@ -465,37 +541,32 @@ function App() {
       }
     }
 
+    const tokenData = previewTokensRef.current[sound.id];
+    if (!tokenData || tokenData.expiresAt <= Date.now()) return;
+
     setPreviewing(sound.id);
     logEvent("sound_preview", { sound_name: sound.name });
 
-    // Create Audio element synchronously in the user gesture handler
-    // to preserve the gesture chain for Twitch iframe sandbox autoplay
-    const audio = new Audio();
+    // Use short-lived preview token in URL — full JWT stays header-only.
+    // play() is called synchronously within the gesture to satisfy Twitch sandbox.
+    const src = `${EBS_BASE}/api/sounds/preview/${sound.id}?channelId=${currentAuth.channelId}&pt=${encodeURIComponent(tokenData.token)}`;
+    const audio = new Audio(src);
     audio.volume = 0.5;
     previewAudioRef.current = audio;
-
-    fetch(
-      `${EBS_BASE}/api/sounds/preview/${sound.id}?channelId=${currentAuth.channelId}`,
-      { headers: { Authorization: `Bearer ${currentAuth.token}` } },
-    )
-      .then((r) => {
-        if (!r.ok) throw new Error("fetch failed");
-        return r.blob();
-      })
-      .then((blob) => {
-        const url = URL.createObjectURL(blob);
-        audio.src = url;
-        audio.onended = () => {
-          setPreviewing(null);
-          previewAudioRef.current = null;
-          URL.revokeObjectURL(url);
-        };
-        return audio.play();
-      })
-      .catch(() => {
-        setPreviewing(null);
-        previewAudioRef.current = null;
-      });
+    audio.onended = () => {
+      setPreviewing(null);
+      previewAudioRef.current = null;
+      setJustSampled(sound.id);
+      setTimeout(() => setJustSampled((prev) => (prev === sound.id ? null : prev)), 6000);
+    };
+    audio.onerror = () => {
+      setPreviewing(null);
+      previewAudioRef.current = null;
+    };
+    audio.play().catch(() => {
+      setPreviewing(null);
+      previewAudioRef.current = null;
+    });
   }
 
   function playVoicePreview(voiceId) {
@@ -740,7 +811,10 @@ function App() {
                   disabled={disabled}
                   onRedeem={handleSoundClick}
                   onPreview={handlePreview}
+                  onHover={prefetchPreviewToken}
                   isPreviewPlaying={previewing === sound.id}
+                  showSendPrompt={justSampled === sound.id}
+                  onDismissSample={() => setJustSampled(null)}
                   getCost={getCost}
                 />
               );

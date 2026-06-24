@@ -775,6 +775,15 @@ app.get("/api/overlay/stream", (req, res) => {
     broadcastGoalSnapshot(goalUserId, client);
   }
 
+  if (timerUserId) {
+    const soundSettings = getSoundSettings(String(timerUserId));
+    if (soundSettings) {
+      const ssPayload = { maxQueueSize: soundSettings.maxQueueSize, overlayDurationMs: soundSettings.overlayDurationMs, videoSize: soundSettings.videoSize || "medium" };
+      res.write("event: sound_settings\n");
+      res.write(`data: ${JSON.stringify(ssPayload)}\n\n`);
+    }
+  }
+
   const wheelCacheKey = wheelId ? `${key}:${wheelId}` : key;
   const lastWheel = lastWheelSpinByKey.get(wheelCacheKey);
   if (lastWheel) {
@@ -958,6 +967,7 @@ mountSoundRoutes(app, {
   requireOverlayAuth,
   getSessionUserId: (req) => req.session?.managingAs || req.session?.twitchUser?.id,
   getUserIdForKey,
+  sseClients,
   pendingAlerts,
   onRemoveAlert: ({ channelId, alertId }) => {
     const cq = pendingAlerts.get(String(channelId));

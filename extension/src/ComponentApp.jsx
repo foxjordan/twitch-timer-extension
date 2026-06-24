@@ -180,7 +180,7 @@ function SoundCard({
           )}
         </div>
         {/* Preview overlay \u2014 visible on hover or while sampling */}
-        {(hovered || isPreviewPlaying) && !disabled && !showSendPrompt && (sound.type || "sound") !== "clip" && (
+        {(hovered || isPreviewPlaying) && !disabled && !showSendPrompt && !["clip","video"].includes(sound.type || "sound") && (
           <div
             data-preview="true"
             onClick={(e) => {
@@ -566,7 +566,7 @@ function ComponentApp() {
 
   function prefetchPreviewAudio(sound) {
     const currentAuth = authRef.current;
-    if (!currentAuth || (sound.type || "sound") === "clip") return;
+    if (!currentAuth || ["clip","video"].includes(sound.type || "sound")) return;
     if (previewBlobsRef.current[sound.id]) return;
     fetch(`${EBS_BASE}/api/sounds/preview/${sound.id}?channelId=${currentAuth.channelId}`, {
       headers: { Authorization: `Bearer ${currentAuth.token}` },
@@ -583,7 +583,7 @@ function ComponentApp() {
     e.stopPropagation();
     const currentAuth = authRef.current;
     if (!currentAuth) return;
-    if ((sound.type || "sound") === "clip") return;
+    if (["clip","video"].includes(sound.type || "sound")) return;
 
     if (previewAudioRef.current) {
       previewAudioRef.current.pause();

@@ -157,16 +157,7 @@ export function renderSoundConfigPage(options = {}) {
         background: #9146ff;
         color: #fff;
       }
-      .ext-promo .ext-request {
-        background: var(--secondary-button-bg);
-        color: var(--secondary-button-text);
-        border: 1px solid var(--secondary-button-border);
-      }
-      .ext-promo .ext-hint {
-        color: var(--text-muted);
-        font-size: 11px;
-        text-align: center;
-      }
+
       @media (max-width: 1100px) {
         .ext-promo { display: none; }
       }
@@ -195,9 +186,7 @@ export function renderSoundConfigPage(options = {}) {
         Twitch Extension
       </div>
       <div style="color:var(--text-muted);">Let viewers trigger sounds directly from your channel page.</div>
-      <a class="ext-link" href="https://dashboard.twitch.tv/extensions/l7iuxz2tipmi4ly2g2vg5uzmdqkhx3-0.0.2" target="_blank" rel="noopener noreferrer">Install Extension</a>
-      <a class="ext-request" href="https://docs.google.com/forms/d/e/1FAIpQLSdOH9xH51BnCU2OeJB05TNLze78GEGYzFTgWPjaqQgsA6MXcw/viewform" target="_blank" rel="noopener noreferrer">Request Access</a>
-      <div class="ext-hint">Access approval required during early release</div>
+      <a class="ext-link" href="https://dashboard.twitch.tv/extensions/l7iuxz2tipmi4ly2g2vg5uzmdqkhx3-0.0.6" target="_blank" rel="noopener noreferrer">Install Extension</a>
     </aside>
 
     <main>
@@ -266,6 +255,15 @@ export function renderSoundConfigPage(options = {}) {
             <label style="font-size:13px; display:flex; align-items:center; gap:8px;">
               Max Queue
               <input type="number" id="soundMaxQueue" min="1" max="200" value="200" style="width:60px">
+            </label>
+            <label style="font-size:13px; display:flex; align-items:center; gap:8px; grid-column: 1 / -1;">
+              Video/Clip Size
+              <select id="videoSize" style="padding:3px 6px; border-radius:4px; border:1px solid #444; background:#1a1a1f; color:#efeff1; font-size:13px;">
+                <option value="small">Small (640×360)</option>
+                <option value="medium" selected>Medium (1280×720)</option>
+                <option value="large">Large (1920×1080)</option>
+                <option value="fullscreen">Fullscreen</option>
+              </select>
             </label>
           </div>
           <div style="margin-top:10px;">
@@ -540,6 +538,7 @@ export function renderSoundConfigPage(options = {}) {
         var soundGlobalVolumeValEl = document.getElementById('soundGlobalVolumeVal');
         var soundGlobalCooldownEl = document.getElementById('soundGlobalCooldown');
         var soundMaxQueueEl = document.getElementById('soundMaxQueue');
+        var videoSizeEl = document.getElementById('videoSize');
         var saveSoundSettingsBtn = document.getElementById('saveSoundSettings');
         var soundSettingsHintEl = document.getElementById('soundSettingsHint');
         var soundUploadForm = document.getElementById('soundUploadForm');
@@ -629,6 +628,7 @@ export function renderSoundConfigPage(options = {}) {
             if (soundGlobalVolumeEl) { soundGlobalVolumeEl.value = settings.globalVolume ?? 100; if (soundGlobalVolumeValEl) soundGlobalVolumeValEl.textContent = soundGlobalVolumeEl.value + '%'; }
             if (soundGlobalCooldownEl) soundGlobalCooldownEl.value = Math.round((settings.globalCooldownMs || 3000) / 1000);
             if (soundMaxQueueEl) soundMaxQueueEl.value = settings.maxQueueSize ?? 5;
+            if (videoSizeEl) videoSizeEl.value = settings.videoSize || 'medium';
             // Gate clip/video tabs behind videoClipsEnabled
             var vcEnabled = settings.videoClipsEnabled || false;
             var tabClipEl = document.getElementById('tabClip');
@@ -1355,7 +1355,8 @@ export function renderSoundConfigPage(options = {}) {
                 enabled: soundEnabledEl ? soundEnabledEl.checked : true,
                 globalVolume: soundGlobalVolumeEl ? Number(soundGlobalVolumeEl.value) : 100,
                 globalCooldownMs: soundGlobalCooldownEl ? Number(soundGlobalCooldownEl.value) * 1000 : 3000,
-                maxQueueSize: soundMaxQueueEl ? Number(soundMaxQueueEl.value) : 5
+                maxQueueSize: soundMaxQueueEl ? Number(soundMaxQueueEl.value) : 5,
+                videoSize: videoSizeEl ? videoSizeEl.value : 'medium'
               };
               await fetch(API_BASE + '/settings', {
                 method: 'POST',

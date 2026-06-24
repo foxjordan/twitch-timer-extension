@@ -70,6 +70,7 @@ const DEFAULT_SOUND_SETTINGS = {
   maxQueueSize: 200,
   overlayDurationMs: 5000,
   videoClipsEnabled: false,
+  videoSize: "medium", // "small"=640×360, "medium"=1280×720, "large"=1920×1080, "fullscreen"
 };
 
 function nowIso() {

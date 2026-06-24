@@ -84,8 +84,6 @@ export function renderSoundAlertOverlayPage() {
       }
       .media-container video {
         display: block;
-        max-width: 640px;
-        max-height: 360px;
       }
       .media-container iframe {
         display: block;
@@ -93,6 +91,17 @@ export function renderSoundAlertOverlayPage() {
       }
       .media-container.exit {
         animation: fadeOut 0.3s ease-in forwards;
+      }
+      .media-container.fullscreen {
+        border-radius: 0;
+        box-shadow: none;
+        width: 100vw;
+        height: 100vh;
+      }
+      .media-container.fullscreen video {
+        width: 100%;
+        height: 100%;
+        object-fit: contain;
       }
       @keyframes scaleIn {
         from { transform: translate(-50%, -50%) scale(0.9); opacity: 0; }
@@ -126,7 +135,23 @@ export function renderSoundAlertOverlayPage() {
 
         var maxQueue = 200;
         var displayMs = 5000;
+        var videoSize = 'medium';
         var alertsEl = document.getElementById('alerts');
+
+        function applyVideoSize(video, container) {
+          if (videoSize === 'fullscreen') {
+            container.classList.add('fullscreen');
+          } else if (videoSize === 'small') {
+            video.style.maxWidth = '640px';
+            video.style.maxHeight = '360px';
+          } else if (videoSize === 'large') {
+            video.style.maxWidth = '1920px';
+            video.style.maxHeight = '1080px';
+          } else {
+            video.style.maxWidth = '1280px';
+            video.style.maxHeight = '720px';
+          }
+        }
         var alertQueue = [];
         var isPlaying = false;
         var currentAudio = null;
@@ -202,6 +227,7 @@ export function renderSoundAlertOverlayPage() {
           video.volume = vol;
           video.autoplay = true;
           video.playsInline = true;
+          applyVideoSize(video, container);
 
           video.onended = function() {
             container.classList.add('exit');
@@ -240,6 +266,7 @@ export function renderSoundAlertOverlayPage() {
           video.volume = vol;
           video.autoplay = true;
           video.playsInline = true;
+          applyVideoSize(video, container);
 
           video.onended = function() {
             container.classList.add('exit');
@@ -407,6 +434,7 @@ export function renderSoundAlertOverlayPage() {
               var data = JSON.parse(ev.data);
               if (typeof data.maxQueueSize === 'number') maxQueue = data.maxQueueSize;
               if (typeof data.overlayDurationMs === 'number') displayMs = data.overlayDurationMs;
+              if (data.videoSize) videoSize = data.videoSize;
             } catch (e) {}
           });
 

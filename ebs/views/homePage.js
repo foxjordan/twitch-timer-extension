@@ -217,7 +217,7 @@ export function renderHomePage(options = {}) {
       <!-- Bit Alerts Extension -->
       <div class="feature-block reverse">
         <div class="feature-text">
-          <div class="tag-pill">Twitch Extension</div><span class="beta-badge">Beta</span>
+          <div class="tag-pill">Twitch Extension</div>
           <h2>Live Bit Alerts for your stream</h2>
           <p>A companion Twitch Extension that fires custom sound effects when viewers use Bits. Available as both a panel below the video and a component overlay on top of it &mdash; viewers never have to scroll away from the action.</p>
           <ul class="feature-bullets">
@@ -228,11 +228,8 @@ export function renderHomePage(options = {}) {
             <li>OBS Browser Source overlay for on-screen alerts</li>
           </ul>
           <div class="feature-ctas">
-            <a class="cta primary" href="https://forms.gle/68zBupcoB6XthTheA" target="_blank" rel="noopener noreferrer">Request Beta Access</a>
+            <a class="cta primary" href="https://dashboard.twitch.tv/extensions/l7iuxz2tipmi4ly2g2vg5uzmdqkhx3-0.0.6" target="_blank" rel="noopener noreferrer">Add to Your Channel</a>
             <a class="cta secondary" href="${soundsConfigUrl}">Manage Sounds</a>
-          </div>
-          <div class="beta-callout">
-            <strong>Looking for beta testers!</strong> Bit Alerts is currently in testing on Twitch and requires whitelisting. Request access using the button above and we&rsquo;ll get you set up.
           </div>
         </div>
         <div class="feature-screenshots">

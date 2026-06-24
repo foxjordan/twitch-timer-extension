@@ -307,6 +307,7 @@ export function mountSoundRoutes(app, deps = {}) {
     onRemoveAlert,
     pendingAlerts,
     deduplicateTx,
+    sseClients,
   } = deps;
 
   // Resolve broadcaster from session OR extension JWT
@@ -938,6 +939,16 @@ export function mountSoundRoutes(app, deps = {}) {
     if (!uid) return;
     const settings = setSoundSettings(uid, req.body || {});
     logger.info("sound_settings_updated", { userId: uid });
+    if (sseClients) {
+      const ssPayload = JSON.stringify({ maxQueueSize: settings.maxQueueSize, overlayDurationMs: settings.overlayDurationMs, videoSize: settings.videoSize || "medium" });
+      for (const client of Array.from(sseClients)) {
+        if (client.timerUserId && String(client.timerUserId) !== String(uid)) continue;
+        try {
+          client.res.write("event: sound_settings\n");
+          client.res.write(`data: ${ssPayload}\n\n`);
+        } catch { sseClients.delete(client); }
+      }
+    }
     res.json({ settings });
   });
 

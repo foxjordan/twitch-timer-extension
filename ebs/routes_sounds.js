@@ -90,6 +90,31 @@ async function proxyFileFromStorage(res, uid, sound, cacheControl = 'no-store') 
   });
 }
 
+// Proxy an image through the EBS (no redirect). Same reason as proxyFileFromStorage:
+// extension connect-src does not include the full R2 bucket hostname.
+const EXT_TO_MIME = { jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', gif: 'image/gif', webp: 'image/webp' };
+async function proxyImageFromStorage(res, uid, filename, cacheControl = 'public, max-age=3600') {
+  const ext = filename.split('.').pop().toLowerCase();
+  const mime = EXT_TO_MIME[ext] || 'image/jpeg';
+  if (r2Enabled) {
+    try {
+      const key = r2SoundKey(String(uid), filename);
+      const stream = await getR2ObjectStream(key);
+      res.setHeader('Content-Type', mime);
+      res.setHeader('Cache-Control', cacheControl);
+      await pipeline(stream, res);
+    } catch (err) {
+      if (!res.headersSent) res.status(500).json({ error: 'Storage error' });
+    }
+    return;
+  }
+  const filePath = path.resolve(SOUNDS_FILE_DIR, String(uid), filename);
+  res.setHeader('Cache-Control', cacheControl);
+  res.sendFile(filePath, (err) => {
+    if (err && !res.headersSent) res.status(404).json({ error: 'Image file not found' });
+  });
+}
+
 // Serve an image file from storage.
 async function serveImageFromStorage(res, uid, filename, cacheControl = 'public, max-age=3600') {
   if (r2Enabled) {
@@ -755,7 +780,7 @@ export function mountSoundRoutes(app, deps = {}) {
     if (!sound || !sound.shared || !sound.imageFilename) {
       return res.status(404).json({ error: "Image not found" });
     }
-    await serveImageFromStorage(res, req.params.ownerUserId, sound.imageFilename);
+    await proxyImageFromStorage(res, req.params.ownerUserId, sound.imageFilename);
   });
 
   // Serve audio preview for a library sound (from original owner's directory)
@@ -900,7 +925,7 @@ export function mountSoundRoutes(app, deps = {}) {
     if (!sound || !sound.imageFilename) {
       return res.status(404).json({ error: "Image not found" });
     }
-    await serveImageFromStorage(res, uid, sound.imageFilename, "no-store");
+    await proxyImageFromStorage(res, uid, sound.imageFilename, "no-store");
   });
 
   // Delete a sound
@@ -1159,7 +1184,7 @@ export function mountSoundRoutes(app, deps = {}) {
     if (!sound || !sound.imageFilename) {
       return res.status(404).json({ error: "Image not found" });
     }
-    await serveImageFromStorage(res, channelId, sound.imageFilename);
+    await proxyImageFromStorage(res, channelId, sound.imageFilename);
   });
 
   // Issue a short-lived preview token for a specific sound (requires Bearer JWT).

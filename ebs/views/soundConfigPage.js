@@ -186,7 +186,7 @@ export function renderSoundConfigPage(options = {}) {
         Twitch Extension
       </div>
       <div style="color:var(--text-muted);">Let viewers trigger sounds directly from your channel page.</div>
-      <a class="ext-link" href="https://dashboard.twitch.tv/extensions/l7iuxz2tipmi4ly2g2vg5uzmdqkhx3-0.0.6" target="_blank" rel="noopener noreferrer">Install Extension</a>
+      <a class="ext-link" href="https://dashboard.twitch.tv/extensions/l7iuxz2tipmi4ly2g2vg5uzmdqkhx3-0.0.7" target="_blank" rel="noopener noreferrer">Install Extension</a>
     </aside>
 
     <main>

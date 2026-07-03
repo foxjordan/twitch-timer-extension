@@ -228,7 +228,7 @@ export function renderHomePage(options = {}) {
             <li>OBS Browser Source overlay for on-screen alerts</li>
           </ul>
           <div class="feature-ctas">
-            <a class="cta primary" href="https://dashboard.twitch.tv/extensions/l7iuxz2tipmi4ly2g2vg5uzmdqkhx3-0.0.6" target="_blank" rel="noopener noreferrer">Add to Your Channel</a>
+            <a class="cta primary" href="https://dashboard.twitch.tv/extensions/l7iuxz2tipmi4ly2g2vg5uzmdqkhx3-0.0.7" target="_blank" rel="noopener noreferrer">Add to Your Channel</a>
             <a class="cta secondary" href="${soundsConfigUrl}">Manage Sounds</a>
           </div>
         </div>

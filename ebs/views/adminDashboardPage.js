@@ -138,6 +138,7 @@ export function renderAdminDashboardPage(options = {}) {
           <button class="sidebar-nav-item" data-section="banner">Banner</button>
           <button class="sidebar-nav-item" data-section="tts-config">TTS Config</button>
           <button class="sidebar-nav-item" data-section="test-alerts">Test Alerts</button>
+          <button class="sidebar-nav-item" data-section="library-moderation">Library Moderation</button>
           <button class="sidebar-nav-item" data-section="event-logs">Event Logs</button>
           <button class="sidebar-nav-item" data-section="broadcasters">Broadcasters</button>
           <button class="sidebar-nav-item" data-section="analytics">Analytics</button>
@@ -290,6 +291,14 @@ export function renderAdminDashboardPage(options = {}) {
             <span id="testTtsStatus" class="tts-status" style="display:none; margin-left:8px;"></span>
           </div>
         </div>
+      </div>
+      </div>
+
+      <div class="section-page" data-section="library-moderation">
+      <div class="table-card">
+        <h2>Library Moderation <span class="refresh-info" id="libraryModerationCount"></span></h2>
+        <div style="font-size:12px; color:var(--text-muted); margin-bottom:12px;">Sounds a broadcaster has newly shared to the community library, awaiting approval before they become publicly visible.</div>
+        <div id="libraryModerationList"><div class="empty-state">Loading...</div></div>
       </div>
       </div>
 
@@ -1070,6 +1079,90 @@ export function renderAdminDashboardPage(options = {}) {
         });
 
         fetchBannerConfig();
+
+        // ===== Library Moderation =====
+        var libraryModerationListEl = document.getElementById('libraryModerationList');
+        var libraryModerationCountEl = document.getElementById('libraryModerationCount');
+
+        function fetchLibraryModeration() {
+          fetch('/api/admin/library/pending', { credentials: 'same-origin' })
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+              if (data.error) return;
+              renderLibraryModerationList(data.sounds || []);
+            })
+            .catch(function() {});
+        }
+
+        function renderLibraryModerationList(sounds) {
+          if (!libraryModerationListEl) return;
+          if (libraryModerationCountEl) {
+            libraryModerationCountEl.textContent = sounds.length ? '(' + sounds.length + ' pending)' : '';
+          }
+          libraryModerationListEl.textContent = '';
+          if (!sounds.length) {
+            var empty = document.createElement('div');
+            empty.className = 'empty-state';
+            empty.textContent = 'Nothing pending review.';
+            libraryModerationListEl.appendChild(empty);
+            return;
+          }
+          sounds.forEach(function(s) {
+            var card = document.createElement('div');
+            card.style.cssText = 'display:flex; align-items:center; gap:10px; padding:10px; background:var(--surface-muted); border-radius:8px; margin-bottom:8px;';
+
+            var info = document.createElement('div');
+            info.style.cssText = 'flex:1; min-width:0;';
+            var nameDiv = document.createElement('div');
+            nameDiv.style.cssText = 'font-weight:600; font-size:14px;';
+            nameDiv.textContent = s.name;
+            var metaDiv = document.createElement('div');
+            metaDiv.style.cssText = 'font-size:12px; color:var(--text-muted);';
+            metaDiv.textContent = 'by ' + (s.ownerDisplayName || s.ownerUserId) + (s.tags && s.tags.length ? ' \\u00b7 ' + s.tags.join(', ') : '');
+            info.appendChild(nameDiv);
+            info.appendChild(metaDiv);
+            card.appendChild(info);
+
+            var approveBtn = document.createElement('button');
+            approveBtn.className = 'btn-unban';
+            approveBtn.textContent = 'Approve';
+            approveBtn.addEventListener('click', function() {
+              fetch('/api/admin/library/' + encodeURIComponent(s.ownerUserId) + '/' + encodeURIComponent(s.id) + '/approve', {
+                method: 'POST',
+                credentials: 'same-origin',
+              })
+                .then(function(r) { return r.json(); })
+                .then(function(data) {
+                  if (data.error) { alert('Error: ' + data.error); return; }
+                  fetchLibraryModeration();
+                })
+                .catch(function() { alert('Approve request failed'); });
+            });
+            card.appendChild(approveBtn);
+
+            var rejectBtn = document.createElement('button');
+            rejectBtn.className = 'btn-ban';
+            rejectBtn.textContent = 'Reject';
+            rejectBtn.style.marginLeft = '4px';
+            rejectBtn.addEventListener('click', function() {
+              fetch('/api/admin/library/' + encodeURIComponent(s.ownerUserId) + '/' + encodeURIComponent(s.id) + '/reject', {
+                method: 'POST',
+                credentials: 'same-origin',
+              })
+                .then(function(r) { return r.json(); })
+                .then(function(data) {
+                  if (data.error) { alert('Error: ' + data.error); return; }
+                  fetchLibraryModeration();
+                })
+                .catch(function() { alert('Reject request failed'); });
+            });
+            card.appendChild(rejectBtn);
+
+            libraryModerationListEl.appendChild(card);
+          });
+        }
+
+        fetchLibraryModeration();
 
         // ===== Test Alerts =====
         var testBroadcasterEl = document.getElementById('testBroadcaster');

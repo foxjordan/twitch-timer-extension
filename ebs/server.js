@@ -51,6 +51,7 @@ import { mountAuthRoutes } from "./routes_auth.js";
 import { mountOverlayApiRoutes } from "./routes_overlay_api.js";
 import { mountOverlayPageRoutes } from "./routes_overlay_page.js";
 import { mountDelegateRoutes } from "./routes_delegate.js";
+import { mountLibraryModerationRoutes } from "./routes_library_moderation.js";
 import { isDelegate } from "./delegate_store.js";
 import { mountHomePageRoutes } from "./routes_home_page.js";
 import { mountGoalRoutes } from "./routes_goals.js";
@@ -987,7 +988,8 @@ mountSoundRoutes(app, {
     }
   },
   onSoundAlert: ({ channelId, soundId, soundName, tier, txId, viewerUserId, type, clipSlug, volume }) => {
-    if (txId && !txId.startsWith('test_')) {
+    const isTestAlert = !txId || txId.startsWith('test_');
+    if (!isTestAlert) {
       logSoundEvent({ channelId, viewerUserId, soundId, soundName, alertType: type, tier, txId, clipSlug, eventKind: 'played' });
     }
     const alertId = crypto.randomUUID().slice(0, 12);
@@ -1046,8 +1048,9 @@ mountSoundRoutes(app, {
       payload: { soundId, soundName },
     }).catch(() => {});
 
-    // Add timer time for Bits-in-Extensions usage (same rules as cheers)
-    if (tier) {
+    // Add timer time for Bits-in-Extensions usage (same rules as cheers) —
+    // skipped for test-fired alerts, which must never mutate real timer state.
+    if (tier && !isTestAlert) {
       const bits = Number(tier.replace("sound_", "")) || 0;
       if (bits > 0) {
         logEntry.bitsAmount = bits;
@@ -1240,6 +1243,8 @@ mountOverlayPageRoutes(app, {
 });
 
 mountDelegateRoutes(app, { getUserProfile });
+
+mountLibraryModerationRoutes(app);
 
 mountHomePageRoutes(app);
 

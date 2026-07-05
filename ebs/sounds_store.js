@@ -170,6 +170,15 @@ function normalizeSound(raw = {}) {
     shared: typeof raw.shared === "boolean" ? raw.shared : false,
     sourceUserId: sanitizeString(raw.sourceUserId, ""),
     sourceSoundId: sanitizeString(raw.sourceSoundId, ""),
+    tags: Array.isArray(raw.tags)
+      ? raw.tags.map((t) => sanitizeString(t, "").trim().toLowerCase()).filter(Boolean).slice(0, 5)
+      : [],
+    // Defaults to "approved" (not "pending") so every sound that was already
+    // shared before this field existed stays visible in the library — only
+    // newly-shared sounds go through moderation (see routes_sounds.js).
+    moderationStatus: ["pending", "approved", "rejected"].includes(raw.moderationStatus)
+      ? raw.moderationStatus
+      : "approved",
     createdAt: raw.createdAt || now,
     updatedAt: raw.updatedAt || now,
   };
@@ -233,6 +242,12 @@ export function updateSound(uid, soundId, patch = {}) {
   if ("clipUrl" in patch) sound.clipUrl = sanitizeString(patch.clipUrl, sound.clipUrl);
   if ("clipSlug" in patch) sound.clipSlug = sanitizeString(patch.clipSlug, sound.clipSlug);
   if ("shared" in patch) sound.shared = Boolean(patch.shared);
+  if ("tags" in patch && Array.isArray(patch.tags)) {
+    sound.tags = patch.tags.map((t) => sanitizeString(t, "").trim().toLowerCase()).filter(Boolean).slice(0, 5);
+  }
+  if ("moderationStatus" in patch && ["pending", "approved", "rejected"].includes(patch.moderationStatus)) {
+    sound.moderationStatus = patch.moderationStatus;
+  }
   sound.updatedAt = nowIso();
   persistSoundAlerts().catch(() => {});
   return deepClone(sound);
@@ -395,6 +410,7 @@ export function getSharedLibrary(requestingUserId = null) {
     for (const sound of user.sounds.values()) {
       if (!sound.shared) continue;
       if (sound.type !== "sound") continue; // v1: audio only
+      if ((sound.moderationStatus || "approved") !== "approved") continue;
 
       // If this is a copy of another sound, use the source as the dedup key
       const sourceKey = sound.sourceUserId && sound.sourceSoundId
@@ -414,6 +430,7 @@ export function getSharedLibrary(requestingUserId = null) {
         ownerUserId: uid,
         ownerDisplayName: profile?.displayName || profile?.login || null,
         owned: ownedSet.has(`${uid}:${sound.id}`),
+        tags: sound.tags || [],
         createdAt: sound.createdAt,
       });
     }
@@ -423,6 +440,50 @@ export function getSharedLibrary(requestingUserId = null) {
     const bDate = Date.parse(b.createdAt || "") || 0;
     return bDate - aDate; // newest first
   });
+}
+
+// Shared sounds awaiting moderation approval, for the admin review queue.
+export function getPendingLibrarySounds() {
+  const results = [];
+  for (const [uid, user] of soundAlertsByUser.entries()) {
+    for (const sound of user.sounds.values()) {
+      if (!sound.shared) continue;
+      if (sound.moderationStatus !== "pending") continue;
+      const profile = getUserProfile(uid);
+      results.push({
+        id: sound.id,
+        name: sound.name,
+        type: sound.type,
+        hasImage: Boolean(sound.imageFilename),
+        ownerUserId: uid,
+        ownerDisplayName: profile?.displayName || profile?.login || null,
+        tags: sound.tags || [],
+        createdAt: sound.createdAt,
+      });
+    }
+  }
+  return results.sort((a, b) => {
+    const aDate = Date.parse(a.createdAt || "") || 0;
+    const bDate = Date.parse(b.createdAt || "") || 0;
+    return aDate - bDate; // oldest first — review queue, first-in-first-out
+  });
+}
+
+// Every {channelId, soundId} pair that IS this original sound or a copy of it
+// (via sourceUserId/sourceSoundId) — needed to attribute plays across every
+// broadcaster's copy back to a single library entry for popularity ranking.
+export function getSoundLineage(ownerUserId, soundId) {
+  const owner = String(ownerUserId);
+  const id = String(soundId);
+  const pairs = [{ channelId: owner, soundId: id }];
+  for (const [uid, user] of soundAlertsByUser.entries()) {
+    for (const sound of user.sounds.values()) {
+      if (sound.sourceUserId === owner && sound.sourceSoundId === id) {
+        pairs.push({ channelId: uid, soundId: sound.id });
+      }
+    }
+  }
+  return pairs;
 }
 
 export async function copySoundToUser(sourceUid, sourceSoundId, destUid, { fileCopyFn } = {}) {

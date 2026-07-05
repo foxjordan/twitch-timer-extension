@@ -5,6 +5,47 @@ import { BrandedFooter } from "./BrandedFooter.jsx";
 
 const EBS_BASE = import.meta.env.VITE_EBS_BASE || "https://livestreamerhub.com";
 
+// Mirrors ebs/views/theme.js's THEME_CSS_VARS so the Twitch panel uses the
+// same design tokens as the livestreamerhub.com dashboard, in both themes.
+const THEME_TOKENS = {
+  dark: {
+    pageBg: "#0e0e10",
+    surface: "#1f1f23",
+    surfaceBorder: "#303038",
+    surfaceMuted: "#151517",
+    inputBg: "#151517",
+    inputBorder: "#3a3a3d",
+    text: "#efeff1",
+    textMuted: "rgba(239, 239, 241, 0.8)",
+    accent: "#9146ff",
+    linkColor: "#bf94ff",
+    secondaryBtnBg: "#2c2c31",
+    secondaryBtnBorder: "#3a3a3d",
+    secondaryBtnText: "#efeff1",
+    danger: "#dc2626",
+    success: "#10b981",
+    warning: "#e67e22",
+  },
+  light: {
+    pageBg: "#f5f5f7",
+    surface: "#ffffff",
+    surfaceBorder: "#e5e7eb",
+    surfaceMuted: "#f3f4f6",
+    inputBg: "#ffffff",
+    inputBorder: "#d1d5db",
+    text: "#111827",
+    textMuted: "rgba(17, 24, 39, 0.7)",
+    accent: "#9146ff",
+    linkColor: "#7c3aed",
+    secondaryBtnBg: "#f3f4f6",
+    secondaryBtnBorder: "#d1d5db",
+    secondaryBtnText: "#1f2937",
+    danger: "#dc2626",
+    success: "#10b981",
+    warning: "#e67e22",
+  },
+};
+
 import { TIER_LABELS, DEFAULT_TIER } from "./tiers.js";
 
 import { VALID_TIERS } from "./tiers.js";
@@ -48,7 +89,24 @@ function ConfigApp() {
   const [extConfig, setExtConfig] = useState({ features: { tts: true, videoClips: true, communityLibrary: true } });
   const [initialLoadFailed, setInitialLoadFailed] = useState(false);
   const [bannerDismissed, setBannerDismissed] = useState(false);
+  const [twitchTheme, setTwitchTheme] = useState("dark");
   const previewAudioRef = useRef(null);
+
+  const t = THEME_TOKENS[twitchTheme] || THEME_TOKENS.dark;
+  const styles = buildStyles(t);
+
+  useEffect(() => {
+    window.Twitch?.ext?.onContext((context) => {
+      if (context?.theme === "light" || context?.theme === "dark") {
+        setTwitchTheme(context.theme);
+      }
+    });
+  }, []);
+
+  useEffect(() => {
+    document.body.style.background = t.pageBg;
+    document.body.style.color = t.text;
+  }, [t.pageBg, t.text]);
 
   const headers = useCallback(
     () => ({
@@ -522,7 +580,7 @@ function ConfigApp() {
 
           {/* OBS Overlay URL — nested inside Settings */}
           {overlayUrl && (
-            <div style={{ marginTop: 12, paddingTop: 12, borderTop: "1px solid #303038" }}>
+            <div style={{ marginTop: 12, paddingTop: 12, borderTop: `1px solid ${t.surfaceBorder}` }}>
               <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 6 }}>OBS Browser Source</div>
               <p style={{ fontSize: 11, opacity: 0.6, marginBottom: 6 }}>
                 Add this URL as a Browser Source in OBS to play alerts on stream.
@@ -530,9 +588,9 @@ function ConfigApp() {
               <div
                 style={{
                   padding: "6px 8px",
-                  background: "#0e0e10",
+                  background: t.inputBg,
                   borderRadius: 6,
-                  border: "1px solid #303038",
+                  border: `1px solid ${t.inputBorder}`,
                   fontSize: 10,
                   wordBreak: "break-all",
                   fontFamily: "monospace",
@@ -579,7 +637,7 @@ function ConfigApp() {
                 onClick={() => setCreateTab(tab.key)}
                 style={{
                   ...styles.btnSmall,
-                  background: createTab === tab.key ? "#9146FF" : "#303038",
+                  background: createTab === tab.key ? t.accent : t.surfaceBorder,
                   opacity: createTab === tab.key ? 1 : 0.7,
                 }}
               >
@@ -788,7 +846,17 @@ function ConfigApp() {
 
       {/* Row 2: Alert List — full width */}
       <div style={styles.card}>
-        <h3 style={styles.subHeading}>Alerts ({sounds.length}/20)</h3>
+        <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between" }}>
+          <h3 style={styles.subHeading}>Alerts ({sounds.length}/20)</h3>
+          <a
+            href={`${EBS_BASE}/sounds/config#activity`}
+            target="_blank"
+            rel="noopener noreferrer"
+            style={{ ...styles.link, marginBottom: 10 }}
+          >
+            View Activity &rarr;
+          </a>
+        </div>
         {sounds.length === 0 && (
           <p style={styles.muted}>No alerts created yet.</p>
         )}
@@ -798,9 +866,13 @@ function ConfigApp() {
             sound={s}
             tiers={tiers}
             auth={auth}
+            styles={styles}
+            t={t}
             onToggle={handleToggle}
             onUpdate={handleSoundUpdate}
             onDelete={handleDelete}
+            onSuccess={flash}
+            onError={setError}
             onRefresh={() => fetchSounds(auth.token)}
           />
         ))}
@@ -897,7 +969,7 @@ function ConfigApp() {
                 />
               </label>
               {!ttsSettings.moderationEnabled && (
-                <div style={{ fontSize: 11, color: "#e67e22", marginBottom: 6, marginTop: -4 }}>
+                <div style={{ fontSize: 11, color: t.warning, marginBottom: 6, marginTop: -4 }}>
                   Disabling moderation may allow offensive messages. Banned words are still checked.
                 </div>
               )}
@@ -909,7 +981,7 @@ function ConfigApp() {
                   Test TTS
                 </button>
                 <button
-                  style={{ ...styles.btn, background: "#c0392b" }}
+                  style={{ ...styles.btn, background: t.danger }}
                   onClick={async () => {
                     try {
                       await fetch(`${EBS_BASE}/api/tts/skip`, {
@@ -986,10 +1058,14 @@ function SoundRow({
   sound,
   tiers,
   auth,
+  styles,
+  t,
   onToggle,
   onUpdate,
   onDelete,
   onRefresh,
+  onSuccess,
+  onError,
 }) {
   const [editing, setEditing] = useState(false);
   const [name, setName] = useState(sound.name);
@@ -998,6 +1074,9 @@ function SoundRow({
   const [editClipUrl, setEditClipUrl] = useState(sound.clipUrl || "");
   const [imageUploading, setImageUploading] = useState(false);
   const [imagePreviewUrl, setImagePreviewUrl] = useState(null);
+  const [previewing, setPreviewing] = useState(false);
+  const [testing, setTesting] = useState(false);
+  const soundAudioRef = useRef(null);
   const imageInputRef = useRef(null);
   const soundType = sound.type || "sound";
 
@@ -1060,6 +1139,71 @@ function SoundRow({
     onRefresh();
   }
 
+  function togglePreview() {
+    if (soundAudioRef.current) {
+      soundAudioRef.current.pause();
+      soundAudioRef.current = null;
+      setPreviewing(false);
+      return;
+    }
+    setPreviewing(true);
+    // Fetch a short-lived preview token (small same-origin JSON response — safe to
+    // read via fetch) rather than streaming the audio itself through fetch()+blob,
+    // since the actual audio bytes come from cross-origin storage and reading that
+    // response would require CORS, which media playback doesn't need.
+    fetch(
+      `${EBS_BASE}/api/sounds/preview-token/${sound.id}?channelId=${auth.channelId}`,
+      { headers: { Authorization: `Bearer ${auth.token}` } },
+    )
+      .then((r) => {
+        if (!r.ok) throw new Error();
+        return r.json();
+      })
+      .then(({ token }) => {
+        const url = `${EBS_BASE}/api/sounds/preview/${sound.id}?pt=${encodeURIComponent(token)}&channelId=${auth.channelId}`;
+        const audio = new Audio(url);
+        soundAudioRef.current = audio;
+        audio.onended = () => {
+          soundAudioRef.current = null;
+          setPreviewing(false);
+        };
+        audio.onerror = () => {
+          soundAudioRef.current = null;
+          setPreviewing(false);
+          onError?.("Preview failed");
+        };
+        audio.play().catch(() => {});
+      })
+      .catch(() => {
+        setPreviewing(false);
+        onError?.("Preview failed");
+      });
+  }
+
+  async function handleTest() {
+    setTesting(true);
+    try {
+      const statusRes = await fetch(
+        `${EBS_BASE}/api/overlay/status?channelId=${auth.channelId}`,
+      );
+      const statusData = await statusRes.json().catch(() => ({}));
+      if (!statusData.connected) {
+        onError?.("Overlay not connected — open your OBS browser source or overlay page first.");
+        return;
+      }
+      const res = await fetch(`${EBS_BASE}/api/sounds/test/${sound.id}`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${auth.token}` },
+      });
+      if (!res.ok) throw new Error();
+      onSuccess?.("Sent to overlay!");
+    } catch {
+      onError?.("Test failed");
+    } finally {
+      setTesting(false);
+    }
+  }
+
   return (
     <div style={styles.soundRow}>
       {/* Image thumbnail */}
@@ -1070,7 +1214,7 @@ function SoundRow({
           borderRadius: 6,
           overflow: "hidden",
           flexShrink: 0,
-          background: "#0e0e10",
+          background: t.inputBg,
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
@@ -1205,7 +1349,7 @@ function SoundRow({
                 />
                 {sound.imageFilename && (
                   <button
-                    style={{ ...styles.btnSmall, background: "#c0392b" }}
+                    style={{ ...styles.btnSmall, background: t.danger }}
                     onClick={handleImageDelete}
                   >
                     Remove
@@ -1218,7 +1362,7 @@ function SoundRow({
                 Save
               </button>
               <button
-                style={{ ...styles.btnSmall, background: "#555" }}
+                style={styles.btnSecondary}
                 onClick={() => setEditing(false)}
               >
                 Cancel
@@ -1277,8 +1421,16 @@ function SoundRow({
           <button style={styles.btnSmall} onClick={() => setEditing(true)}>
             Edit
           </button>
+          {soundType === "sound" && (
+            <button style={styles.btnSecondary} onClick={togglePreview}>
+              {previewing ? "■ Stop" : "Preview"}
+            </button>
+          )}
+          <button style={styles.btnSecondary} disabled={testing} onClick={handleTest}>
+            {testing ? "Testing..." : "Test"}
+          </button>
           <button
-            style={{ ...styles.btnSmall, background: "#c0392b" }}
+            style={{ ...styles.btnSmall, background: t.danger }}
             onClick={() => onDelete(sound.id)}
           >
             Del
@@ -1289,171 +1441,183 @@ function SoundRow({
   );
 }
 
-const styles = {
-  container: {
-    padding: "16px 24px",
-    maxWidth: 900,
-    margin: "0 auto",
-  },
-  headingRow: {
-    display: "flex",
-    alignItems: "baseline",
-    justifyContent: "space-between",
-    flexWrap: "wrap",
-    gap: 8,
-    marginBottom: 16,
-  },
-  heading: {
-    fontSize: 22,
-    fontWeight: 700,
-    margin: 0,
-  },
-  link: {
-    color: "#bf94ff",
-    fontSize: 12,
-    textDecoration: "none",
-  },
-  banner: {
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: 10,
-    background: "#9146FF22",
-    border: "1px solid #9146FF",
-    borderRadius: 8,
-    padding: "8px 12px",
-    marginBottom: 14,
-    fontSize: 13,
-  },
-  bannerDismiss: {
-    background: "none",
-    border: "none",
-    color: "#efeff1",
-    fontSize: 16,
-    lineHeight: 1,
-    cursor: "pointer",
-    opacity: 0.7,
-    flexShrink: 0,
-  },
-  bannerLink: {
-    color: "#bf94ff",
-    fontWeight: 600,
-    textDecoration: "underline",
-    marginLeft: 8,
-    whiteSpace: "nowrap",
-  },
-  subHeading: {
-    fontSize: 15,
-    fontWeight: 600,
-    marginBottom: 10,
-  },
-  twoCol: {
-    display: "grid",
-    gridTemplateColumns: "1fr 1fr",
-    gap: 14,
-    marginBottom: 14,
-  },
-  ttsGrid: {
-    display: "grid",
-    gridTemplateColumns: "1fr 1fr",
-    gap: 20,
-  },
-  card: {
-    background: "#1f1f23",
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 14,
-    border: "1px solid #303038",
-  },
-  row: {
-    display: "flex",
-    alignItems: "center",
-    gap: 10,
-    marginBottom: 6,
-    fontSize: 13,
-  },
-  soundRow: {
-    display: "flex",
-    alignItems: "center",
-    gap: 10,
-    padding: "8px 0",
-    borderBottom: "1px solid #303038",
-  },
-  muted: {
-    fontSize: 12,
-    opacity: 0.6,
-  },
-  error: {
-    background: "#c0392b22",
-    border: "1px solid #c0392b",
-    borderRadius: 8,
-    padding: "8px 12px",
-    marginBottom: 12,
-    fontSize: 13,
-  },
-  success: {
-    background: "#27ae6022",
-    border: "1px solid #27ae60",
-    borderRadius: 8,
-    padding: "8px 12px",
-    marginBottom: 12,
-    fontSize: 13,
-  },
-  textInput: {
-    width: "100%",
-    padding: "6px 10px",
-    borderRadius: 6,
-    border: "1px solid #303038",
-    background: "#0e0e10",
-    color: "#efeff1",
-    fontSize: 13,
-    outline: "none",
-    boxSizing: "border-box",
-  },
-  numberInput: {
-    width: 60,
-    padding: "4px 6px",
-    borderRadius: 6,
-    border: "1px solid #303038",
-    background: "#0e0e10",
-    color: "#efeff1",
-    fontSize: 13,
-    outline: "none",
-  },
-  select: {
-    padding: "4px 8px",
-    borderRadius: 6,
-    border: "1px solid #303038",
-    background: "#0e0e10",
-    color: "#efeff1",
-    fontSize: 13,
-    outline: "none",
-  },
-  fileInput: {
-    fontSize: 12,
-    color: "#efeff1",
-  },
-  btn: {
-    background: "#9146FF",
-    color: "#fff",
-    border: "none",
-    borderRadius: 8,
-    padding: "8px 18px",
-    fontSize: 14,
-    fontWeight: 600,
-    cursor: "pointer",
-  },
-  btnSmall: {
-    background: "#9146FF",
-    color: "#fff",
-    border: "none",
-    borderRadius: 6,
-    padding: "4px 10px",
-    fontSize: 12,
-    fontWeight: 600,
-    cursor: "pointer",
-  },
-};
+function buildStyles(t) {
+  return {
+    container: {
+      padding: "16px 24px",
+      maxWidth: 900,
+      margin: "0 auto",
+    },
+    headingRow: {
+      display: "flex",
+      alignItems: "baseline",
+      justifyContent: "space-between",
+      flexWrap: "wrap",
+      gap: 8,
+      marginBottom: 16,
+    },
+    heading: {
+      fontSize: 22,
+      fontWeight: 700,
+      margin: 0,
+    },
+    link: {
+      color: t.linkColor,
+      fontSize: 12,
+      textDecoration: "none",
+    },
+    banner: {
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "space-between",
+      gap: 10,
+      background: `${t.accent}22`,
+      border: `1px solid ${t.accent}`,
+      borderRadius: 8,
+      padding: "8px 12px",
+      marginBottom: 14,
+      fontSize: 13,
+    },
+    bannerDismiss: {
+      background: "none",
+      border: "none",
+      color: t.text,
+      fontSize: 16,
+      lineHeight: 1,
+      cursor: "pointer",
+      opacity: 0.7,
+      flexShrink: 0,
+    },
+    bannerLink: {
+      color: t.linkColor,
+      fontWeight: 600,
+      textDecoration: "underline",
+      marginLeft: 8,
+      whiteSpace: "nowrap",
+    },
+    subHeading: {
+      fontSize: 15,
+      fontWeight: 600,
+      marginBottom: 10,
+    },
+    twoCol: {
+      display: "grid",
+      gridTemplateColumns: "1fr 1fr",
+      gap: 14,
+      marginBottom: 14,
+    },
+    ttsGrid: {
+      display: "grid",
+      gridTemplateColumns: "1fr 1fr",
+      gap: 20,
+    },
+    card: {
+      background: t.surface,
+      borderRadius: 14,
+      padding: 20,
+      marginBottom: 14,
+      border: `1px solid ${t.surfaceBorder}`,
+    },
+    row: {
+      display: "flex",
+      alignItems: "center",
+      gap: 10,
+      marginBottom: 6,
+      fontSize: 13,
+    },
+    soundRow: {
+      display: "flex",
+      alignItems: "center",
+      gap: 10,
+      padding: "8px 0",
+      borderBottom: `1px solid ${t.surfaceBorder}`,
+    },
+    muted: {
+      fontSize: 12,
+      opacity: 0.6,
+    },
+    error: {
+      background: `${t.danger}22`,
+      border: `1px solid ${t.danger}`,
+      borderRadius: 8,
+      padding: "8px 12px",
+      marginBottom: 12,
+      fontSize: 13,
+    },
+    success: {
+      background: `${t.success}22`,
+      border: `1px solid ${t.success}`,
+      borderRadius: 8,
+      padding: "8px 12px",
+      marginBottom: 12,
+      fontSize: 13,
+    },
+    textInput: {
+      width: "100%",
+      padding: "6px 10px",
+      borderRadius: 6,
+      border: `1px solid ${t.inputBorder}`,
+      background: t.inputBg,
+      color: t.text,
+      fontSize: 13,
+      outline: "none",
+      boxSizing: "border-box",
+    },
+    numberInput: {
+      width: 60,
+      padding: "4px 6px",
+      borderRadius: 6,
+      border: `1px solid ${t.inputBorder}`,
+      background: t.inputBg,
+      color: t.text,
+      fontSize: 13,
+      outline: "none",
+    },
+    select: {
+      padding: "4px 8px",
+      borderRadius: 6,
+      border: `1px solid ${t.inputBorder}`,
+      background: t.inputBg,
+      color: t.text,
+      fontSize: 13,
+      outline: "none",
+    },
+    fileInput: {
+      fontSize: 12,
+      color: t.text,
+    },
+    btn: {
+      background: t.accent,
+      color: "#fff",
+      border: "none",
+      borderRadius: 8,
+      padding: "8px 18px",
+      fontSize: 14,
+      fontWeight: 600,
+      cursor: "pointer",
+    },
+    btnSmall: {
+      background: t.accent,
+      color: "#fff",
+      border: "none",
+      borderRadius: 6,
+      padding: "4px 10px",
+      fontSize: 12,
+      fontWeight: 600,
+      cursor: "pointer",
+    },
+    btnSecondary: {
+      background: t.secondaryBtnBg,
+      color: t.secondaryBtnText,
+      border: `1px solid ${t.secondaryBtnBorder}`,
+      borderRadius: 6,
+      padding: "4px 10px",
+      fontSize: 12,
+      fontWeight: 600,
+      cursor: "pointer",
+    },
+  };
+}
 
 ReactDOM.createRoot(document.getElementById("root")).render(<ConfigApp />);
 export default ConfigApp;

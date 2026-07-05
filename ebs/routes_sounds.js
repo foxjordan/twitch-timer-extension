@@ -21,7 +21,8 @@ import {
   getR2ObjectStream,
   copyR2Object,
 } from "./r2.js";
-import { logSoundEvent } from "./alert_events_store.js";
+import { logSoundEvent, getPlayCountsForPairs } from "./alert_events_store.js";
+import { db } from "./db.js";
 import { getUserProfile, setUserProfile } from "./user_profiles.js";
 import { fetchUserDisplayName } from "./twitch_api.js";
 import { getBannerConfig } from "./banner_store.js";
@@ -234,6 +235,7 @@ import {
   SOUNDS_FILE_DIR,
   seedDefaultSounds,
   getSharedLibrary,
+  getSoundLineage,
   copySoundToUser,
 } from "./sounds_store.js";
 
@@ -780,11 +782,34 @@ export function mountSoundRoutes(app, deps = {}) {
   // ===== Community Library =====
 
   // Browse shared sounds from all users
-  app.get("/api/sounds/library", (req, res) => {
+  app.get("/api/sounds/library", async (req, res) => {
     const uid = requireBroadcaster(req, res);
     if (!uid) return;
     const library = getSharedLibrary(uid);
-    res.json({ sounds: library });
+    const sort = req.query.sort;
+
+    if (sort !== "popular" && sort !== "trending") {
+      return res.json({ sounds: library });
+    }
+
+    try {
+      const sinceDays = sort === "trending" ? 7 : null;
+      const lineageByItem = library.map((item) => getSoundLineage(item.ownerUserId, item.id));
+      const allPairs = lineageByItem.flat();
+      const counts = await getPlayCountsForPairs(allPairs, sinceDays);
+      const withCounts = library.map((item, i) => {
+        const playCount = lineageByItem[i].reduce(
+          (sum, p) => sum + (counts.get(`${p.channelId}:${p.soundId}`) || 0),
+          0,
+        );
+        return { ...item, playCount };
+      });
+      withCounts.sort((a, b) => b.playCount - a.playCount);
+      res.json({ sounds: withCounts });
+    } catch (err) {
+      logger.error("library_sort_failed", { sort, message: err?.message });
+      res.json({ sounds: library });
+    }
   });
 
   // Serve image for a library sound (from original owner's directory)
@@ -872,7 +897,17 @@ export function mountSoundRoutes(app, deps = {}) {
   app.put("/api/sounds/:soundId", (req, res) => {
     const uid = requireBroadcaster(req, res);
     if (!uid) return;
-    const sound = updateSound(uid, req.params.soundId, req.body || {});
+    const patch = { ...(req.body || {}) };
+    // Newly-shared sounds enter the moderation queue rather than appearing in
+    // the library immediately — re-sharing an already-approved/rejected sound
+    // does not reset it back to pending.
+    if (patch.shared === true) {
+      const existing = getSound(uid, req.params.soundId);
+      if (existing && !existing.shared) {
+        patch.moderationStatus = "pending";
+      }
+    }
+    const sound = updateSound(uid, req.params.soundId, patch);
     if (!sound) return res.status(404).json({ error: "Sound not found" });
     logger.info("sound_updated", {
       userId: uid,
@@ -1020,6 +1055,51 @@ export function mountSoundRoutes(app, deps = {}) {
       },
       banner: getBannerConfig(),
     });
+  });
+
+  // Broadcaster-facing activity analytics: top sounds and top viewers over the
+  // last 30 days. Same auth family as the rest of this file (requireBroadcaster,
+  // not admin-only) — adapts the proven aggregation already used by the
+  // super-admin per-channel analytics route in routes_admin.js.
+  app.get("/api/sounds/activity", async (req, res) => {
+    const uid = requireBroadcaster(req, res);
+    if (!uid) return;
+    try {
+      const [topSoundsRes, topViewersRes] = await Promise.all([
+        db.query(
+          `SELECT sound_id, sound_name, COUNT(*)::int AS count
+             FROM sound_alert_events
+            WHERE channel_id = $1 AND event_kind = 'played' AND created_at > NOW() - INTERVAL '30 days'
+            GROUP BY sound_id, sound_name
+            ORDER BY count DESC
+            LIMIT 10`,
+          [uid],
+        ),
+        db.query(
+          `SELECT viewer_user_id, COUNT(*)::int AS count
+             FROM sound_alert_events
+            WHERE channel_id = $1 AND event_kind = 'played' AND created_at > NOW() - INTERVAL '30 days'
+              AND viewer_user_id IS NOT NULL
+            GROUP BY viewer_user_id
+            ORDER BY count DESC
+            LIMIT 10`,
+          [uid],
+        ),
+      ]);
+      const topViewers = await Promise.all(
+        topViewersRes.rows.map(async (r) => ({
+          viewerUserId: r.viewer_user_id,
+          displayName: (await fetchUserDisplayName(r.viewer_user_id, uid).catch(() => null)) || r.viewer_user_id,
+          count: r.count,
+        })),
+      );
+      res.json({
+        topSounds: topSoundsRes.rows,
+        topViewers,
+      });
+    } catch (err) {
+      res.status(500).json({ error: err?.message || "Query failed" });
+    }
   });
 
   // Alert queue — returns pending (unplayed) alerts for the broadcaster's channel

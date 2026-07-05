@@ -199,6 +199,7 @@ export function renderSoundConfigPage(options = {}) {
           <button class="sidebar-nav-item" data-section="tts">Text-to-Speech</button>
           <button class="sidebar-nav-item" data-section="queue">Queue</button>
           <button class="sidebar-nav-item" data-section="history">Alert History</button>
+          <button class="sidebar-nav-item" data-section="activity">Activity</button>
           ${!delegateMode ? `<button class="sidebar-nav-item" data-section="delegates">Delegates</button>` : ''}
         </div>
       </nav>
@@ -381,7 +382,14 @@ export function renderSoundConfigPage(options = {}) {
         <h2>Community Library</h2>
         <div id="libraryBody">
           <p class="hint" style="margin-bottom:12px;">Browse sounds shared by other streamers. Preview and add to your alerts.</p>
-          <input type="text" id="librarySearch" class="library-search" placeholder="Search by name or uploader..." />
+          <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-bottom:10px;">
+            <input type="text" id="librarySearch" class="library-search" placeholder="Search by name, uploader, or tag..." style="flex:1; min-width:200px;" />
+            <select id="librarySort" style="padding:6px 10px; border-radius:8px; border:1px solid var(--surface-border); background:var(--surface-muted); color:var(--text-color); font-size:13px;">
+              <option value="newest">Newest</option>
+              <option value="popular">Most Popular</option>
+              <option value="trending">Trending (7d)</option>
+            </select>
+          </div>
           <div id="libraryList" class="library-grid">
             <div class="hint" style="grid-column: 1 / -1;">Loading library...</div>
           </div>
@@ -392,7 +400,7 @@ export function renderSoundConfigPage(options = {}) {
       <div class="section-page active" data-section="alerts">
       <!-- Sound List -->
       <div class="card">
-        <h2>Alerts (<span id="soundCount">0</span>/20)</h2>
+        <h2>Alerts (<span id="soundCount">0</span>/20) <span id="soundTestHint" class="hint" style="font-size:12px; margin-left:8px;"></span></h2>
         <div id="soundList" style="display:flex; flex-direction:column; gap:6px;">
           <div class="hint">Loading sounds…</div>
         </div>
@@ -494,6 +502,20 @@ export function renderSoundConfigPage(options = {}) {
       </div>
       </div>
 
+      <div class="section-page" data-section="activity">
+      <!-- Activity: top sounds & top viewers, last 30 days -->
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:20px;">
+        <div class="card">
+          <h2>Top Sounds <span class="hint" style="font-size:11px;">(last 30 days)</span></h2>
+          <div id="activityTopSounds"><div class="hint">Loading...</div></div>
+        </div>
+        <div class="card">
+          <h2>Top Viewers <span class="hint" style="font-size:11px;">(last 30 days)</span></h2>
+          <div id="activityTopViewers"><div class="hint">Loading...</div></div>
+        </div>
+      </div>
+      </div>
+
       ${!delegateMode ? `
       <div class="section-page" data-section="delegates">
       <div class="card">
@@ -533,6 +555,16 @@ export function renderSoundConfigPage(options = {}) {
 
         var soundListEl = document.getElementById('soundList');
         var soundCountEl = document.getElementById('soundCount');
+        var soundTestHintEl = document.getElementById('soundTestHint');
+        var soundPreviewAudio = null;
+        var soundPreviewAudioUrl = null;
+        var soundPreviewBtn = null;
+
+        function stopSoundPreview() {
+          if (soundPreviewAudio) { soundPreviewAudio.pause(); soundPreviewAudio = null; }
+          if (soundPreviewAudioUrl) { URL.revokeObjectURL(soundPreviewAudioUrl); soundPreviewAudioUrl = null; }
+          if (soundPreviewBtn) { soundPreviewBtn.textContent = 'Preview'; soundPreviewBtn = null; }
+        }
         var soundEnabledEl = document.getElementById('soundEnabled');
         var soundGlobalVolumeEl = document.getElementById('soundGlobalVolume');
         var soundGlobalVolumeValEl = document.getElementById('soundGlobalVolumeVal');
@@ -705,12 +737,25 @@ export function renderSoundConfigPage(options = {}) {
               nameDiv.appendChild(badge);
             }
 
-            // Shared badge
+            // Shared / moderation status badge
             if (s.shared) {
               var sharedBadge = document.createElement('span');
-              sharedBadge.style.cssText = 'display:inline-block; padding:1px 6px; border-radius:4px; font-size:10px; font-weight:600; letter-spacing:0.04em; margin-left:6px; background:rgba(34,197,94,0.15); color:#22c55e;';
-              sharedBadge.textContent = 'SHARED';
+              sharedBadge.style.cssText = 'display:inline-block; padding:1px 6px; border-radius:4px; font-size:10px; font-weight:600; letter-spacing:0.04em; margin-left:6px;';
+              if (s.moderationStatus === 'pending') {
+                sharedBadge.style.background = 'rgba(245,158,11,0.15)';
+                sharedBadge.style.color = '#f59e0b';
+                sharedBadge.textContent = 'PENDING REVIEW';
+              } else {
+                sharedBadge.style.background = 'rgba(34,197,94,0.15)';
+                sharedBadge.style.color = '#22c55e';
+                sharedBadge.textContent = 'SHARED';
+              }
               nameDiv.appendChild(sharedBadge);
+            } else if (s.moderationStatus === 'rejected') {
+              var rejectedBadge = document.createElement('span');
+              rejectedBadge.style.cssText = 'display:inline-block; padding:1px 6px; border-radius:4px; font-size:10px; font-weight:600; letter-spacing:0.04em; margin-left:6px; background:rgba(220,38,38,0.15); color:#dc2626;';
+              rejectedBadge.textContent = 'REJECTED';
+              nameDiv.appendChild(rejectedBadge);
             }
 
             var metaDiv = document.createElement('div');
@@ -746,9 +791,51 @@ export function renderSoundConfigPage(options = {}) {
             testBtn.addEventListener('click', async function() {
               flashButton(testBtn);
               setBusy(testBtn, true);
-              try { await fetch(API_BASE + '/test/' + encodeURIComponent(s.id), { method: 'POST' }); } catch(e) {}
+              if (soundTestHintEl) soundTestHintEl.textContent = '';
+              try {
+                var statusRes = await fetch('/api/overlay/status');
+                var statusData = await statusRes.json().catch(function() { return {}; });
+                if (!statusData.connected) {
+                  if (soundTestHintEl) soundTestHintEl.textContent = 'Overlay not connected — open your OBS browser source or overlay page first.';
+                  setBusy(testBtn, false);
+                  return;
+                }
+                var r = await fetch(API_BASE + '/test/' + encodeURIComponent(s.id), { method: 'POST' });
+                if (!r.ok) throw new Error();
+                if (soundTestHintEl) {
+                  soundTestHintEl.textContent = 'Sent to overlay!';
+                  setTimeout(function() { soundTestHintEl.textContent = ''; }, 2500);
+                }
+              } catch (e) {
+                if (soundTestHintEl) soundTestHintEl.textContent = 'Test failed';
+              }
               setBusy(testBtn, false);
             });
+
+            var previewBtn = null;
+            if ((s.type || 'sound') === 'sound') {
+              previewBtn = document.createElement('button');
+              previewBtn.textContent = 'Preview';
+              previewBtn.className = 'secondary';
+              previewBtn.style.cssText = 'font-size:12px; padding:3px 8px;';
+              previewBtn.addEventListener('click', function() {
+                var isPlaying = soundPreviewBtn === previewBtn;
+                stopSoundPreview();
+                if (isPlaying) return;
+                // Play directly against the API URL (no fetch/blob) so the browser's
+                // native media loading handles the redirect to storage — fetch()+blob
+                // would require CORS on the storage response, which media playback does not.
+                soundPreviewAudio = new Audio(API_BASE + '/' + encodeURIComponent(s.id) + '/audio');
+                soundPreviewBtn = previewBtn;
+                previewBtn.textContent = '\\u25A0 Stop';
+                soundPreviewAudio.onended = stopSoundPreview;
+                soundPreviewAudio.onerror = function() {
+                  stopSoundPreview();
+                  if (soundTestHintEl) soundTestHintEl.textContent = 'Preview failed';
+                };
+                soundPreviewAudio.play().catch(function() { stopSoundPreview(); });
+              });
+            }
 
             var delBtn = document.createElement('button');
             delBtn.textContent = 'Del';
@@ -758,6 +845,7 @@ export function renderSoundConfigPage(options = {}) {
 
             controls.appendChild(toggle);
             controls.appendChild(editBtn);
+            if (previewBtn) controls.appendChild(previewBtn);
             controls.appendChild(testBtn);
             controls.appendChild(delBtn);
             card.appendChild(controls);
@@ -773,14 +861,32 @@ export function renderSoundConfigPage(options = {}) {
 
         async function fetchLibrary() {
           try {
-            var r = await fetch(API_BASE + '/library', { cache: 'no-store' });
+            var sort = librarySortEl ? librarySortEl.value : 'newest';
+            var r = await fetch(API_BASE + '/library?sort=' + encodeURIComponent(sort), { cache: 'no-store' });
             var data = await r.json();
             librarySounds = data.sounds || [];
-            renderLibraryList(librarySounds);
+            applyLibraryFilter();
           } catch (e) {
             var el = document.getElementById('libraryList');
             if (el) { el.textContent = ''; var h = document.createElement('div'); h.className = 'hint'; h.style.gridColumn = '1 / -1'; h.textContent = 'Failed to load library'; el.appendChild(h); }
           }
+        }
+
+        var librarySortEl = document.getElementById('librarySort');
+        if (librarySortEl) {
+          librarySortEl.addEventListener('change', function() { fetchLibrary(); });
+        }
+
+        function applyLibraryFilter() {
+          var searchInput = document.getElementById('librarySearch');
+          var q = searchInput ? searchInput.value.trim().toLowerCase() : '';
+          if (!q) { renderLibraryList(librarySounds); return; }
+          var filtered = librarySounds.filter(function(s) {
+            return (s.name || '').toLowerCase().indexOf(q) !== -1 ||
+                   (s.ownerDisplayName || '').toLowerCase().indexOf(q) !== -1 ||
+                   (s.tags || []).some(function(t) { return t.toLowerCase().indexOf(q) !== -1; });
+          });
+          renderLibraryList(filtered);
         }
 
         // Search/filter
@@ -790,15 +896,7 @@ export function renderSoundConfigPage(options = {}) {
           if (searchInput) {
             searchInput.addEventListener('input', function() {
               clearTimeout(debounceTimer);
-              debounceTimer = setTimeout(function() {
-                var q = searchInput.value.trim().toLowerCase();
-                if (!q) { renderLibraryList(librarySounds); return; }
-                var filtered = librarySounds.filter(function(s) {
-                  return (s.name || '').toLowerCase().indexOf(q) !== -1 ||
-                         (s.ownerDisplayName || '').toLowerCase().indexOf(q) !== -1;
-                });
-                renderLibraryList(filtered);
-              }, 200);
+              debounceTimer = setTimeout(applyLibraryFilter, 200);
             });
           }
         })();
@@ -852,22 +950,20 @@ export function renderSoundConfigPage(options = {}) {
             playIcon.style.cssText = 'font-size:18px; color:#fff;';
             playIcon.textContent = '\\u25B6';
             previewOverlay.appendChild(playIcon);
-            previewOverlay.addEventListener('click', async function(e) {
+            previewOverlay.addEventListener('click', function(e) {
               e.stopPropagation();
               var isPlaying = libraryAudio && playIcon.textContent === '\\u25A0';
               stopLibraryPreview();
               if (isPlaying) return;
-              try {
-                var r = await fetch(API_BASE + '/library/' + encodeURIComponent(s.ownerUserId) + '/' + encodeURIComponent(s.id) + '/preview');
-                if (!r.ok) throw new Error('Preview failed');
-                var blob = await r.blob();
-                libraryAudioUrl = URL.createObjectURL(blob);
-                libraryAudio = new Audio(libraryAudioUrl);
-                libraryAudio.volume = 0.5;
-                playIcon.textContent = '\\u25A0';
-                libraryAudio.onended = function() { playIcon.textContent = '\\u25B6'; };
-                libraryAudio.play();
-              } catch (e) {}
+              // Play directly against the API URL (no fetch/blob) so the browser's
+              // native media loading handles the redirect to storage — fetch()+blob
+              // would require CORS on the storage response, which media playback does not.
+              libraryAudio = new Audio(API_BASE + '/library/' + encodeURIComponent(s.ownerUserId) + '/' + encodeURIComponent(s.id) + '/preview');
+              libraryAudio.volume = 0.5;
+              playIcon.textContent = '\\u25A0';
+              libraryAudio.onended = function() { playIcon.textContent = '\\u25B6'; };
+              libraryAudio.onerror = function() { stopLibraryPreview(); };
+              libraryAudio.play().catch(function() { stopLibraryPreview(); });
             });
             thumb.appendChild(previewOverlay);
             card.appendChild(thumb);
@@ -884,6 +980,14 @@ export function renderSoundConfigPage(options = {}) {
             ownerDiv.className = 'library-card-owner';
             ownerDiv.textContent = s.ownerDisplayName || 'Unknown';
             card.appendChild(ownerDiv);
+
+            // Tags
+            if (s.tags && s.tags.length) {
+              var tagsDiv = document.createElement('div');
+              tagsDiv.style.cssText = 'font-size:11px; color:var(--text-muted); margin-top:2px;';
+              tagsDiv.textContent = s.tags.join(', ');
+              card.appendChild(tagsDiv);
+            }
 
             // Add button
             var actions = document.createElement('div');
@@ -1256,6 +1360,9 @@ export function renderSoundConfigPage(options = {}) {
               cooldownMs: Number(cdInput.value) * 1000,
               shared: sharedCb.checked
             };
+            if (!s.type || s.type === 'sound') {
+              patch.tags = tagsInput.value.split(',').map(function(t) { return t.trim(); }).filter(Boolean).slice(0, 5);
+            }
             if (s.type === 'clip') {
               var clipUrlInput = document.getElementById('editClipUrl_' + s.id);
               if (clipUrlInput) {
@@ -1290,11 +1397,26 @@ export function renderSoundConfigPage(options = {}) {
           sharedLabel.appendChild(sharedCb);
           sharedLabel.appendChild(document.createTextNode('Share to Community Library'));
 
+          // Tags (only meaningful for sound-type alerts, the only type the library supports)
+          var tagsLabel = document.createElement('label');
+          tagsLabel.style.cssText = 'font-size:12px; color:var(--text-muted); display:block; margin-top:4px;';
+          tagsLabel.textContent = 'Tags (comma-separated, up to 5 — helps others find it in the library)';
+          var tagsInput = document.createElement('input');
+          tagsInput.type = 'text';
+          tagsInput.value = (s.tags || []).join(', ');
+          tagsInput.placeholder = 'e.g. anime, meme, horror';
+          tagsInput.maxLength = 200;
+          tagsInput.style.cssText = 'width:100%; max-width:400px; margin-top:2px;';
+
           form.appendChild(nameInput);
           form.appendChild(row);
           form.appendChild(cdLabel);
           form.appendChild(imageSection);
           form.appendChild(sharedLabel);
+          if (!s.type || s.type === 'sound') {
+            form.appendChild(tagsLabel);
+            form.appendChild(tagsInput);
+          }
 
           // Clip URL field (only for clip type)
           if (s.type === 'clip') {
@@ -1990,6 +2112,56 @@ export function renderSoundConfigPage(options = {}) {
           });
         }
 
+        // ===== Activity (top sounds / top viewers, last 30 days) =====
+        function fetchActivity() {
+          var topSoundsEl = document.getElementById('activityTopSounds');
+          var topViewersEl = document.getElementById('activityTopViewers');
+          fetch('/api/sounds/activity')
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+              if (data.error) throw new Error(data.error);
+              renderActivityList(topSoundsEl, data.topSounds || [], function(row) {
+                return row.sound_name + ' (' + row.count + (row.count === 1 ? ' play' : ' plays') + ')';
+              }, 'No sound plays yet in the last 30 days.');
+              renderActivityList(topViewersEl, data.topViewers || [], function(row) {
+                return row.displayName + ' (' + row.count + (row.count === 1 ? ' alert' : ' alerts') + ')';
+              }, 'No viewer activity yet in the last 30 days.');
+            })
+            .catch(function() {
+              setActivityError(topSoundsEl);
+              setActivityError(topViewersEl);
+            });
+        }
+
+        function setActivityError(container) {
+          if (!container) return;
+          container.textContent = '';
+          var msg = document.createElement('div');
+          msg.className = 'hint';
+          msg.textContent = 'Could not load activity.';
+          container.appendChild(msg);
+        }
+
+        function renderActivityList(container, rows, formatRow, emptyText) {
+          if (!container) return;
+          container.textContent = '';
+          if (!rows.length) {
+            var empty = document.createElement('div');
+            empty.className = 'hint';
+            empty.textContent = emptyText;
+            container.appendChild(empty);
+            return;
+          }
+          var list = document.createElement('ol');
+          list.style.cssText = 'margin:0; padding-left:20px; font-size:13px; line-height:1.9;';
+          rows.forEach(function(row) {
+            var li = document.createElement('li');
+            li.textContent = formatRow(row);
+            list.appendChild(li);
+          });
+          container.appendChild(list);
+        }
+
         // Logout handler
         var logoutBtn = document.getElementById('logout');
         if (logoutBtn) {
@@ -2004,6 +2176,7 @@ export function renderSoundConfigPage(options = {}) {
         fetchTtsSettings();
         fetchAlertHistory();
         fetchOverlayStatus();
+        fetchActivity();
       })();
     </script>
     ${!delegateMode ? `<script>

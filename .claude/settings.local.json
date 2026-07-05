@@ -28,7 +28,18 @@
       "Bash(node -e \"require\\(''./ebs/routes_sounds.js''\\)\")",
       "Bash(node -e \"require\\(''./ebs/routes_overlay_page.js''\\)\")",
       "Bash(node -e \"require\\(''./ebs/routes_admin.js''\\)\")",
-      "WebSearch"
+      "WebSearch",
+      "Bash(ps -p 11688 -o pid,command)",
+      "Bash(kill 11688)",
+      "Bash(npm run *)",
+      "Bash(curl -s \"http://localhost:8080/api/ext/config?channelId=53577580\")",
+      "Bash(curl -s http://localhost:8080/api/admin/library/pending)",
+      "Bash(ps -p 12841 -o pid,command)",
+      "Bash(kill 12841)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\\\\n\" http://localhost:8080/sounds/config)",
+      "Bash(curl -s http://localhost:8080/api/sounds/activity)",
+      "Bash(node --input-type=module -e ' *)",
+      "Bash(lsof -ti:8080)"
     ]
   }
 }

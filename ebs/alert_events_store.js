@@ -24,6 +24,31 @@ export function logSoundEvent({
   ).catch(err => logger.error('alert_event_log_failed', { table: 'sound_alert_events', message: err?.message }));
 }
 
+// Given a flat list of {channelId, soundId} pairs, returns total play counts
+// per pair (as a Map keyed by "channelId:soundId"), optionally windowed to the
+// last `sinceDays` days (null = all-time). Used to rank community library
+// entries by popularity/trending across every broadcaster's copy of a sound.
+export async function getPlayCountsForPairs(pairs, sinceDays = null) {
+  const map = new Map();
+  if (!pairs.length) return map;
+  const channelIds = pairs.map((p) => String(p.channelId));
+  const soundIds = pairs.map((p) => String(p.soundId));
+  const res = await db.query(
+    `SELECT e.channel_id, e.sound_id, COUNT(*)::int AS count
+       FROM sound_alert_events e
+       JOIN unnest($1::text[], $2::text[]) AS pairs(channel_id, sound_id)
+         ON e.channel_id = pairs.channel_id AND e.sound_id = pairs.sound_id
+      WHERE e.event_kind = 'played'
+        AND ($3::int IS NULL OR e.created_at > NOW() - ($3::int || ' days')::interval)
+      GROUP BY e.channel_id, e.sound_id`,
+    [channelIds, soundIds, sinceDays],
+  );
+  for (const row of res.rows) {
+    map.set(`${row.channel_id}:${row.sound_id}`, row.count);
+  }
+  return map;
+}
+
 export function logTtsEvent({
   channelId, viewerUserId, voiceId, voiceName,
   message, tier, txId, eventKind, rejectionReason,

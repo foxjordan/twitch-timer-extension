@@ -46,6 +46,8 @@ function ConfigApp() {
   const [ttsBannedWordsText, setTtsBannedWordsText] = useState("");
   const [previewingVoice, setPreviewingVoice] = useState(null);
   const [extConfig, setExtConfig] = useState({ features: { tts: true, videoClips: true, communityLibrary: true } });
+  const [initialLoadFailed, setInitialLoadFailed] = useState(false);
+  const [bannerDismissed, setBannerDismissed] = useState(false);
   const previewAudioRef = useRef(null);
 
   const headers = useCallback(
@@ -68,6 +70,7 @@ function ConfigApp() {
         setTiers(data.tiers || []);
       } catch (e) {
         setError(e.message);
+        setInitialLoadFailed(true);
       } finally {
         setLoading(false);
       }
@@ -383,9 +386,63 @@ function ConfigApp() {
     );
   }
 
+  if (initialLoadFailed) {
+    return (
+      <div style={styles.container}>
+        <div style={styles.error}>
+          Error loading the config. Please use{" "}
+          <a
+            href={`${EBS_BASE}/sounds/config`}
+            target="_blank"
+            rel="noopener noreferrer"
+            style={styles.link}
+          >
+            Livestreamer Hub
+          </a>{" "}
+          to manage your sound alerts while we look into this.
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div style={styles.container}>
-      <h2 style={styles.heading}>Livestreamer Alerts</h2>
+      {extConfig.banner?.enabled && extConfig.banner?.message && !bannerDismissed && (
+        <div style={styles.banner}>
+          <span style={{ flex: 1 }}>
+            {extConfig.banner.message}
+            {extConfig.banner.linkUrl && (
+              <a
+                href={extConfig.banner.linkUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                style={styles.bannerLink}
+              >
+                {extConfig.banner.linkText || "Learn more"}
+              </a>
+            )}
+          </span>
+          <button
+            style={styles.bannerDismiss}
+            onClick={() => setBannerDismissed(true)}
+            title="Dismiss"
+          >
+            &times;
+          </button>
+        </div>
+      )}
+
+      <div style={styles.headingRow}>
+        <h2 style={styles.heading}>Livestreamer Alerts</h2>
+        <a
+          href={`${EBS_BASE}/sounds/config`}
+          target="_blank"
+          rel="noopener noreferrer"
+          style={styles.link}
+        >
+          Manage on Livestreamer Hub &rarr;
+        </a>
+      </div>
 
       {/* Setup Guide */}
       <div style={{ ...styles.card, marginBottom: 12 }}>
@@ -1238,10 +1295,52 @@ const styles = {
     maxWidth: 900,
     margin: "0 auto",
   },
+  headingRow: {
+    display: "flex",
+    alignItems: "baseline",
+    justifyContent: "space-between",
+    flexWrap: "wrap",
+    gap: 8,
+    marginBottom: 16,
+  },
   heading: {
     fontSize: 22,
     fontWeight: 700,
-    marginBottom: 16,
+    margin: 0,
+  },
+  link: {
+    color: "#bf94ff",
+    fontSize: 12,
+    textDecoration: "none",
+  },
+  banner: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 10,
+    background: "#9146FF22",
+    border: "1px solid #9146FF",
+    borderRadius: 8,
+    padding: "8px 12px",
+    marginBottom: 14,
+    fontSize: 13,
+  },
+  bannerDismiss: {
+    background: "none",
+    border: "none",
+    color: "#efeff1",
+    fontSize: 16,
+    lineHeight: 1,
+    cursor: "pointer",
+    opacity: 0.7,
+    flexShrink: 0,
+  },
+  bannerLink: {
+    color: "#bf94ff",
+    fontWeight: 600,
+    textDecoration: "underline",
+    marginLeft: 8,
+    whiteSpace: "nowrap",
   },
   subHeading: {
     fontSize: 15,

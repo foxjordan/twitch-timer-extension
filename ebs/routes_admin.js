@@ -7,6 +7,8 @@ import { getBan, banUser, unbanUser } from "./bans.js";
 import { getLogEntries } from "./event_log.js";
 import { getSubscription, isPro } from "./subscription_store.js";
 import { getTtsSettings, setTtsSettings, getGlobalTtsConfig, setGlobalTtsConfig } from "./tts_store.js";
+import { getBannerConfig, setBannerConfig } from "./banner_store.js";
+import { fetchLiveStreamStatus } from "./twitch_api.js";
 import { deleteAllUserData } from "./user_data_deletion.js";
 import { getVoices, isValidVoice } from "./tts_voices.js";
 import { synthesizeSpeech } from "./tts_provider.js";
@@ -106,13 +108,18 @@ export function mountAdminRoutes(app, ctx) {
     res.send(html);
   });
 
-  app.get("/api/admin/stats", (req, res) => {
+  app.get("/api/admin/stats", async (req, res) => {
     if (!req.session?.isAdmin || !isSuperAdmin(req)) {
       return res.status(403).json({ error: "Access denied" });
     }
 
     const registeredIds = getAllUserIds();
     const activeBroadcasters = getAllActiveBroadcasters();
+
+    let liveStatus = new Map();
+    try {
+      liveStatus = await fetchLiveStreamStatus(registeredIds);
+    } catch {}
 
     const users = registeredIds.map((uid) => {
       const conn = getBroadcasterConnection(uid);
@@ -158,11 +165,14 @@ export function mountAdminRoutes(app, ctx) {
       const subscription = getSubscription(uid);
 
       const profile = getUserProfile ? getUserProfile(uid) : null;
+      const live = liveStatus.get(String(uid)) || null;
       return {
         userId: uid,
         login: conn?.broadcasterLogin || profile?.login || null,
         displayName: conn?.broadcasterLogin || profile?.displayName || profile?.login || null,
         connected: conn?.ws?.readyState === 1,
+        live: Boolean(live),
+        viewerCount: live?.viewerCount ?? null,
         lastEventAt: conn?.lastEventAt || null,
         remaining: remaining > 0 ? remaining : null,
         timerPaused: totals.paused || false,
@@ -336,6 +346,23 @@ export function mountAdminRoutes(app, ctx) {
       return res.status(403).json({ error: "Access denied" });
     }
     const updated = setGlobalTtsConfig(req.body || {});
+    res.json({ ok: true, config: updated });
+  });
+
+  // Get global config-panel banner
+  app.get("/api/admin/banner-config", (req, res) => {
+    if (!req.session?.isAdmin || !isSuperAdmin(req)) {
+      return res.status(403).json({ error: "Access denied" });
+    }
+    res.json({ config: getBannerConfig() });
+  });
+
+  // Update global config-panel banner
+  app.post("/api/admin/banner-config", (req, res) => {
+    if (!req.session?.isAdmin || !isSuperAdmin(req)) {
+      return res.status(403).json({ error: "Access denied" });
+    }
+    const updated = setBannerConfig(req.body || {});
     res.json({ ok: true, config: updated });
   });
 

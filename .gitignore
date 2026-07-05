@@ -13,6 +13,7 @@ ebs/overlay-goals.json
 ebs/overlay-timer-state.json
 ebs/overlay-styles.json
 ebs/overlay-sound-alerts.json
+ebs/banner-config.json
 
 # Catch-all for any encrypted tokens or session data
 *.enc.json

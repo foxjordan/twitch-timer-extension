@@ -1,0 +1,36 @@
+{
+  "74034487": {
+    "enabled": true,
+    "granted": true,
+    "tier": "sound_300",
+    "allowedVoices": [
+      "Ashley",
+      "Alex",
+      "Julia",
+      "Mark",
+      "Sarah"
+    ],
+    "maxMessageLength": 300,
+    "bannedWords": [],
+    "volume": 80,
+    "cooldownMs": 10000,
+    "moderationEnabled": true
+  },
+  "1198505560": {
+    "enabled": true,
+    "granted": true,
+    "tier": "sound_300",
+    "allowedVoices": [
+      "Ashley",
+      "Alex",
+      "Julia",
+      "Mark",
+      "Sarah"
+    ],
+    "maxMessageLength": 300,
+    "bannedWords": [],
+    "volume": 80,
+    "cooldownMs": 10000,
+    "moderationEnabled": true
+  }
+}

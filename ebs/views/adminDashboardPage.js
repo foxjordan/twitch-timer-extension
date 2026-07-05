@@ -18,7 +18,6 @@ export function renderAdminDashboardPage(options = {}) {
     <meta name="robots" content="noindex, nofollow" />
     <title>Admin Dashboard – Livestreamer Hub</title>
     <link rel="icon" type="image/png" href="/assets/convertico-coin_24x24.png">
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/driver.js@1.3.1/dist/driver.css"/>
     ${renderThemeBootstrapScript()}
     ${renderFirebaseScript()}
     <style>
@@ -53,11 +52,19 @@ export function renderAdminDashboardPage(options = {}) {
       tbody td { padding: 10px; border-bottom: 1px solid var(--surface-border); vertical-align: middle; }
       tbody tr:last-child td { border-bottom: none; }
       .badge { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 600; }
+      .badge-live { background: #eb0400; color: #fff; }
       .badge-online { background: #10b98133; color: #10b981; }
       .badge-offline { background: #94a3b833; color: #94a3b8; }
       .badge-paused { background: #f59e0b33; color: #f59e0b; }
       .badge-capped { background: #ef444433; color: #ef4444; }
       .badge-banned { background: #dc262633; color: #dc2626; }
+      .broadcasters-toolbar { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; margin-bottom: 12px; font-size: 13px; }
+      .broadcasters-toolbar select { padding: 4px 8px; border-radius: 6px; border: 1px solid var(--surface-border); background: var(--surface-muted); color: var(--text-color); font-size: 12px; }
+      .broadcasters-toolbar button { padding: 4px 10px; border-radius: 6px; border: 1px solid var(--surface-border); background: var(--surface-muted); color: var(--text-color); font-size: 12px; cursor: pointer; }
+      .broadcasters-toolbar button:disabled { opacity: 0.4; cursor: default; }
+      .broadcasters-toolbar .spacer { flex: 1; }
+      #backToTopBtn { position: fixed; bottom: 24px; right: 24px; z-index: 50; background: #9146ff; color: #fff; border: none; border-radius: 999px; padding: 10px 16px; font-size: 12px; font-weight: 600; cursor: pointer; box-shadow: 0 4px 12px rgba(0,0,0,0.3); display: none; }
+      #backToTopBtn:hover { background: #7c3aed; }
       .btn-ban { background: #dc2626; color: #fff; border: none; padding: 4px 10px; border-radius: 6px; font-size: 12px; cursor: pointer; font-weight: 600; }
       .btn-ban:hover { background: #b91c1c; }
       .btn-unban { background: #16a34a; color: #fff; border: none; padding: 4px 10px; border-radius: 6px; font-size: 12px; cursor: pointer; font-weight: 600; }
@@ -100,8 +107,6 @@ export function renderAdminDashboardPage(options = {}) {
       .log-toolbar button { background: #9146ff; color: #fff; border: none; padding: 6px 14px; border-radius: 8px; font-size: 12px; font-weight: 600; cursor: pointer; }
       .log-toolbar button:hover { background: #7c3aed; }
       .log-toolbar .log-status { font-size: 12px; color: var(--text-muted); }
-      .tour-btn { position: fixed; bottom: 20px; right: 20px; background: #9146ff; color: #fff; border: none; padding: 8px 16px; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; z-index: 10; opacity: 0.85; transition: opacity 0.15s; }
-      .tour-btn:hover { opacity: 1; }
       .analytics-sku-badge { display:inline-block; padding:1px 7px; border-radius:999px; font-size:11px; font-weight:600; margin-right:4px; }
       .analytics-sku-sound { background:#9146ff33; color:#bf94ff; }
       .analytics-sku-tts   { background:#0ea5e933; color:#38bdf8; }
@@ -130,6 +135,7 @@ export function renderAdminDashboardPage(options = {}) {
         <div class="sidebar-nav">
           <button class="sidebar-nav-item active" data-section="overview">Overview</button>
           <button class="sidebar-nav-item" data-section="health">Server Health</button>
+          <button class="sidebar-nav-item" data-section="banner">Banner</button>
           <button class="sidebar-nav-item" data-section="tts-config">TTS Config</button>
           <button class="sidebar-nav-item" data-section="test-alerts">Test Alerts</button>
           <button class="sidebar-nav-item" data-section="event-logs">Event Logs</button>
@@ -167,6 +173,33 @@ export function renderAdminDashboardPage(options = {}) {
         <h2>Server Health</h2>
         <div id="serverHealth" class="server-health-grid">
           <div class="empty-state">Loading...</div>
+        </div>
+      </div>
+      </div>
+
+      <div class="section-page" data-section="banner">
+      <div class="table-card">
+        <h2>Config Panel Banner</h2>
+        <div style="font-size:12px; color:var(--text-muted); margin-bottom:12px;">Shown at the top of every broadcaster's Twitch config panel. Use it for release notes, incidents, or announcements.</div>
+        <label style="display:flex; align-items:center; gap:6px; font-size:13px; font-weight:normal; margin-bottom:10px;">
+          <input type="checkbox" id="bannerEnabled"> Enabled
+        </label>
+        <label style="display:block; font-size:13px; font-weight:600; margin-bottom:6px;">Message</label>
+        <textarea id="bannerMessage" placeholder="e.g. Text-to-Speech alerts are now live!" rows="2" maxlength="500" style="width:100%; padding:8px 10px; border-radius:8px; border:1px solid var(--surface-border); background:var(--surface-muted); color:var(--text-color); font-size:13px; margin-bottom:10px; resize:vertical; font-family:inherit; box-sizing:border-box;"></textarea>
+        <div style="display:grid; grid-template-columns:2fr 1fr; gap:10px; margin-bottom:10px;">
+          <div>
+            <label style="display:block; font-size:13px; font-weight:600; margin-bottom:6px;">Link URL (optional)</label>
+            <input type="url" id="bannerLinkUrl" placeholder="https://discord.gg/..." style="width:100%; padding:8px 10px; border-radius:8px; border:1px solid var(--surface-border); background:var(--surface-muted); color:var(--text-color); font-size:13px; box-sizing:border-box;">
+          </div>
+          <div>
+            <label style="display:block; font-size:13px; font-weight:600; margin-bottom:6px;">Link Text</label>
+            <input type="text" id="bannerLinkText" placeholder="Join our Discord" maxlength="60" style="width:100%; padding:8px 10px; border-radius:8px; border:1px solid var(--surface-border); background:var(--surface-muted); color:var(--text-color); font-size:13px; box-sizing:border-box;">
+          </div>
+        </div>
+        <div style="font-size:11px; color:var(--text-muted); margin-bottom:10px;">Link URL must start with http:// or https://. Leave blank to show a plain message with no link.</div>
+        <div>
+          <button class="btn-save" id="bannerSaveBtn">Save Banner</button>
+          <span id="bannerSaveStatus" class="tts-status" style="display:none; margin-left: 10px;"></span>
         </div>
       </div>
       </div>
@@ -278,11 +311,35 @@ export function renderAdminDashboardPage(options = {}) {
       <div class="section-page" data-section="broadcasters">
       <div class="table-card">
         <h2>Broadcasters <span class="refresh-info" id="lastRefresh"></span></h2>
+        <div class="broadcasters-toolbar">
+          <label>Sort:
+            <select id="broadcasterSort">
+              <option value="live">Live first</option>
+              <option value="name-asc">Name (A-Z)</option>
+              <option value="name-desc">Name (Z-A)</option>
+              <option value="last-event">Most recent event</option>
+              <option value="time-added">Most time added</option>
+            </select>
+          </label>
+          <label>Per page:
+            <select id="broadcasterPageSize">
+              <option value="25">25</option>
+              <option value="50">50</option>
+              <option value="100">100</option>
+              <option value="0">All</option>
+            </select>
+          </label>
+          <span class="spacer"></span>
+          <span id="broadcasterPageInfo" class="refresh-info"></span>
+          <button id="broadcasterPrevBtn" type="button">&larr; Prev</button>
+          <button id="broadcasterNextBtn" type="button">Next &rarr;</button>
+        </div>
         <div id="tableContainer">
           <div class="empty-state">Loading...</div>
         </div>
       </div>
       </div>
+      <button id="backToTopBtn" type="button">&uarr; Back to top</button>
 
       <div class="section-page" data-section="analytics">
       <div class="overview-grid" id="analyticsStats">
@@ -331,6 +388,79 @@ export function renderAdminDashboardPage(options = {}) {
         var refreshInterval = 10000;
         var tableContainer = document.getElementById('tableContainer');
         var lastRefreshEl = document.getElementById('lastRefresh');
+
+        // ===== Broadcasters: sort/pagination/back-to-top state =====
+        var broadcasterSortEl = document.getElementById('broadcasterSort');
+        var broadcasterPageSizeEl = document.getElementById('broadcasterPageSize');
+        var broadcasterPageInfoEl = document.getElementById('broadcasterPageInfo');
+        var broadcasterPrevBtn = document.getElementById('broadcasterPrevBtn');
+        var broadcasterNextBtn = document.getElementById('broadcasterNextBtn');
+        var backToTopBtn = document.getElementById('backToTopBtn');
+        var broadcasterPage = 0; // zero-indexed
+        var lastUsersData = null; // cached full user list from the last successful poll
+
+        function sortUsers(users, sortKey) {
+          var sorted = users.slice();
+          sorted.sort(function(a, b) {
+            switch (sortKey) {
+              case 'name-asc':
+                return (a.displayName || a.login || '').localeCompare(b.displayName || b.login || '');
+              case 'name-desc':
+                return (b.displayName || b.login || '').localeCompare(a.displayName || a.login || '');
+              case 'last-event':
+                return (Date.parse(b.lastEventAt || '') || 0) - (Date.parse(a.lastEventAt || '') || 0);
+              case 'time-added':
+                return (b.additionsTotal || 0) - (a.additionsTotal || 0);
+              case 'live':
+              default:
+                if (a.live !== b.live) return a.live ? -1 : 1;
+                if (a.connected !== b.connected) return a.connected ? -1 : 1;
+                return (a.displayName || a.login || '').localeCompare(b.displayName || b.login || '');
+            }
+          });
+          return sorted;
+        }
+
+        function renderBroadcasters() {
+          if (!lastUsersData) return;
+          var sortKey = broadcasterSortEl ? broadcasterSortEl.value : 'live';
+          var pageSize = broadcasterPageSizeEl ? parseInt(broadcasterPageSizeEl.value, 10) : 25;
+          var sorted = sortUsers(lastUsersData, sortKey);
+          var total = sorted.length;
+          var pageItems = sorted;
+          if (pageSize > 0) {
+            var totalPages = Math.max(1, Math.ceil(total / pageSize));
+            if (broadcasterPage >= totalPages) broadcasterPage = totalPages - 1;
+            if (broadcasterPage < 0) broadcasterPage = 0;
+            var start = broadcasterPage * pageSize;
+            pageItems = sorted.slice(start, start + pageSize);
+            if (broadcasterPageInfoEl) {
+              broadcasterPageInfoEl.textContent = total === 0 ? '' :
+                'Showing ' + (start + 1) + '-' + Math.min(start + pageSize, total) + ' of ' + total;
+            }
+            if (broadcasterPrevBtn) broadcasterPrevBtn.disabled = broadcasterPage <= 0;
+            if (broadcasterNextBtn) broadcasterNextBtn.disabled = broadcasterPage >= totalPages - 1;
+          } else {
+            if (broadcasterPageInfoEl) broadcasterPageInfoEl.textContent = total === 0 ? '' : 'Showing all ' + total;
+            if (broadcasterPrevBtn) broadcasterPrevBtn.disabled = true;
+            if (broadcasterNextBtn) broadcasterNextBtn.disabled = true;
+          }
+          renderBroadcasterTable(pageItems);
+        }
+
+        if (broadcasterSortEl) broadcasterSortEl.addEventListener('change', function() { broadcasterPage = 0; renderBroadcasters(); });
+        if (broadcasterPageSizeEl) broadcasterPageSizeEl.addEventListener('change', function() { broadcasterPage = 0; renderBroadcasters(); });
+        if (broadcasterPrevBtn) broadcasterPrevBtn.addEventListener('click', function() { broadcasterPage--; renderBroadcasters(); });
+        if (broadcasterNextBtn) broadcasterNextBtn.addEventListener('click', function() { broadcasterPage++; renderBroadcasters(); });
+
+        if (backToTopBtn) {
+          window.addEventListener('scroll', function() {
+            backToTopBtn.style.display = window.scrollY > 400 ? 'block' : 'none';
+          });
+          backToTopBtn.addEventListener('click', function() {
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+          });
+        }
 
         function formatSeconds(s) {
           if (s == null || s < 0) return '--';
@@ -414,17 +544,15 @@ export function renderAdminDashboardPage(options = {}) {
 
           renderServerHealth(data.server);
 
-          var users = data.users || [];
-          if (users.length === 0) {
+          lastUsersData = data.users || [];
+          if (lastUsersData.length === 0) {
             tableContainer.textContent = 'No registered broadcasters yet.';
             return;
           }
+          renderBroadcasters();
+        }
 
-          users.sort(function(a, b) {
-            if (a.connected !== b.connected) return a.connected ? -1 : 1;
-            return (a.login || '').localeCompare(b.login || '');
-          });
-
+        function renderBroadcasterTable(users) {
           // Build table with DOM methods to avoid innerHTML with dynamic content
           var table = document.createElement('table');
           var thead = document.createElement('thead');
@@ -445,7 +573,20 @@ export function renderAdminDashboardPage(options = {}) {
             var tdBroadcaster = document.createElement('td');
             var nameDiv = document.createElement('div');
             nameDiv.style.fontWeight = '600';
-            nameDiv.textContent = u.displayName || u.login || 'Unknown';
+            var nameText = u.displayName || u.login || 'Unknown';
+            if (u.login) {
+              var nameLink = document.createElement('a');
+              nameLink.href = 'https://twitch.tv/' + encodeURIComponent(u.login);
+              nameLink.target = '_blank';
+              nameLink.rel = 'noopener noreferrer';
+              nameLink.textContent = nameText;
+              nameLink.style.cssText = 'color:inherit; text-decoration:none;';
+              nameLink.addEventListener('mouseenter', function() { this.style.textDecoration = 'underline'; });
+              nameLink.addEventListener('mouseleave', function() { this.style.textDecoration = 'none'; });
+              nameDiv.appendChild(nameLink);
+            } else {
+              nameDiv.textContent = nameText;
+            }
             var idDiv = document.createElement('div');
             idDiv.className = 'mono';
             idDiv.textContent = u.userId;
@@ -462,8 +603,9 @@ export function renderAdminDashboardPage(options = {}) {
               tdStatus.appendChild(span);
               tdStatus.appendChild(document.createTextNode(' '));
             }
-            if (u.connected) addBadge('Online', 'badge-online');
-            else addBadge('Offline', 'badge-offline');
+            if (u.live) addBadge('LIVE' + (u.viewerCount != null ? ' \\u00b7 ' + u.viewerCount : ''), 'badge-live');
+            if (u.connected) addBadge('Connected', 'badge-online');
+            else addBadge('Not Connected', 'badge-offline');
             if (u.timerPaused) addBadge('Paused', 'badge-paused');
             if (u.capReached) addBadge('Capped', 'badge-capped');
             if (u.banned) addBadge('Banned', 'badge-banned');
@@ -872,6 +1014,62 @@ export function renderAdminDashboardPage(options = {}) {
         });
 
         fetchTtsConfig();
+
+        // ===== Banner =====
+        var bannerEnabledEl = document.getElementById('bannerEnabled');
+        var bannerMessageEl = document.getElementById('bannerMessage');
+        var bannerLinkUrlEl = document.getElementById('bannerLinkUrl');
+        var bannerLinkTextEl = document.getElementById('bannerLinkText');
+        var bannerSaveBtn = document.getElementById('bannerSaveBtn');
+        var bannerSaveStatus = document.getElementById('bannerSaveStatus');
+
+        function fetchBannerConfig() {
+          fetch('/api/admin/banner-config', { credentials: 'same-origin' })
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+              if (data.error || !data.config) return;
+              bannerEnabledEl.checked = !!data.config.enabled;
+              bannerMessageEl.value = data.config.message || '';
+              bannerLinkUrlEl.value = data.config.linkUrl || '';
+              bannerLinkTextEl.value = data.config.linkText || '';
+            })
+            .catch(function() {});
+        }
+
+        function showBannerStatus(text, ok) {
+          bannerSaveStatus.textContent = text;
+          bannerSaveStatus.style.display = 'inline-block';
+          bannerSaveStatus.style.background = ok ? '#10b98133' : '#ef444433';
+          bannerSaveStatus.style.color = ok ? '#10b981' : '#ef4444';
+          if (ok) setTimeout(function() { bannerSaveStatus.style.display = 'none'; }, 3000);
+        }
+
+        bannerSaveBtn.addEventListener('click', function() {
+          bannerSaveBtn.disabled = true;
+          fetch('/api/admin/banner-config', {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              enabled: bannerEnabledEl.checked,
+              message: bannerMessageEl.value,
+              linkUrl: bannerLinkUrlEl.value.trim(),
+              linkText: bannerLinkTextEl.value.trim(),
+            })
+          })
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+              bannerSaveBtn.disabled = false;
+              if (data.error) showBannerStatus('Error: ' + data.error, false);
+              else showBannerStatus('Saved!', true);
+            })
+            .catch(function() {
+              bannerSaveBtn.disabled = false;
+              showBannerStatus('Save failed', false);
+            });
+        });
+
+        fetchBannerConfig();
 
         // ===== Test Alerts =====
         var testBroadcasterEl = document.getElementById('testBroadcaster');
@@ -1408,78 +1606,6 @@ export function renderAdminDashboardPage(options = {}) {
             }
           });
         });
-      })();
-    </script>
-    <button class="tour-btn" id="tourBtn" title="Show guided tour">Take A Tour</button>
-    <script src="https://cdn.jsdelivr.net/npm/driver.js@1.3.1/dist/driver.js.iife.js"></script>
-    <script>
-      (function() {
-        var TOUR_KEY = 'admin_tour_seen';
-        function tourSwitchSection(s) {
-          document.querySelectorAll('.section-page').forEach(function(el) { el.classList.toggle('active', el.getAttribute('data-section') === s); });
-          document.querySelectorAll('.sidebar-nav-item').forEach(function(el) { el.classList.toggle('active', el.getAttribute('data-section') === s); });
-        }
-        var tourSteps = [
-          {
-            element: '.sidebar-nav',
-            popover: {
-              title: 'Navigation',
-              description: 'Use the sidebar to switch between Overview, Server Health, TTS Config, Test Alerts, and Broadcasters.',
-              side: 'right', align: 'start'
-            }
-          },
-          {
-            element: '.overview-grid',
-            popover: {
-              title: 'Overview Stats',
-              description: 'Quick glance at your service: registered broadcasters, EventSub connections, active overlays, and total SSE connections served.',
-              side: 'bottom', align: 'center'
-            },
-            onHighlightStarted: function() { tourSwitchSection('overview'); }
-          },
-          {
-            element: '#serverHealth',
-            popover: {
-              title: 'Server Health',
-              description: 'Live server metrics — uptime, memory usage, EventSub status, and any recent errors.',
-              side: 'bottom', align: 'center'
-            },
-            onHighlightStarted: function() { tourSwitchSection('health'); }
-          },
-          {
-            element: '[data-section="event-logs"].section-page',
-            popover: {
-              title: 'Event Logs',
-              description: 'View per-broadcaster event logs — timer events, sound alerts, TTS alerts, subscriptions, and more.',
-              side: 'bottom', align: 'center'
-            },
-            onHighlightStarted: function() { tourSwitchSection('event-logs'); }
-          },
-          {
-            element: '#tableContainer',
-            popover: {
-              title: 'Broadcasters Table',
-              description: 'Every registered broadcaster, their connection status, timer state, enabled features, and moderation actions.',
-              side: 'top', align: 'center'
-            },
-            onHighlightStarted: function() { tourSwitchSection('broadcasters'); }
-          }
-        ];
-
-        function startTour() {
-          var driverObj = window.driver.js.driver({
-            showProgress: true,
-            progressText: '{{current}} of {{total}}',
-            allowClose: true,
-            steps: tourSteps,
-            onDestroyed: function() {
-              localStorage.setItem(TOUR_KEY, 'true');
-            }
-          });
-          driverObj.drive();
-        }
-
-        document.getElementById('tourBtn').addEventListener('click', startTour);
       })();
     </script>
   </body>

@@ -22,6 +22,9 @@ import {
   copyR2Object,
 } from "./r2.js";
 import { logSoundEvent } from "./alert_events_store.js";
+import { getUserProfile, setUserProfile } from "./user_profiles.js";
+import { fetchUserDisplayName } from "./twitch_api.js";
+import { getBannerConfig } from "./banner_store.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -353,6 +356,20 @@ export function mountSoundRoutes(app, deps = {}) {
     return null;
   }
 
+  // Broadcasters who only ever use the Twitch extension config panel (JWT auth,
+  // no Twitch OAuth login) never hit setUserProfile, so they show as "Unknown"
+  // in the admin dashboard. Backfill their display name once via Twitch's app
+  // access token, which needs no stored user token or extra scopes.
+  const profileBackfillAttempted = new Set();
+  async function backfillBroadcasterProfile(uid) {
+    if (getUserProfile(uid) || profileBackfillAttempted.has(uid)) return;
+    profileBackfillAttempted.add(uid);
+    try {
+      const displayName = await fetchUserDisplayName(uid, uid);
+      if (displayName) setUserProfile(uid, null, displayName);
+    } catch {}
+  }
+
   // Require any valid extension JWT (viewer, broadcaster, moderator)
   function requireExtensionAuth(req, res) {
     const claims = verifyExtensionJwt(req);
@@ -375,6 +392,7 @@ export function mountSoundRoutes(app, deps = {}) {
   app.get("/api/sounds", async (req, res) => {
     const uid = requireBroadcaster(req, res);
     if (!uid) return;
+    backfillBroadcasterProfile(uid).catch(() => {});
     await seedDefaultSounds(uid);
     const sounds = listSounds(uid);
     const settings = getSoundSettings(uid);
@@ -1000,6 +1018,7 @@ export function mountSoundRoutes(app, deps = {}) {
         videoClips: Boolean(soundSettings?.videoClipsEnabled),
         communityLibrary: true,
       },
+      banner: getBannerConfig(),
     });
   });
 

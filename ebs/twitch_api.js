@@ -70,7 +70,9 @@ export async function fetchUserDisplayName(userId, channelId = null) {
   const token =
     (tokenChannelId && await getValidAccessToken(String(tokenChannelId))) ||
     process.env.BROADCASTER_USER_TOKEN ||
-    null;
+    // Falls back to an app access token for users with no stored OAuth token
+    // (e.g. broadcasters who only ever used the Twitch extension config panel)
+    await getAppAccessToken();
   if (!clientId || !token) return null;
 
   try {
@@ -119,6 +121,48 @@ export async function lookupUserByLogin(login, channelId = null) {
   } catch {
     return null;
   }
+}
+
+// Look up which of the given user IDs are currently live on Twitch.
+// Returns a Map<userId, { viewerCount, gameName, startedAt }> — absence from
+// the map means that channel is not currently live. Uses the app access
+// token since this needs to check arbitrary broadcasters' live status, not
+// just ones with a stored user token.
+export async function fetchLiveStreamStatus(userIds = []) {
+  const ids = Array.from(new Set((userIds || []).map(String).filter(Boolean)));
+  if (ids.length === 0) return new Map();
+  const clientId = process.env.TWITCH_CLIENT_ID;
+  const token = await getAppAccessToken();
+  if (!clientId || !token) return new Map();
+
+  const live = new Map();
+  const CHUNK_SIZE = 100; // Helix "Get Streams" allows up to 100 user_id params per call
+  for (let i = 0; i < ids.length; i += CHUNK_SIZE) {
+    const chunk = ids.slice(i, i + CHUNK_SIZE);
+    const url = new URL("https://api.twitch.tv/helix/streams");
+    url.searchParams.set("first", "100");
+    for (const id of chunk) url.searchParams.append("user_id", id);
+    try {
+      const res = await fetch(url.toString(), {
+        headers: { "Client-Id": clientId, Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) {
+        logger.warn("twitch_streams_fetch_failed", { status: res.status });
+        continue;
+      }
+      const json = await res.json();
+      for (const stream of json.data || []) {
+        live.set(String(stream.user_id), {
+          viewerCount: stream.viewer_count,
+          gameName: stream.game_name || null,
+          startedAt: stream.started_at || null,
+        });
+      }
+    } catch (err) {
+      logger.error("twitch_streams_fetch_error", { message: err?.message });
+    }
+  }
+  return live;
 }
 
 export async function fetchActiveSubscriberCount({ broadcasterId }) {

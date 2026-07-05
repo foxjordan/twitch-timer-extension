@@ -11,8 +11,8 @@ const TTS_GLOBAL_PATH = path.resolve(DATA_DIR, "tts-global-config.json");
 const ttsSettingsByUser = new Map();
 
 const DEFAULT_TTS_SETTINGS = {
-  enabled: false,
-  granted: false,
+  enabled: true,
+  granted: true,
   tier: "sound_300",
   allowedVoices: [...DEFAULT_ALLOWED_VOICES],
   maxMessageLength: 300,

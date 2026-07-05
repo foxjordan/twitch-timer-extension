@@ -45,6 +45,7 @@ import {
   getAllUserIds,
 } from "./keys.js";
 import { loadUserProfiles, getUserProfile, setUserProfile } from "./user_profiles.js";
+import { loadBannerConfig } from "./banner_store.js";
 import { mountTimerRoutes } from "./routes_timer.js";
 import { mountAuthRoutes } from "./routes_auth.js";
 import { mountOverlayApiRoutes } from "./routes_overlay_api.js";
@@ -285,6 +286,7 @@ loadSubscriptions().catch(() => {});
 loadTtsSettings().catch(() => {});
 loadVoices().catch(() => {});
 loadTokens().catch(() => {});
+loadBannerConfig().catch(() => {});
 
 // ===== Per-user settings (persisted) =====
 const DATA_DIR = process.env.DATA_DIR || process.cwd();

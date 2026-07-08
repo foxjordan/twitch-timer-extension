@@ -1226,8 +1226,11 @@ export function renderAdminDashboardPage(options = {}) {
             return;
           }
           sounds.forEach(function(s) {
+            var wrapper = document.createElement('div');
+            wrapper.style.cssText = 'margin-bottom:8px;';
+
             var card = document.createElement('div');
-            card.style.cssText = 'display:flex; align-items:center; gap:10px; padding:10px; background:var(--surface-muted); border-radius:8px; margin-bottom:8px;';
+            card.style.cssText = 'display:flex; align-items:center; gap:10px; padding:10px; background:var(--surface-muted); border-radius:8px;';
 
             var info = document.createElement('div');
             info.style.cssText = 'flex:1; min-width:0;';
@@ -1286,6 +1289,245 @@ export function renderAdminDashboardPage(options = {}) {
             });
             card.appendChild(editBtn);
 
+            // Trim panel — hidden until "Trim" is clicked, fetches duration
+            // on first open, then posts trimStart/trimEnd on Apply.
+            var trimPanel = document.createElement('div');
+            trimPanel.style.cssText = 'display:none; margin-top:6px; padding:10px; background:var(--surface-color); border:1px solid var(--surface-border); border-radius:8px; font-size:12px;';
+
+            var trimBtn = document.createElement('button');
+            trimBtn.className = 'secondary';
+            trimBtn.textContent = 'Trim';
+            trimBtn.addEventListener('click', function() {
+              var opening = trimPanel.style.display === 'none';
+              trimPanel.style.display = opening ? 'block' : 'none';
+              if (!opening || trimPanel.dataset.loaded) return;
+              trimPanel.textContent = 'Loading duration…';
+              fetch('/api/admin/official-library/' + encodeURIComponent(s.id) + '/duration', { credentials: 'same-origin' })
+                .then(function(r) { return r.json(); })
+                .then(function(data) {
+                  if (data.error) { trimPanel.textContent = 'Error: ' + data.error; return; }
+                  trimPanel.dataset.loaded = '1';
+                  var duration = data.duration || 0;
+                  trimPanel.textContent = '';
+
+                  var label = document.createElement('div');
+                  label.style.cssText = 'margin-bottom:6px; color:var(--text-muted);';
+                  label.textContent = 'Full length: ' + duration.toFixed(1) + 's';
+                  trimPanel.appendChild(label);
+
+                  // Waveform + draggable dual-handle range slider. Handles
+                  // are absolutely-positioned divs (not a native <input
+                  // type=range> — no browser supports a two-thumb range
+                  // natively) driven by mouse events; the numeric inputs
+                  // below stay in sync for precise entry.
+                  var waveWrap = document.createElement('div');
+                  waveWrap.style.cssText = 'position:relative; height:64px; margin-bottom:10px; border-radius:6px; overflow:hidden; background:var(--surface-color); border:1px solid var(--surface-border); cursor:pointer; user-select:none;';
+                  var waveCanvas = document.createElement('canvas');
+                  waveCanvas.style.cssText = 'display:block; width:100%; height:64px;';
+                  waveWrap.appendChild(waveCanvas);
+                  var dimLeft = document.createElement('div');
+                  dimLeft.style.cssText = 'position:absolute; top:0; bottom:0; left:0; width:0%; background:rgba(0,0,0,0.5); pointer-events:none;';
+                  var dimRight = document.createElement('div');
+                  dimRight.style.cssText = 'position:absolute; top:0; bottom:0; right:0; width:0%; background:rgba(0,0,0,0.5); pointer-events:none;';
+                  waveWrap.appendChild(dimLeft);
+                  waveWrap.appendChild(dimRight);
+                  var handleStart = document.createElement('div');
+                  handleStart.style.cssText = 'position:absolute; top:0; bottom:0; width:8px; left:0%; margin-left:-4px; background:#9146ff; cursor:ew-resize; border-radius:2px; box-shadow:0 0 0 1px rgba(255,255,255,0.5);';
+                  var handleEnd = document.createElement('div');
+                  handleEnd.style.cssText = 'position:absolute; top:0; bottom:0; width:8px; left:100%; margin-left:-4px; background:#9146ff; cursor:ew-resize; border-radius:2px; box-shadow:0 0 0 1px rgba(255,255,255,0.5);';
+                  waveWrap.appendChild(handleStart);
+                  waveWrap.appendChild(handleEnd);
+                  trimPanel.appendChild(waveWrap);
+
+                  var row = document.createElement('div');
+                  row.style.cssText = 'display:flex; align-items:center; gap:6px; margin-bottom:8px;';
+                  var startLabel = document.createElement('label');
+                  startLabel.textContent = 'Start (s)';
+                  var startInput = document.createElement('input');
+                  startInput.type = 'number';
+                  startInput.min = '0';
+                  startInput.max = String(duration);
+                  startInput.step = '0.1';
+                  startInput.value = '0';
+                  startInput.style.cssText = 'width:60px;';
+                  var endLabel = document.createElement('label');
+                  endLabel.textContent = 'End (s)';
+                  var endInput = document.createElement('input');
+                  endInput.type = 'number';
+                  endInput.min = '0';
+                  endInput.max = String(duration);
+                  endInput.step = '0.1';
+                  endInput.value = String(duration);
+                  endInput.style.cssText = 'width:60px;';
+                  row.appendChild(startLabel);
+                  row.appendChild(startInput);
+                  row.appendChild(endLabel);
+                  row.appendChild(endInput);
+
+                  var previewSelBtn = document.createElement('button');
+                  previewSelBtn.className = 'secondary';
+                  previewSelBtn.textContent = '\\u25B6 Preview selection';
+                  previewSelBtn.disabled = true;
+                  row.appendChild(previewSelBtn);
+
+                  trimPanel.appendChild(row);
+
+                  function updateHandles() {
+                    var hs = parseFloat(startInput.value);
+                    var he = parseFloat(endInput.value);
+                    if (!isFinite(hs)) hs = 0;
+                    if (!isFinite(he)) he = duration;
+                    var sp = duration > 0 ? Math.max(0, Math.min(100, (hs / duration) * 100)) : 0;
+                    var ep = duration > 0 ? Math.max(0, Math.min(100, (he / duration) * 100)) : 100;
+                    handleStart.style.left = sp + '%';
+                    handleEnd.style.left = ep + '%';
+                    dimLeft.style.width = sp + '%';
+                    dimRight.style.width = (100 - ep) + '%';
+                  }
+                  updateHandles();
+                  startInput.addEventListener('input', updateHandles);
+                  endInput.addEventListener('input', updateHandles);
+
+                  var dragging = null;
+                  function posToTime(clientX) {
+                    var rect = waveWrap.getBoundingClientRect();
+                    var x = Math.max(0, Math.min(rect.width, clientX - rect.left));
+                    return rect.width > 0 ? (x / rect.width) * duration : 0;
+                  }
+                  function beginDrag(which) {
+                    return function(ev) { ev.preventDefault(); dragging = which; };
+                  }
+                  handleStart.addEventListener('mousedown', beginDrag('start'));
+                  handleEnd.addEventListener('mousedown', beginDrag('end'));
+                  waveWrap.addEventListener('mousedown', function(ev) {
+                    if (ev.target === handleStart || ev.target === handleEnd) return;
+                    var t = posToTime(ev.clientX);
+                    var s0 = parseFloat(startInput.value) || 0;
+                    var e0 = parseFloat(endInput.value) || duration;
+                    var which = Math.abs(t - s0) <= Math.abs(t - e0) ? 'start' : 'end';
+                    dragging = which;
+                    if (which === 'start') startInput.value = Math.max(0, Math.min(t, e0 - 0.1)).toFixed(2);
+                    else endInput.value = Math.min(duration, Math.max(t, s0 + 0.1)).toFixed(2);
+                    updateHandles();
+                  });
+                  window.addEventListener('mousemove', function(ev) {
+                    if (!dragging) return;
+                    var t = posToTime(ev.clientX);
+                    if (dragging === 'start') {
+                      var maxStart = (parseFloat(endInput.value) || duration) - 0.1;
+                      startInput.value = Math.max(0, Math.min(t, maxStart)).toFixed(2);
+                    } else {
+                      var minEnd = (parseFloat(startInput.value) || 0) + 0.1;
+                      endInput.value = Math.min(duration, Math.max(t, minEnd)).toFixed(2);
+                    }
+                    updateHandles();
+                  });
+                  window.addEventListener('mouseup', function() { dragging = null; });
+
+                  // Waveform rendering + trimmed-selection playback preview
+                  // are best-effort — if decoding fails (unsupported codec,
+                  // network hiccup) the slider/inputs still work fine, just
+                  // without the visual or the preview button.
+                  var actx = null;
+                  var decodedBuffer = null;
+                  var activeSource = null;
+                  fetch('/api/admin/official-library/' + encodeURIComponent(s.id) + '/audio', { credentials: 'same-origin' })
+                    .then(function(r) { return r.arrayBuffer(); })
+                    .then(function(buf) {
+                      var Ctx = window.AudioContext || window.webkitAudioContext;
+                      actx = new Ctx();
+                      return actx.decodeAudioData(buf);
+                    })
+                    .then(function(buffer) {
+                      decodedBuffer = buffer;
+                      previewSelBtn.disabled = false;
+                      var dpr = window.devicePixelRatio || 1;
+                      var w = waveWrap.clientWidth || 300;
+                      var h = 64;
+                      waveCanvas.width = w * dpr;
+                      waveCanvas.height = h * dpr;
+                      var wctx = waveCanvas.getContext('2d');
+                      wctx.scale(dpr, dpr);
+                      var chan = buffer.getChannelData(0);
+                      var step = Math.max(1, Math.ceil(chan.length / w));
+                      var mid = h / 2;
+                      wctx.strokeStyle = '#9146ff';
+                      wctx.lineWidth = 1;
+                      wctx.beginPath();
+                      for (var i = 0; i < w; i++) {
+                        var mn = 1.0, mx = -1.0;
+                        for (var j = 0; j < step; j++) {
+                          var idx = i * step + j;
+                          if (idx >= chan.length) break;
+                          var v = chan[idx];
+                          if (v < mn) mn = v;
+                          if (v > mx) mx = v;
+                        }
+                        if (mx < mn) { mn = 0; mx = 0; }
+                        wctx.moveTo(i + 0.5, mid + mn * mid * 0.9);
+                        wctx.lineTo(i + 0.5, mid + mx * mid * 0.9);
+                      }
+                      wctx.stroke();
+                    })
+                    .catch(function() {});
+
+                  previewSelBtn.addEventListener('click', function() {
+                    if (activeSource) {
+                      try { activeSource.stop(); } catch (e) {}
+                      activeSource = null;
+                      previewSelBtn.textContent = '\\u25B6 Preview selection';
+                      return;
+                    }
+                    if (!decodedBuffer || !actx) return;
+                    var ps = parseFloat(startInput.value) || 0;
+                    var pe = parseFloat(endInput.value) || duration;
+                    if (pe <= ps) return;
+                    var src = actx.createBufferSource();
+                    src.buffer = decodedBuffer;
+                    src.connect(actx.destination);
+                    src.onended = function() {
+                      activeSource = null;
+                      previewSelBtn.textContent = '\\u25B6 Preview selection';
+                    };
+                    src.start(0, ps, pe - ps);
+                    activeSource = src;
+                    previewSelBtn.textContent = '\\u25A0 Stop';
+                  });
+
+                  var applyBtn = document.createElement('button');
+                  applyBtn.className = 'btn-save';
+                  applyBtn.textContent = 'Apply Trim';
+                  var trimStatus = document.createElement('span');
+                  trimStatus.style.cssText = 'margin-left:8px;';
+                  applyBtn.addEventListener('click', function() {
+                    applyBtn.disabled = true;
+                    trimStatus.textContent = 'Trimming…';
+                    fetch('/api/admin/official-library/' + encodeURIComponent(s.id) + '/trim', {
+                      method: 'POST',
+                      credentials: 'same-origin',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ trimStart: parseFloat(startInput.value), trimEnd: parseFloat(endInput.value) })
+                    })
+                      .then(function(r) { return r.json(); })
+                      .then(function(result) {
+                        applyBtn.disabled = false;
+                        if (result.error) { trimStatus.textContent = 'Error: ' + result.error; return; }
+                        trimStatus.textContent = 'Trimmed!';
+                        delete trimPanel.dataset.loaded;
+                        setTimeout(function() { trimPanel.style.display = 'none'; fetchOfficialLibrary(); }, 800);
+                      })
+                      .catch(function() {
+                        applyBtn.disabled = false;
+                        trimStatus.textContent = 'Trim failed';
+                      });
+                  });
+                  trimPanel.appendChild(applyBtn);
+                  trimPanel.appendChild(trimStatus);
+                })
+                .catch(function() { trimPanel.textContent = 'Failed to load duration'; });
+            });
+            card.appendChild(trimBtn);
+
             var delBtn = document.createElement('button');
             delBtn.className = 'btn-ban';
             delBtn.textContent = 'Delete';
@@ -1298,7 +1540,9 @@ export function renderAdminDashboardPage(options = {}) {
             });
             card.appendChild(delBtn);
 
-            officialListEl.appendChild(card);
+            wrapper.appendChild(card);
+            wrapper.appendChild(trimPanel);
+            officialListEl.appendChild(wrapper);
           });
         }
 

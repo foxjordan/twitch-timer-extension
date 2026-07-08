@@ -2,10 +2,19 @@ import path from "path";
 import os from "os";
 import crypto from "crypto";
 import multer from "multer";
+import { execFile } from "child_process";
+import { promisify } from "util";
+import { stat as fsStat, unlink as fsUnlink, rename } from "fs/promises";
+import { createReadStream } from "fs";
 import { logger } from "./logger.js";
 import { isSuperAdmin } from "./routes_admin.js";
-import { r2Enabled } from "./r2.js";
-import { uploadToStorage, deleteFileFromStorage, serveFileFromStorage } from "./routes_sounds.js";
+import { r2Enabled, r2SoundKey, putR2Object, getR2PresignedUrl } from "./r2.js";
+import {
+  uploadToStorage,
+  deleteFileFromStorage,
+  serveFileFromStorage,
+  downloadFromR2ToTemp,
+} from "./routes_sounds.js";
 import {
   OFFICIAL_LIBRARY_UID,
   listSounds,
@@ -14,10 +23,13 @@ import {
   updateSound,
   deleteSound,
   generateFilename,
+  getSoundFilePath,
   ALLOWED_MIME_TYPES,
   MAX_OFFICIAL_LIBRARY_FILE_SIZE,
   SOUNDS_FILE_DIR,
 } from "./sounds_store.js";
+
+const execFileAsync = promisify(execFile);
 
 const MULTER_TMP_DIR = r2Enabled ? os.tmpdir() : path.resolve(SOUNDS_FILE_DIR, "tmp");
 
@@ -128,5 +140,101 @@ export function mountOfficialLibraryRoutes(app) {
     const sound = getSound(OFFICIAL_LIBRARY_UID, req.params.soundId);
     if (!sound) return res.status(404).json({ error: "Sound not found" });
     await serveFileFromStorage(res, OFFICIAL_LIBRARY_UID, sound, "no-store");
+  });
+
+  // Get audio duration (for the trim UI's range slider)
+  app.get("/api/admin/official-library/:soundId/duration", async (req, res) => {
+    if (!requireSuperAdmin(req, res)) return;
+    const sound = getSound(OFFICIAL_LIBRARY_UID, req.params.soundId);
+    if (!sound) return res.status(404).json({ error: "Sound not found" });
+
+    let probeTarget;
+    if (r2Enabled) {
+      probeTarget = await getR2PresignedUrl(r2SoundKey(OFFICIAL_LIBRARY_UID, sound.filename), 300);
+    } else {
+      probeTarget = getSoundFilePath(OFFICIAL_LIBRARY_UID, sound);
+    }
+    try {
+      const { stdout } = await execFileAsync("ffprobe", [
+        "-v", "error",
+        "-show_entries", "format=duration",
+        "-of", "json",
+        probeTarget,
+      ], { timeout: 10000 });
+      const info = JSON.parse(stdout);
+      const duration = parseFloat(info.format?.duration || "0");
+      res.json({ duration });
+    } catch (err) {
+      logger.error("official_library_duration_failed", { soundId: sound.id, message: err?.message });
+      res.status(500).json({ error: "Could not determine audio duration" });
+    }
+  });
+
+  // Trim a sound in place (server-side ffmpeg) — mirrors the broadcaster-facing
+  // /api/sounds/:soundId/trim in routes_sounds.js exactly (same R2-safe
+  // download-trim-reupload approach), just scoped to the official library.
+  app.post("/api/admin/official-library/:soundId/trim", async (req, res) => {
+    if (!requireSuperAdmin(req, res)) return;
+    const sound = getSound(OFFICIAL_LIBRARY_UID, req.params.soundId);
+    if (!sound) return res.status(404).json({ error: "Sound not found" });
+
+    const trimStart = parseFloat(req.body.trimStart);
+    const trimEnd = parseFloat(req.body.trimEnd);
+    if (!Number.isFinite(trimStart) || !Number.isFinite(trimEnd) || trimStart < 0 || trimEnd <= trimStart) {
+      return res.status(400).json({ error: "Invalid trim range" });
+    }
+    if (trimEnd - trimStart < 0.5) {
+      return res.status(400).json({ error: "Trimmed clip must be at least 0.5 seconds" });
+    }
+
+    const ext = path.extname(sound.filename) || ".mp3";
+    const localTmpBase = path.resolve(MULTER_TMP_DIR, `${sound.id}_trim_${Date.now()}`);
+    const filePath = r2Enabled ? localTmpBase + ext : getSoundFilePath(OFFICIAL_LIBRARY_UID, sound);
+    const tmpPath = r2Enabled ? localTmpBase + ".trim_tmp" + ext : filePath + ".trim_tmp" + ext;
+
+    try {
+      if (r2Enabled) {
+        await downloadFromR2ToTemp(OFFICIAL_LIBRARY_UID, sound.filename, filePath);
+      }
+
+      let usedCopy = true;
+      try {
+        await execFileAsync("ffmpeg", [
+          "-i", filePath, "-ss", String(trimStart), "-to", String(trimEnd),
+          "-c", "copy", "-y", tmpPath,
+        ], { timeout: 10000 });
+      } catch (copyErr) {
+        usedCopy = false;
+        logger.info("official_library_trim_copy_fallback", { soundId: sound.id, reason: copyErr?.stderr || copyErr?.message });
+        await execFileAsync("ffmpeg", [
+          "-i", filePath, "-ss", String(trimStart), "-to", String(trimEnd),
+          "-y", tmpPath,
+        ], { timeout: 10000 });
+      }
+
+      const tmpStat = await fsStat(tmpPath);
+      if (tmpStat.size === 0) throw new Error("ffmpeg produced an empty file");
+
+      if (r2Enabled) {
+        await putR2Object(r2SoundKey(OFFICIAL_LIBRARY_UID, sound.filename), createReadStream(tmpPath), sound.mimeType);
+        await fsUnlink(tmpPath).catch(() => {});
+        await fsUnlink(filePath).catch(() => {});
+        const updated = updateSound(OFFICIAL_LIBRARY_UID, sound.id, { sizeBytes: tmpStat.size });
+        logger.info("official_library_trimmed", { soundId: sound.id, trimStart, trimEnd, newSize: tmpStat.size, usedCopy });
+        return res.json({ sound: updated });
+      }
+
+      await rename(tmpPath, filePath);
+      const fileStat = await fsStat(filePath);
+      const updated = updateSound(OFFICIAL_LIBRARY_UID, sound.id, { sizeBytes: fileStat.size });
+      logger.info("official_library_trimmed", { soundId: sound.id, trimStart, trimEnd, newSize: fileStat.size, usedCopy });
+      res.json({ sound: updated });
+    } catch (err) {
+      try { await fsUnlink(tmpPath); } catch {}
+      if (r2Enabled) try { await fsUnlink(filePath); } catch {}
+      const detail = err?.stderr || err?.message || "Unknown error";
+      logger.error("official_library_trim_failed", { soundId: req.params.soundId, detail });
+      res.status(500).json({ error: "Trim failed: " + detail });
+    }
   });
 }

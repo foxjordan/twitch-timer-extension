@@ -148,7 +148,7 @@ export async function deleteFileFromStorage(uid, filename) {
 }
 
 // Download a file from R2 to a local temp path.
-async function downloadFromR2ToTemp(uid, filename, tempPath) {
+export async function downloadFromR2ToTemp(uid, filename, tempPath) {
   const key = r2SoundKey(String(uid), filename);
   const stream = await getR2ObjectStream(key);
   await pipeline(stream, createWriteStream(tempPath));

@@ -645,8 +645,22 @@ export function renderSoundConfigPage(options = {}) {
         document.querySelectorAll('.sidebar-nav-item').forEach(function(btn) {
           btn.addEventListener('click', function() {
             switchSection(btn.getAttribute('data-section'));
+            history.replaceState(null, '', '#' + btn.getAttribute('data-section'));
           });
         });
+
+        // Deep-link support: /sounds/config#library lands directly on that
+        // section instead of always defaulting to "alerts".
+        (function() {
+          var requested = (window.location.hash || '').replace('#', '');
+          var validSections = Array.prototype.map.call(
+            document.querySelectorAll('.section-page'),
+            function(el) { return el.getAttribute('data-section'); }
+          );
+          if (requested && validSections.indexOf(requested) !== -1) {
+            switchSection(requested);
+          }
+        })();
 
         var soundsCache = [];
 

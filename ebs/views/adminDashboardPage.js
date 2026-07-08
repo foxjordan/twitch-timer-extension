@@ -139,6 +139,7 @@ export function renderAdminDashboardPage(options = {}) {
           <button class="sidebar-nav-item" data-section="tts-config">TTS Config</button>
           <button class="sidebar-nav-item" data-section="test-alerts">Test Alerts</button>
           <button class="sidebar-nav-item" data-section="library-moderation">Library Moderation</button>
+          <button class="sidebar-nav-item" data-section="official-library">Official Library</button>
           <button class="sidebar-nav-item" data-section="event-logs">Event Logs</button>
           <button class="sidebar-nav-item" data-section="broadcasters">Broadcasters</button>
           <button class="sidebar-nav-item" data-section="analytics">Analytics</button>
@@ -302,6 +303,26 @@ export function renderAdminDashboardPage(options = {}) {
       </div>
       </div>
 
+      <div class="section-page" data-section="official-library">
+      <div class="table-card" style="margin-bottom:20px;">
+        <h2>Add to Official Library</h2>
+        <div style="font-size:12px; color:var(--text-muted); margin-bottom:12px;">Upload a properly-licensed sound (CC0 / public domain only). It's added directly to the community library for every broadcaster — no moderation queue, since this <em>is</em> the review. Record the source URL and license for our own paper trail.</div>
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; max-width:700px; margin-bottom:10px;">
+          <input type="file" id="officialFile" accept="audio/mpeg,audio/ogg,audio/wav,audio/webm,audio/mp4,audio/flac,.flac" style="grid-column:1 / -1; font-size:12px; color:var(--text-color);">
+          <input type="text" id="officialName" placeholder="Sound name" style="padding:8px 10px; border-radius:8px; border:1px solid var(--surface-border); background:var(--surface-muted); color:var(--text-color); font-size:12px;">
+          <input type="text" id="officialTags" placeholder="Tags (comma-separated, up to 5)" style="padding:8px 10px; border-radius:8px; border:1px solid var(--surface-border); background:var(--surface-muted); color:var(--text-color); font-size:12px;">
+          <input type="text" id="officialSourceUrl" placeholder="Source URL (e.g. Freesound link)" style="padding:8px 10px; border-radius:8px; border:1px solid var(--surface-border); background:var(--surface-muted); color:var(--text-color); font-size:12px;">
+          <input type="text" id="officialSourceLicense" placeholder="License (e.g. CC0)" style="padding:8px 10px; border-radius:8px; border:1px solid var(--surface-border); background:var(--surface-muted); color:var(--text-color); font-size:12px;">
+        </div>
+        <button class="btn-save" id="officialUploadBtn">Upload</button>
+        <span id="officialUploadStatus" class="tts-status" style="display:none; margin-left:8px;"></span>
+      </div>
+      <div class="table-card">
+        <h2>Official Library <span class="refresh-info" id="officialCount"></span></h2>
+        <div id="officialList"><div class="empty-state">Loading...</div></div>
+      </div>
+      </div>
+
       <div class="section-page" data-section="event-logs">
       <div class="table-card">
         <h2>Event Logs</h2>
@@ -324,6 +345,7 @@ export function renderAdminDashboardPage(options = {}) {
           <label>Sort:
             <select id="broadcasterSort">
               <option value="live">Live first</option>
+              <option value="newest">Newest users</option>
               <option value="name-asc">Name (A-Z)</option>
               <option value="name-desc">Name (Z-A)</option>
               <option value="last-event">Most recent event</option>
@@ -368,6 +390,11 @@ export function renderAdminDashboardPage(options = {}) {
           <h2 id="analyticsStreamerDetailTitle">Streamer Detail</h2>
           <div id="analyticsStreamerDetailBody"></div>
         </div>
+      </div>
+      <div class="table-card" style="margin-bottom:20px;">
+        <h2>Setup Funnel by Language</h2>
+        <div style="font-size:12px; color:var(--text-muted); margin-bottom:10px;">Distinct broadcasters who opened the config panel vs. who went on to create at least one alert, grouped by Twitch's reported language for that session.</div>
+        <div id="analyticsFunnelContainer"><div class="empty-state">Loading...</div></div>
       </div>
       <div class="table-card">
         <h2>Per-Streamer Breakdown <span class="refresh-info" id="analyticsRefreshInfo"></span></h2>
@@ -420,6 +447,8 @@ export function renderAdminDashboardPage(options = {}) {
                 return (Date.parse(b.lastEventAt || '') || 0) - (Date.parse(a.lastEventAt || '') || 0);
               case 'time-added':
                 return (b.additionsTotal || 0) - (a.additionsTotal || 0);
+              case 'newest':
+                return (Date.parse(b.firstSeenAt || '') || 0) - (Date.parse(a.firstSeenAt || '') || 0);
               case 'live':
               default:
                 if (a.live !== b.live) return a.live ? -1 : 1;
@@ -1164,6 +1193,154 @@ export function renderAdminDashboardPage(options = {}) {
 
         fetchLibraryModeration();
 
+        // ===== Official Library =====
+        var officialListEl = document.getElementById('officialList');
+        var officialCountEl = document.getElementById('officialCount');
+        var officialAudio = null;
+        var officialPreviewBtn = null;
+
+        function stopOfficialPreview() {
+          if (officialAudio) { officialAudio.pause(); officialAudio = null; }
+          if (officialPreviewBtn) { officialPreviewBtn.textContent = 'Preview'; officialPreviewBtn = null; }
+        }
+
+        function fetchOfficialLibrary() {
+          fetch('/api/admin/official-library', { credentials: 'same-origin' })
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+              if (data.error) return;
+              renderOfficialList(data.sounds || []);
+            })
+            .catch(function() {});
+        }
+
+        function renderOfficialList(sounds) {
+          if (!officialListEl) return;
+          if (officialCountEl) officialCountEl.textContent = sounds.length ? '(' + sounds.length + ')' : '';
+          officialListEl.textContent = '';
+          if (!sounds.length) {
+            var empty = document.createElement('div');
+            empty.className = 'empty-state';
+            empty.textContent = 'No official sounds yet — upload one above.';
+            officialListEl.appendChild(empty);
+            return;
+          }
+          sounds.forEach(function(s) {
+            var card = document.createElement('div');
+            card.style.cssText = 'display:flex; align-items:center; gap:10px; padding:10px; background:var(--surface-muted); border-radius:8px; margin-bottom:8px;';
+
+            var info = document.createElement('div');
+            info.style.cssText = 'flex:1; min-width:0;';
+            var nameDiv = document.createElement('div');
+            nameDiv.style.cssText = 'font-weight:600; font-size:14px;';
+            nameDiv.textContent = s.name;
+            var metaDiv = document.createElement('div');
+            metaDiv.style.cssText = 'font-size:12px; color:var(--text-muted);';
+            var metaParts = [];
+            if (s.tags && s.tags.length) metaParts.push(s.tags.join(', '));
+            if (s.sourceLicense) metaParts.push(s.sourceLicense);
+            metaDiv.textContent = metaParts.length ? metaParts.join(' \\u00b7 ') : 'No tags or source recorded';
+            info.appendChild(nameDiv);
+            info.appendChild(metaDiv);
+            if (s.sourceUrl) {
+              var srcLink = document.createElement('a');
+              srcLink.href = s.sourceUrl;
+              srcLink.target = '_blank';
+              srcLink.rel = 'noopener noreferrer';
+              srcLink.textContent = 'source';
+              srcLink.style.cssText = 'font-size:11px; color:#9146ff;';
+              info.appendChild(srcLink);
+            }
+            card.appendChild(info);
+
+            var previewBtn = document.createElement('button');
+            previewBtn.className = 'secondary';
+            previewBtn.textContent = 'Preview';
+            previewBtn.addEventListener('click', function() {
+              var isPlaying = officialPreviewBtn === previewBtn;
+              stopOfficialPreview();
+              if (isPlaying) return;
+              officialAudio = new Audio('/api/admin/official-library/' + encodeURIComponent(s.id) + '/audio');
+              officialPreviewBtn = previewBtn;
+              previewBtn.textContent = '\\u25A0 Stop';
+              officialAudio.onended = stopOfficialPreview;
+              officialAudio.onerror = stopOfficialPreview;
+              officialAudio.play().catch(stopOfficialPreview);
+            });
+            card.appendChild(previewBtn);
+
+            var editBtn = document.createElement('button');
+            editBtn.textContent = 'Edit Tags';
+            editBtn.addEventListener('click', function() {
+              var newTags = prompt('Tags (comma-separated, up to 5):', (s.tags || []).join(', '));
+              if (newTags === null) return;
+              fetch('/api/admin/official-library/' + encodeURIComponent(s.id), {
+                method: 'PUT',
+                credentials: 'same-origin',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ tags: newTags })
+              })
+                .then(function(r) { return r.json(); })
+                .then(function() { fetchOfficialLibrary(); })
+                .catch(function() {});
+            });
+            card.appendChild(editBtn);
+
+            var delBtn = document.createElement('button');
+            delBtn.className = 'btn-ban';
+            delBtn.textContent = 'Delete';
+            delBtn.addEventListener('click', function() {
+              if (!confirm('Delete "' + s.name + '" from the official library? This removes it for everyone.')) return;
+              fetch('/api/admin/official-library/' + encodeURIComponent(s.id), { method: 'DELETE', credentials: 'same-origin' })
+                .then(function(r) { return r.json(); })
+                .then(function() { fetchOfficialLibrary(); })
+                .catch(function() {});
+            });
+            card.appendChild(delBtn);
+
+            officialListEl.appendChild(card);
+          });
+        }
+
+        var officialUploadBtn = document.getElementById('officialUploadBtn');
+        var officialUploadStatus = document.getElementById('officialUploadStatus');
+        if (officialUploadBtn) {
+          officialUploadBtn.addEventListener('click', function() {
+            var fileInput = document.getElementById('officialFile');
+            var file = fileInput && fileInput.files ? fileInput.files[0] : null;
+            if (!file) { alert('Select an audio file first'); return; }
+            officialUploadBtn.disabled = true;
+            officialUploadStatus.style.display = 'inline-block';
+            officialUploadStatus.textContent = 'Uploading…';
+            var fd = new FormData();
+            fd.append('file', file);
+            fd.append('name', document.getElementById('officialName').value);
+            fd.append('tags', document.getElementById('officialTags').value);
+            fd.append('sourceUrl', document.getElementById('officialSourceUrl').value);
+            fd.append('sourceLicense', document.getElementById('officialSourceLicense').value);
+            fetch('/api/admin/official-library', { method: 'POST', credentials: 'same-origin', body: fd })
+              .then(function(r) { return r.json(); })
+              .then(function(data) {
+                officialUploadBtn.disabled = false;
+                if (data.error) { officialUploadStatus.textContent = 'Error: ' + data.error; return; }
+                officialUploadStatus.textContent = 'Uploaded!';
+                setTimeout(function() { officialUploadStatus.style.display = 'none'; }, 2500);
+                fileInput.value = '';
+                document.getElementById('officialName').value = '';
+                document.getElementById('officialTags').value = '';
+                document.getElementById('officialSourceUrl').value = '';
+                document.getElementById('officialSourceLicense').value = '';
+                fetchOfficialLibrary();
+              })
+              .catch(function() {
+                officialUploadBtn.disabled = false;
+                officialUploadStatus.textContent = 'Upload failed';
+              });
+          });
+        }
+
+        fetchOfficialLibrary();
+
         // ===== Test Alerts =====
         var testBroadcasterEl = document.getElementById('testBroadcaster');
         var testSoundSelectEl = document.getElementById('testSoundSelect');
@@ -1671,6 +1848,56 @@ export function renderAdminDashboardPage(options = {}) {
             });
         }
 
+        function renderFunnelTable(rows) {
+          var container = document.getElementById('analyticsFunnelContainer');
+          if (!container) return;
+          container.textContent = '';
+          if (!rows || !rows.length) {
+            container.appendChild(makeEmptyState('No config panel opens recorded yet.'));
+            return;
+          }
+          var table = document.createElement('table');
+          var thead = document.createElement('thead');
+          var headerRow = document.createElement('tr');
+          ['Language', 'Opened Config', 'Created an Alert', 'Completion Rate'].forEach(function(label) {
+            var th = document.createElement('th');
+            th.textContent = label;
+            headerRow.appendChild(th);
+          });
+          thead.appendChild(headerRow);
+          table.appendChild(thead);
+          var tbody = document.createElement('tbody');
+          rows.forEach(function(r) {
+            var tr = document.createElement('tr');
+            [
+              r.language || 'unknown',
+              String(r.opened),
+              String(r.completed_setup),
+              r.opened ? Math.round((r.completed_setup / r.opened) * 100) + '%' : '--',
+            ].forEach(function(text) {
+              var td = document.createElement('td');
+              td.textContent = text;
+              tr.appendChild(td);
+            });
+            tbody.appendChild(tr);
+          });
+          table.appendChild(tbody);
+          container.appendChild(table);
+        }
+
+        function fetchAnalyticsFunnel() {
+          fetch('/api/admin/analytics/funnel', { credentials: 'same-origin' })
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+              if (data.error) return;
+              renderFunnelTable(data.rows);
+            })
+            .catch(function() {
+              var container = document.getElementById('analyticsFunnelContainer');
+              if (container) { container.textContent = ''; container.appendChild(makeEmptyState('Failed to load funnel.')); }
+            });
+        }
+
         function fetchAnalytics() {
           fetch('/api/admin/analytics', { credentials: 'same-origin' })
             .then(function(r) { return r.json(); })
@@ -1690,6 +1917,7 @@ export function renderAdminDashboardPage(options = {}) {
             .catch(function() {
               document.getElementById('analyticsRefreshInfo').textContent = 'Load failed';
             });
+          fetchAnalyticsFunnel();
         }
 
         document.querySelectorAll('.sidebar-nav-item').forEach(function(btn) {

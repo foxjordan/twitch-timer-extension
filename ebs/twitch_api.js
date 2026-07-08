@@ -98,6 +98,48 @@ export async function fetchUserDisplayName(userId, channelId = null) {
   }
 }
 
+const userProfileCache = new Map();
+
+// Fetch both login and display name for a user ID — unlike
+// fetchUserDisplayName (which only returns a single display string, for
+// viewer-name-in-chat-message use cases), this is for populating
+// user_profiles.js, which needs the actual login handle to build
+// twitch.tv/<login> links.
+export async function fetchUserProfile(userId, channelId = null) {
+  if (!userId) return null;
+  const uid = String(userId);
+
+  const cached = userProfileCache.get(uid);
+  if (cached && Date.now() < cached.expiresAt) return cached.profile;
+
+  const clientId = process.env.TWITCH_CLIENT_ID;
+  const tokenChannelId = channelId || process.env.BROADCASTER_USER_ID;
+  const token =
+    (tokenChannelId && await getValidAccessToken(String(tokenChannelId))) ||
+    process.env.BROADCASTER_USER_TOKEN ||
+    await getAppAccessToken();
+  if (!clientId || !token) return null;
+
+  try {
+    const res = await fetch(
+      `https://api.twitch.tv/helix/users?id=${encodeURIComponent(uid)}`,
+      { headers: { "Client-Id": clientId, Authorization: `Bearer ${token}` } },
+    );
+    if (!res.ok) return null;
+    const json = await res.json();
+    const user = json.data?.[0];
+    if (!user) return null;
+    const profile = { login: user.login || null, displayName: user.display_name || user.login || null };
+    if (profile.login) {
+      userProfileCache.set(uid, { profile, expiresAt: Date.now() + DISPLAY_NAME_TTL });
+    }
+    return profile;
+  } catch (err) {
+    logger.warn("user_profile_fetch_error", { userId: uid, message: err?.message });
+    return null;
+  }
+}
+
 // Look up a Twitch user ID by login name. Returns { id, displayName } or null.
 export async function lookupUserByLogin(login, channelId = null) {
   if (!login) return null;

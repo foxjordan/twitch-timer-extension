@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import ReactDOM from "react-dom/client";
-import { setupAnalytics, logEvent } from "./firebase.js";
+import { setupAnalytics, setAnalyticsAuth, logEvent } from "./firebase.js";
 import { BrandedFooter } from "./BrandedFooter.jsx";
 
 const EBS_BASE = import.meta.env.VITE_EBS_BASE || "https://livestreamerhub.com";
@@ -360,11 +360,12 @@ function ComponentApp() {
   }, []);
 
   useEffect(() => {
-    setupAnalytics();
+    setupAnalytics("component");
 
     window.Twitch?.ext?.onAuthorized((authData) => {
       authRef.current = authData;
       setAuth(authData);
+      setAnalyticsAuth(authData);
       logEvent("component_loaded", { channel_id: authData.channelId });
 
       if (window.Twitch?.ext?.features?.isBitsEnabled) {

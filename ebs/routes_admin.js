@@ -9,6 +9,7 @@ import { getSubscription, isPro } from "./subscription_store.js";
 import { getTtsSettings, setTtsSettings, getGlobalTtsConfig, setGlobalTtsConfig } from "./tts_store.js";
 import { getBannerConfig, setBannerConfig } from "./banner_store.js";
 import { fetchLiveStreamStatus } from "./twitch_api.js";
+import { backfillUserProfile } from "./user_profiles.js";
 import { deleteAllUserData } from "./user_data_deletion.js";
 import { getVoices, isValidVoice } from "./tts_voices.js";
 import { synthesizeSpeech } from "./tts_provider.js";
@@ -121,6 +122,16 @@ export function mountAdminRoutes(app, ctx) {
       liveStatus = await fetchLiveStreamStatus(registeredIds);
     } catch {}
 
+    // Proactively backfill any broadcaster we don't have a login for yet,
+    // rather than only doing so when they open their own config panel — an
+    // idle broadcaster (including ones we can already see are live) might
+    // never trigger that path, leaving them permanently "Unknown" here.
+    // Fire-and-forget: rate-limited internally, results show up on the next
+    // 10-second poll rather than blocking this response.
+    for (const uid of registeredIds) {
+      if (!getUserProfile?.(uid)?.login) backfillUserProfile(uid).catch(() => {});
+    }
+
     const users = registeredIds.map((uid) => {
       const conn = getBroadcasterConnection(uid);
       const totals = getTotals(uid);
@@ -169,7 +180,11 @@ export function mountAdminRoutes(app, ctx) {
       return {
         userId: uid,
         login: conn?.broadcasterLogin || profile?.login || null,
-        displayName: conn?.broadcasterLogin || profile?.displayName || profile?.login || null,
+        // Prefer the actual display name over the raw (always-lowercase)
+        // login handle, which was previously taking priority here whenever
+        // an EventSub connection existed.
+        displayName: profile?.displayName || conn?.broadcasterLogin || profile?.login || null,
+        firstSeenAt: profile?.firstSeenAt || null,
         connected: conn?.ws?.readyState === 1,
         live: Boolean(live),
         viewerCount: live?.viewerCount ?? null,
@@ -473,6 +488,39 @@ export function mountAdminRoutes(app, ctx) {
 
     const result = await deleteAllUserData(uid, ctx.deletionCtx || {});
     res.json({ ok: true, userId: uid, deleted: result.deleted });
+  });
+
+  // Setup funnel (config panel opened -> first alert created), broken down by
+  // language — helps answer "are non-English broadcasters dropping off during
+  // setup more than English ones", using the first-party client_events table.
+  app.get("/api/admin/analytics/funnel", async (req, res) => {
+    if (!req.session?.isAdmin || !isSuperAdmin(req)) {
+      return res.status(403).json({ error: "Access denied" });
+    }
+    try {
+      const result = await db.query(`
+        WITH loaded AS (
+          SELECT DISTINCT channel_id, COALESCE(language, 'unknown') AS language
+          FROM client_events
+          WHERE event_name = 'config_loaded'
+        ),
+        completed AS (
+          SELECT DISTINCT channel_id
+          FROM client_events
+          WHERE event_name IN ('sound_uploaded', 'clip_created', 'video_uploaded')
+        )
+        SELECT loaded.language,
+               COUNT(DISTINCT loaded.channel_id)::int AS opened,
+               COUNT(DISTINCT completed.channel_id)::int AS completed_setup
+          FROM loaded
+          LEFT JOIN completed ON completed.channel_id = loaded.channel_id
+         GROUP BY loaded.language
+         ORDER BY opened DESC
+      `);
+      res.json({ rows: result.rows });
+    } catch (err) {
+      res.status(500).json({ error: err?.message || "Query failed" });
+    }
   });
 
   app.get("/api/admin/analytics", async (req, res) => {

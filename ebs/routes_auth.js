@@ -9,37 +9,43 @@ import { syncSubscriptionFromStripe } from './routes_stripe.js';
 import { setUserProfile } from './user_profiles.js';
 
 /**
- * Build a signed OAuth state value that encodes the origin so the callback
+ * Build a signed OAuth state value that encodes the origin (so the callback
  * can reconstruct the exact redirect_uri even if the in-memory session is
- * lost (e.g. Fly machine restart between login and callback).
+ * lost — e.g. Fly machine restart between login and callback) and the
+ * intended post-login destination. `state` is the one value Twitch reliably
+ * echoes back untouched, unlike query params on redirect_uri, which must
+ * match exactly at token-exchange time — so `next` rides along in here
+ * rather than as a redirect_uri query param.
  *
- * Format: <nonce>.<base64url(origin)>.<hmac>
+ * Format: <nonce>.<base64url(origin)>.<base64url(next)>.<hmac>
  */
-function buildSignedState(origin, secret) {
+function buildSignedState(origin, next, secret) {
   const nonce = crypto.randomBytes(16).toString('hex');
   const originB64 = Buffer.from(origin).toString('base64url');
-  const payload = `${nonce}.${originB64}`;
+  const nextB64 = Buffer.from(next || '').toString('base64url');
+  const payload = `${nonce}.${originB64}.${nextB64}`;
   const hmac = crypto.createHmac('sha256', secret).update(payload).digest('hex');
   return `${payload}.${hmac}`;
 }
 
 /**
  * Verify and decode a signed state value.
- * Returns { valid: true, origin } or { valid: false }.
+ * Returns { valid: true, origin, next } or { valid: false }.
  */
 function verifySignedState(state, secret) {
   if (!state || typeof state !== 'string') return { valid: false };
   const parts = state.split('.');
-  if (parts.length !== 3) return { valid: false };
-  const [nonce, originB64, hmac] = parts;
-  const payload = `${nonce}.${originB64}`;
+  if (parts.length !== 4) return { valid: false };
+  const [nonce, originB64, nextB64, hmac] = parts;
+  const payload = `${nonce}.${originB64}.${nextB64}`;
   const expected = crypto.createHmac('sha256', secret).update(payload).digest('hex');
   if (!crypto.timingSafeEqual(Buffer.from(hmac, 'hex'), Buffer.from(expected, 'hex'))) {
     return { valid: false };
   }
   try {
     const origin = Buffer.from(originB64, 'base64url').toString();
-    return { valid: true, origin };
+    const next = Buffer.from(nextB64 || '', 'base64url').toString();
+    return { valid: true, origin, next };
   } catch {
     return { valid: false };
   }
@@ -55,12 +61,16 @@ export function mountAuthRoutes(app, opts = {}) {
     if (!clientId) return res.status(500).send('Missing TWITCH_CLIENT_ID');
 
     const origin = getBaseUrl(req);
-    const state = buildSignedState(origin, stateSigningKey);
+    // Only accept a same-origin-relative next path — never an absolute URL,
+    // to avoid this becoming an open redirect.
+    const next = typeof req.query.next === 'string' && req.query.next.startsWith('/') ? req.query.next : '';
+    const state = buildSignedState(origin, next, stateSigningKey);
     const redirectUri = `${origin}/auth/callback`;
 
     // Also store in session as a fallback (if session survives, great)
     req.session.oauthState = state;
     req.session.oauthOrigin = origin;
+    req.session.oauthNext = next;
 
     logger.info('oauth_login_start', {
       resolvedBase: origin,
@@ -115,6 +125,7 @@ export function mountAuthRoutes(app, opts = {}) {
 
       // Clean up session state if it survived
       delete req.session.oauthState;
+      delete req.session.oauthNext;
 
       // Use the origin from the signed state for the redirect_uri
       const callbackOrigin = verified.origin;
@@ -162,7 +173,9 @@ export function mountAuthRoutes(app, opts = {}) {
       try { if (opts && typeof opts.onAdminLogin === 'function') opts.onAdminLogin({ user, accessToken }); } catch {}
       // Sync Stripe subscription state on login (fire-and-forget)
       syncSubscriptionFromStripe(user.id).catch(() => {});
-      const next = req.query.next || '/overlay/config';
+      // next comes from the signed state (survives the round trip even if the
+      // session doesn't), falling back to the session copy, then the timer.
+      const next = verified.next || req.session?.oauthNext || '/overlay/config';
       res.redirect(String(next).startsWith('/') ? next : '/overlay/config');
     } catch (e) {
       logger.error('oauth_callback_error', { message: e?.message });

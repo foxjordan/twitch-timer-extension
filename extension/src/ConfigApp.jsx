@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef, useCallback } from "react";
 import ReactDOM from "react-dom/client";
-import { setupAnalytics, logEvent } from "./firebase.js";
+import { setupAnalytics, setAnalyticsAuth, logEvent } from "./firebase.js";
 import { BrandedFooter } from "./BrandedFooter.jsx";
 
 const EBS_BASE = import.meta.env.VITE_EBS_BASE || "https://livestreamerhub.com";
@@ -59,6 +59,8 @@ function getTtsTiers(minTier) {
 function ConfigApp() {
   const [auth, setAuth] = useState(null);
   const [sounds, setSounds] = useState([]);
+  const [officialSounds, setOfficialSounds] = useState([]);
+  const [addingOfficialId, setAddingOfficialId] = useState(null);
   const [settings, setSettings] = useState({
     enabled: true,
     globalVolume: 100,
@@ -137,10 +139,11 @@ function ConfigApp() {
   );
 
   useEffect(() => {
-    setupAnalytics();
+    setupAnalytics("config");
 
     window.Twitch?.ext?.onAuthorized((authData) => {
       setAuth(authData);
+      setAnalyticsAuth(authData);
       logEvent("config_loaded");
       fetchSounds(authData.token);
       fetch(`${EBS_BASE}/api/sounds/overlay-url`, {
@@ -158,6 +161,19 @@ function ConfigApp() {
       })
         .then((r) => r.json())
         .then((data) => { if (data.features) setExtConfig(data); })
+        .catch(() => {});
+
+      // A handful of curated official sounds so new broadcasters have
+      // something to add immediately, without leaving the panel. Full
+      // browse/search stays dashboard-only — see plan notes on scope.
+      fetch(`${EBS_BASE}/api/sounds/library`, {
+        headers: { Authorization: `Bearer ${authData.token}` },
+      })
+        .then((r) => r.json())
+        .then((data) => {
+          const official = (data.sounds || []).filter((s) => s.isOfficial).slice(0, 10);
+          setOfficialSounds(official);
+        })
         .catch(() => {});
 
       // Fetch TTS settings
@@ -308,6 +324,32 @@ function ConfigApp() {
       flash("Sound deleted");
     } catch (e) {
       setError(e.message);
+    }
+  }
+
+  async function handleAddOfficialSound(sound) {
+    setError(null);
+    setAddingOfficialId(sound.id);
+    try {
+      const res = await fetch(`${EBS_BASE}/api/sounds/library/add`, {
+        method: "POST",
+        headers: { ...headers(), "Content-Type": "application/json" },
+        body: JSON.stringify({ ownerUserId: sound.ownerUserId, soundId: sound.id }),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error || "Failed to add sound");
+      }
+      await fetchSounds(auth.token);
+      logEvent("official_sound_added", { soundId: sound.id });
+      setOfficialSounds((prev) =>
+        prev.map((s) => (s.id === sound.id ? { ...s, owned: true } : s)),
+      );
+      flash(`Added "${sound.name}"`);
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setAddingOfficialId(null);
     }
   }
 
@@ -516,6 +558,56 @@ function ConfigApp() {
           The overlay page must be open (in OBS or a browser) for alerts to play. An "Overlay not active" warning appears in the viewer panel when it is not connected.
         </p>
       </div>
+
+      {officialSounds.length > 0 && (
+        <div style={{ ...styles.card, marginBottom: 12 }}>
+          <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", marginBottom: 8 }}>
+            <h3 style={styles.subHeading}>Official Sound Alerts</h3>
+            <a
+              href={`${EBS_BASE}/sounds/config#library`}
+              target="_blank"
+              rel="noopener noreferrer"
+              style={styles.link}
+            >
+              Find more on Livestreamer Hub &rarr;
+            </a>
+          </div>
+          <p style={{ margin: "0 0 10px", fontSize: 11, opacity: 0.6 }}>
+            A few ready-made alerts to get you started — add any of these instantly, no files needed.
+          </p>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+            {officialSounds.map((s) => (
+              <div
+                key={s.id}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 8,
+                  padding: "6px 10px",
+                  borderRadius: 8,
+                  background: t.surfaceMuted,
+                  border: `1px solid ${t.surfaceBorder}`,
+                  fontSize: 12,
+                }}
+              >
+                <span>{s.name}</span>
+                <button
+                  style={{
+                    ...styles.btnSmall,
+                    background: s.owned ? t.secondaryBtnBg : t.accent,
+                    color: s.owned ? t.secondaryBtnText : "#fff",
+                    padding: "3px 8px",
+                  }}
+                  disabled={s.owned || addingOfficialId === s.id}
+                  onClick={() => handleAddOfficialSound(s)}
+                >
+                  {s.owned ? "Added" : addingOfficialId === s.id ? "Adding..." : "+ Add"}
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {error && <div style={styles.error}>{error}</div>}
       {success && <div style={styles.success}>{success}</div>}

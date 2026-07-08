@@ -1,16 +1,23 @@
-import { readFile, writeFile, mkdir, unlink, stat, copyFile, rm } from "fs/promises";
+import { readFile, mkdir, unlink, stat, copyFile, rm } from "fs/promises";
 import { existsSync } from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
 import crypto from "crypto";
 import { VALID_TIERS, DEFAULT_TIER } from "./tiers.js";
 import { getUserProfile } from "./user_profiles.js";
+import { atomicWriteFile } from "./atomic_write.js";
 
 const DATA_DIR = process.env.DATA_DIR || process.cwd();
 export const SOUNDS_PATH = path.resolve(DATA_DIR, "overlay-sound-alerts.json");
 export const SOUNDS_FILE_DIR = path.resolve(DATA_DIR, "sounds");
 
 const soundAlertsByUser = new Map(); // userId -> { sounds: Map<soundId, SoundConfig>, settings: {} }
+
+// Reserved pseudo-broadcaster ID that owns the admin-curated "official"
+// starter library. Not a real Twitch channel ID (those are always numeric),
+// so it can't collide with one. Sounds owned by this ID are always shared,
+// pre-approved, and flagged isOfficial — see normalizeSound().
+export const OFFICIAL_LIBRARY_UID = "official";
 
 export const ALLOWED_MIME_TYPES = [
   "audio/mpeg",
@@ -19,6 +26,8 @@ export const ALLOWED_MIME_TYPES = [
   "audio/webm",
   "audio/mp4",
   "audio/x-wav",
+  "audio/flac",
+  "audio/x-flac",
 ];
 
 export const ALLOWED_VIDEO_MIME_TYPES = [
@@ -54,9 +63,16 @@ const MIME_TO_EXT = {
   "audio/webm": "webm",
   "audio/mp4": "m4a",
   "audio/x-wav": "wav",
+  "audio/flac": "flac",
+  "audio/x-flac": "flac",
 };
 
-export const MAX_FILE_SIZE = 1 * 1024 * 1024; // 1 MB
+export const MAX_FILE_SIZE = 1 * 1024 * 1024; // 1 MB — regular per-broadcaster uploads
+// Admin-curated official library isn't subject to the same storage-abuse
+// concerns as arbitrary broadcaster uploads, and lossless source files (e.g.
+// FLAC from Freesound) run larger — generous cap rather than no cap at all,
+// just to guard against a wildly mis-selected file.
+export const MAX_OFFICIAL_LIBRARY_FILE_SIZE = 100 * 1024 * 1024; // 100 MB
 export const MAX_VIDEO_FILE_SIZE = 10 * 1024 * 1024; // 10 MB
 export const MAX_SOUNDS_PER_USER = 20;
 
@@ -121,7 +137,7 @@ export async function loadSoundAlerts() {
         }
         if (userData.sounds && typeof userData.sounds === "object") {
           for (const [sid, sound] of Object.entries(userData.sounds)) {
-            const normalized = normalizeSound({ id: sid, ...sound });
+            const normalized = normalizeSound({ id: sid, ...sound }, uid);
             user.sounds.set(normalized.id, normalized);
           }
         }
@@ -142,7 +158,7 @@ async function persistSoundAlerts() {
         obj[uid].sounds[sid] = sound;
       }
     }
-    await writeFile(SOUNDS_PATH, JSON.stringify(obj, null, 2), "utf-8");
+    await atomicWriteFile(SOUNDS_PATH, JSON.stringify(obj, null, 2));
   } catch {}
 }
 
@@ -150,8 +166,9 @@ async function persistSoundAlerts() {
 
 export const VALID_TYPES = ["sound", "clip", "video"];
 
-function normalizeSound(raw = {}) {
+function normalizeSound(raw = {}, uid = null) {
   const now = nowIso();
+  const isOfficial = uid === OFFICIAL_LIBRARY_UID;
   return {
     id: raw.id ? String(raw.id) : `snd_${crypto.randomUUID().slice(0, 12)}`,
     type: VALID_TYPES.includes(raw.type) ? raw.type : "sound",
@@ -167,7 +184,10 @@ function normalizeSound(raw = {}) {
     enabled: typeof raw.enabled === "boolean" ? raw.enabled : true,
     volume: sanitizeNumber(raw.volume, 80, 0, 100),
     cooldownMs: sanitizeNumber(raw.cooldownMs, 5000, 0, 60000),
-    shared: typeof raw.shared === "boolean" ? raw.shared : false,
+    // Sounds owned by the official library are always shared/approved,
+    // regardless of what's passed in — this is a trust boundary, not just a
+    // default, so it's enforced here rather than relying on every caller.
+    shared: isOfficial ? true : (typeof raw.shared === "boolean" ? raw.shared : false),
     sourceUserId: sanitizeString(raw.sourceUserId, ""),
     sourceSoundId: sanitizeString(raw.sourceSoundId, ""),
     tags: Array.isArray(raw.tags)
@@ -176,9 +196,16 @@ function normalizeSound(raw = {}) {
     // Defaults to "approved" (not "pending") so every sound that was already
     // shared before this field existed stays visible in the library — only
     // newly-shared sounds go through moderation (see routes_sounds.js).
-    moderationStatus: ["pending", "approved", "rejected"].includes(raw.moderationStatus)
-      ? raw.moderationStatus
-      : "approved",
+    moderationStatus: isOfficial
+      ? "approved"
+      : ["pending", "approved", "rejected"].includes(raw.moderationStatus)
+        ? raw.moderationStatus
+        : "approved",
+    isOfficial,
+    // Optional provenance record for licensed source material (e.g. "Freesound
+    // CC0" + a URL) — not shown to broadcasters, kept for our own paper trail.
+    sourceUrl: sanitizeString(raw.sourceUrl, ""),
+    sourceLicense: sanitizeString(raw.sourceLicense, ""),
     createdAt: raw.createdAt || now,
     updatedAt: raw.updatedAt || now,
   };
@@ -216,10 +243,12 @@ export function getSound(uid, soundId) {
 
 export function createSound(uid, data = {}) {
   const user = ensureUser(uid);
-  if (user.sounds.size >= MAX_SOUNDS_PER_USER) {
+  // The official library is admin-curated and deliberately not capped at the
+  // normal per-broadcaster limit — it's meant to grow into a real catalog.
+  if (uid !== OFFICIAL_LIBRARY_UID && user.sounds.size >= MAX_SOUNDS_PER_USER) {
     return { error: `Maximum of ${MAX_SOUNDS_PER_USER} sounds reached` };
   }
-  const sound = normalizeSound(data);
+  const sound = normalizeSound(data, uid);
   user.sounds.set(sound.id, sound);
   persistSoundAlerts().catch(() => {});
   return deepClone(sound);
@@ -241,12 +270,18 @@ export function updateSound(uid, soundId, patch = {}) {
   if ("imageFilename" in patch) sound.imageFilename = sanitizeString(patch.imageFilename, sound.imageFilename);
   if ("clipUrl" in patch) sound.clipUrl = sanitizeString(patch.clipUrl, sound.clipUrl);
   if ("clipSlug" in patch) sound.clipSlug = sanitizeString(patch.clipSlug, sound.clipSlug);
-  if ("shared" in patch) sound.shared = Boolean(patch.shared);
   if ("tags" in patch && Array.isArray(patch.tags)) {
     sound.tags = patch.tags.map((t) => sanitizeString(t, "").trim().toLowerCase()).filter(Boolean).slice(0, 5);
   }
-  if ("moderationStatus" in patch && ["pending", "approved", "rejected"].includes(patch.moderationStatus)) {
-    sound.moderationStatus = patch.moderationStatus;
+  if ("sourceUrl" in patch) sound.sourceUrl = sanitizeString(patch.sourceUrl, sound.sourceUrl);
+  if ("sourceLicense" in patch) sound.sourceLicense = sanitizeString(patch.sourceLicense, sound.sourceLicense);
+  // Official-library sounds are always shared/approved — see normalizeSound().
+  // Only non-official sounds can have these fields changed via patch.
+  if (uid !== OFFICIAL_LIBRARY_UID) {
+    if ("shared" in patch) sound.shared = Boolean(patch.shared);
+    if ("moderationStatus" in patch && ["pending", "approved", "rejected"].includes(patch.moderationStatus)) {
+      sound.moderationStatus = patch.moderationStatus;
+    }
   }
   sound.updatedAt = nowIso();
   persistSoundAlerts().catch(() => {});
@@ -354,6 +389,7 @@ const DEFAULT_SOUNDS = [
  * Only runs when the user has zero sounds — idempotent after first call.
  */
 export async function seedDefaultSounds(uid) {
+  if (uid === OFFICIAL_LIBRARY_UID) return; // curated separately, never auto-seeded
   const user = ensureUser(uid);
   if (user.sounds.size > 0) return; // already has sounds, skip
 
@@ -428,17 +464,19 @@ export function getSharedLibrary(requestingUserId = null) {
         type: sound.type,
         hasImage: Boolean(sound.imageFilename),
         ownerUserId: uid,
-        ownerDisplayName: profile?.displayName || profile?.login || null,
+        ownerDisplayName: sound.isOfficial ? "Livestreamer Hub" : (profile?.displayName || profile?.login || null),
         owned: ownedSet.has(`${uid}:${sound.id}`),
         tags: sound.tags || [],
+        isOfficial: sound.isOfficial,
         createdAt: sound.createdAt,
       });
     }
   }
   return results.sort((a, b) => {
+    if (a.isOfficial !== b.isOfficial) return a.isOfficial ? -1 : 1; // official first
     const aDate = Date.parse(a.createdAt || "") || 0;
     const bDate = Date.parse(b.createdAt || "") || 0;
-    return bDate - aDate; // newest first
+    return bDate - aDate; // then newest first
   });
 }
 
@@ -537,7 +575,7 @@ export async function copySoundToUser(sourceUid, sourceSoundId, destUid, { fileC
     shared: false, // copies are not shared by default
     sourceUserId: String(sourceUid),
     sourceSoundId: String(sourceSoundId),
-  });
+  }, destUid);
 
   destUser.sounds.set(newSound.id, newSound);
   persistSoundAlerts().catch(() => {});

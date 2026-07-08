@@ -39,7 +39,8 @@
       "Bash(curl -s -o /dev/null -w \"%{http_code}\\\\n\" http://localhost:8080/sounds/config)",
       "Bash(curl -s http://localhost:8080/api/sounds/activity)",
       "Bash(node --input-type=module -e ' *)",
-      "Bash(lsof -ti:8080)"
+      "Bash(lsof -ti:8080)",
+      "WebFetch(domain:freesound.org)"
     ]
   }
 }

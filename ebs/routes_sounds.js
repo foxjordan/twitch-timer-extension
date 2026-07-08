@@ -23,7 +23,7 @@ import {
 } from "./r2.js";
 import { logSoundEvent, getPlayCountsForPairs } from "./alert_events_store.js";
 import { db } from "./db.js";
-import { getUserProfile, setUserProfile } from "./user_profiles.js";
+import { backfillUserProfile } from "./user_profiles.js";
 import { fetchUserDisplayName } from "./twitch_api.js";
 import { getBannerConfig } from "./banner_store.js";
 
@@ -34,7 +34,7 @@ const execFileAsync = promisify(execFile);
 // Upload a file from a local path to storage (R2 or local disk).
 // In R2 mode: streams to R2 then deletes the local temp file.
 // In disk mode: renames from tmpPath to the final path under SOUNDS_FILE_DIR/{uid}.
-async function uploadToStorage(uid, filename, tmpPath, mimeType) {
+export async function uploadToStorage(uid, filename, tmpPath, mimeType) {
   if (r2Enabled) {
     const key = r2SoundKey(String(uid), filename);
     const stream = createReadStream(tmpPath);
@@ -50,7 +50,7 @@ async function uploadToStorage(uid, filename, tmpPath, mimeType) {
 // Serve a sound file (audio or video) from storage.
 // In R2 mode: redirects to a presigned URL.
 // In disk mode: pipes the local file.
-async function serveFileFromStorage(res, uid, sound, cacheControl = 'no-store') {
+export async function serveFileFromStorage(res, uid, sound, cacheControl = 'no-store') {
   if (r2Enabled) {
     try {
       const key = r2SoundKey(String(uid), sound.filename);
@@ -140,7 +140,7 @@ async function serveImageFromStorage(res, uid, filename, cacheControl = 'public,
 }
 
 // Delete a file from storage (best-effort, silent on failure).
-async function deleteFileFromStorage(uid, filename) {
+export async function deleteFileFromStorage(uid, filename) {
   if (r2Enabled && filename) {
     await deleteR2Object(r2SoundKey(String(uid), filename)).catch(() => {});
   }
@@ -358,20 +358,6 @@ export function mountSoundRoutes(app, deps = {}) {
     return null;
   }
 
-  // Broadcasters who only ever use the Twitch extension config panel (JWT auth,
-  // no Twitch OAuth login) never hit setUserProfile, so they show as "Unknown"
-  // in the admin dashboard. Backfill their display name once via Twitch's app
-  // access token, which needs no stored user token or extra scopes.
-  const profileBackfillAttempted = new Set();
-  async function backfillBroadcasterProfile(uid) {
-    if (getUserProfile(uid) || profileBackfillAttempted.has(uid)) return;
-    profileBackfillAttempted.add(uid);
-    try {
-      const displayName = await fetchUserDisplayName(uid, uid);
-      if (displayName) setUserProfile(uid, null, displayName);
-    } catch {}
-  }
-
   // Require any valid extension JWT (viewer, broadcaster, moderator)
   function requireExtensionAuth(req, res) {
     const claims = verifyExtensionJwt(req);
@@ -394,7 +380,7 @@ export function mountSoundRoutes(app, deps = {}) {
   app.get("/api/sounds", async (req, res) => {
     const uid = requireBroadcaster(req, res);
     if (!uid) return;
-    backfillBroadcasterProfile(uid).catch(() => {});
+    backfillUserProfile(uid).catch(() => {});
     await seedDefaultSounds(uid);
     const sounds = listSounds(uid);
     const settings = getSoundSettings(uid);
@@ -816,7 +802,7 @@ export function mountSoundRoutes(app, deps = {}) {
   app.get("/api/sounds/library/:ownerUserId/:soundId/image", async (req, res) => {
     const uid = requireBroadcaster(req, res);
     if (!uid) return;
-    if (!/^\w+$/.test(req.params.ownerUserId) || !/^\w+$/.test(req.params.soundId)) {
+    if (!/^[\w-]+$/.test(req.params.ownerUserId) || !/^[\w-]+$/.test(req.params.soundId)) {
       return res.status(400).json({ error: "Invalid parameters" });
     }
     const sound = getSound(req.params.ownerUserId, req.params.soundId);
@@ -830,7 +816,7 @@ export function mountSoundRoutes(app, deps = {}) {
   app.get("/api/sounds/library/:ownerUserId/:soundId/preview", async (req, res) => {
     const uid = requireBroadcaster(req, res);
     if (!uid) return;
-    if (!/^\w+$/.test(req.params.ownerUserId) || !/^\w+$/.test(req.params.soundId)) {
+    if (!/^[\w-]+$/.test(req.params.ownerUserId) || !/^[\w-]+$/.test(req.params.soundId)) {
       return res.status(400).json({ error: "Invalid parameters" });
     }
     const sound = getSound(req.params.ownerUserId, req.params.soundId);

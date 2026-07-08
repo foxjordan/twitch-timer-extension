@@ -52,6 +52,8 @@ import { mountOverlayApiRoutes } from "./routes_overlay_api.js";
 import { mountOverlayPageRoutes } from "./routes_overlay_page.js";
 import { mountDelegateRoutes } from "./routes_delegate.js";
 import { mountLibraryModerationRoutes } from "./routes_library_moderation.js";
+import { mountAnalyticsRoutes } from "./routes_analytics.js";
+import { mountOfficialLibraryRoutes } from "./routes_official_library.js";
 import { isDelegate } from "./delegate_store.js";
 import { mountHomePageRoutes } from "./routes_home_page.js";
 import { mountGoalRoutes } from "./routes_goals.js";
@@ -1245,6 +1247,10 @@ mountOverlayPageRoutes(app, {
 mountDelegateRoutes(app, { getUserProfile });
 
 mountLibraryModerationRoutes(app);
+
+mountAnalyticsRoutes(app);
+
+mountOfficialLibraryRoutes(app);
 
 mountHomePageRoutes(app);
 

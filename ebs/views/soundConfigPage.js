@@ -716,7 +716,7 @@ export function renderSoundConfigPage(options = {}) {
             thumb.style.cssText = 'width:40px; height:40px; border-radius:6px; overflow:hidden; flex-shrink:0; background:var(--surface-color,#1f1f23); display:flex; align-items:center; justify-content:center;';
             if (s.imageFilename) {
               var img = document.createElement('img');
-              img.src = '/api/sounds/' + encodeURIComponent(s.id) + '/image';
+              img.src = API_BASE + '/' + encodeURIComponent(s.id) + '/image';
               img.alt = '';
               img.style.cssText = 'width:100%; height:100%; object-fit:cover;';
               img.onerror = function() { this.style.display = 'none'; };
@@ -2130,7 +2130,7 @@ export function renderSoundConfigPage(options = {}) {
         function fetchActivity() {
           var topSoundsEl = document.getElementById('activityTopSounds');
           var topViewersEl = document.getElementById('activityTopViewers');
-          fetch('/api/sounds/activity')
+          fetch(API_BASE + '/activity')
             .then(function(r) { return r.json(); })
             .then(function(data) {
               if (data.error) throw new Error(data.error);

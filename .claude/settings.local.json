@@ -40,7 +40,13 @@
       "Bash(curl -s http://localhost:8080/api/sounds/activity)",
       "Bash(node --input-type=module -e ' *)",
       "Bash(lsof -ti:8080)",
-      "WebFetch(domain:freesound.org)"
+      "WebFetch(domain:freesound.org)",
+      "mcp__claude_ai_Supabase__list_projects",
+      "mcp__claude_ai_Supabase__list_tables",
+      "mcp__claude_ai_Supabase__get_logs",
+      "mcp__claude_ai_Vercel__list_teams",
+      "mcp__claude_ai_Vercel__list_projects",
+      "Bash(DATABASE_URL=postgres://u:p@localhost:5432/db node -e ' *)"
     ]
   }
 }

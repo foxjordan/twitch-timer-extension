@@ -97,7 +97,7 @@ async function proxyFileFromStorage(res, uid, sound, cacheControl = 'no-store') 
 // Proxy an image through the EBS (no redirect). Same reason as proxyFileFromStorage:
 // extension connect-src does not include the full R2 bucket hostname.
 const EXT_TO_MIME = { jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', gif: 'image/gif', webp: 'image/webp' };
-async function proxyImageFromStorage(res, uid, filename, cacheControl = 'public, max-age=3600') {
+export async function proxyImageFromStorage(res, uid, filename, cacheControl = 'public, max-age=3600') {
   const ext = filename.split('.').pop().toLowerCase();
   const mime = EXT_TO_MIME[ext] || 'image/jpeg';
   if (r2Enabled) {

@@ -10,8 +10,12 @@ import { pipeline } from "stream/promises";
 import path from "path";
 import crypto from "crypto";
 import fetch from "node-fetch";
-import { fetchClipInfo, downloadClipVideo } from "./twitch_api.js";
+import { fetchClipInfo, downloadClipVideo, fetchUserDisplayName } from "./twitch_api.js";
 import { DEFAULT_TIER } from "./tiers.js";
+import { db } from "./db.js";
+import { getPlayCountsForPairs } from "./alert_events_store.js";
+import { serveFileFromStorage, proxyImageFromStorage } from "./routes_sounds.js";
+import { r2Enabled, r2SoundKey, copyR2Object } from "./r2.js";
 import {
   listSounds,
   getSound,
@@ -25,6 +29,9 @@ import {
   generateFilename,
   generateImageFilename,
   seedDefaultSounds,
+  getSharedLibrary,
+  getSoundLineage,
+  copySoundToUser,
   ALLOWED_MIME_TYPES,
   ALLOWED_IMAGE_MIME_TYPES,
   ALLOWED_VIDEO_MIME_TYPES,
@@ -491,6 +498,137 @@ export function mountAdminSoundRoutes(app, ctx = {}) {
     } catch (err) {
       try { await fsUnlink(tmpPath); } catch {}
       res.status(500).json({ error: "Trim failed: " + (err?.stderr || err?.message || "Unknown error") });
+    }
+  });
+
+  // ===== Community Library (admin view into a managed streamer's library) =====
+
+  // Browse shared sounds from all users, as seen by the managed streamer
+  app.get("/api/admin/sounds/:userId/library", async (req, res) => {
+    if (!requireSuperAdmin(req, res)) return;
+    const uid = String(req.params.userId);
+    const library = getSharedLibrary(uid);
+    const sort = req.query.sort;
+
+    if (sort !== "popular" && sort !== "trending") {
+      return res.json({ sounds: library });
+    }
+
+    try {
+      const sinceDays = sort === "trending" ? 7 : null;
+      const lineageByItem = library.map((item) => getSoundLineage(item.ownerUserId, item.id));
+      const allPairs = lineageByItem.flat();
+      const counts = await getPlayCountsForPairs(allPairs, sinceDays);
+      const withCounts = library.map((item, i) => {
+        const playCount = lineageByItem[i].reduce(
+          (sum, p) => sum + (counts.get(`${p.channelId}:${p.soundId}`) || 0),
+          0,
+        );
+        return { ...item, playCount };
+      });
+      withCounts.sort((a, b) => b.playCount - a.playCount);
+      res.json({ sounds: withCounts });
+    } catch (err) {
+      logger.error("admin_library_sort_failed", { sort, message: err?.message });
+      res.json({ sounds: library });
+    }
+  });
+
+  // Serve image for a library sound (from original owner's directory)
+  app.get("/api/admin/sounds/:userId/library/:ownerUserId/:soundId/image", async (req, res) => {
+    if (!requireSuperAdmin(req, res)) return;
+    if (!/^[\w-]+$/.test(req.params.ownerUserId) || !/^[\w-]+$/.test(req.params.soundId)) {
+      return res.status(400).json({ error: "Invalid parameters" });
+    }
+    const sound = getSound(req.params.ownerUserId, req.params.soundId);
+    if (!sound || !sound.shared || !sound.imageFilename) {
+      return res.status(404).json({ error: "Image not found" });
+    }
+    await proxyImageFromStorage(res, req.params.ownerUserId, sound.imageFilename);
+  });
+
+  // Serve audio preview for a library sound (from original owner's directory)
+  app.get("/api/admin/sounds/:userId/library/:ownerUserId/:soundId/preview", async (req, res) => {
+    if (!requireSuperAdmin(req, res)) return;
+    if (!/^[\w-]+$/.test(req.params.ownerUserId) || !/^[\w-]+$/.test(req.params.soundId)) {
+      return res.status(400).json({ error: "Invalid parameters" });
+    }
+    const sound = getSound(req.params.ownerUserId, req.params.soundId);
+    if (!sound || !sound.shared) {
+      return res.status(404).json({ error: "Sound not found or not shared" });
+    }
+    res.setHeader("Content-Type", sound.mimeType || "audio/mpeg");
+    await serveFileFromStorage(res, req.params.ownerUserId, sound, "public, max-age=3600");
+  });
+
+  // Add a library sound to the managed streamer's own alerts (copies the file)
+  app.post("/api/admin/sounds/:userId/library/add", async (req, res) => {
+    if (!requireSuperAdmin(req, res)) return;
+    const uid = String(req.params.userId);
+    const { ownerUserId, soundId } = req.body || {};
+    if (!ownerUserId || !soundId) {
+      return res.status(400).json({ error: "ownerUserId and soundId are required" });
+    }
+    try {
+      const fileCopyFn = r2Enabled
+        ? async (srcFilename, destFilename) => {
+            const srcKey = r2SoundKey(String(ownerUserId), srcFilename);
+            const destKey = r2SoundKey(String(uid), destFilename);
+            await copyR2Object(srcKey, destKey);
+            const src = getSound(String(ownerUserId), soundId);
+            return { size: src?.sizeBytes || 0 };
+          }
+        : undefined;
+      const result = await copySoundToUser(ownerUserId, soundId, uid, { fileCopyFn });
+      if (result.error) return res.status(400).json(result);
+      logger.info("admin_library_sound_added", { admin: req.session.twitchUser.id, userId: uid, sourceUserId: ownerUserId, sourceSoundId: soundId, newSoundId: result.id });
+      res.status(201).json({ sound: result });
+    } catch (err) {
+      logger.error("admin_library_add_failed", { userId: uid, message: err?.message });
+      res.status(500).json({ error: "Failed to add sound from library" });
+    }
+  });
+
+  // Broadcaster-facing activity analytics: top sounds and top viewers over the
+  // last 30 days, for the managed streamer.
+  app.get("/api/admin/sounds/:userId/activity", async (req, res) => {
+    if (!requireSuperAdmin(req, res)) return;
+    const uid = String(req.params.userId);
+    try {
+      const [topSoundsRes, topViewersRes] = await Promise.all([
+        db.query(
+          `SELECT sound_id, sound_name, COUNT(*)::int AS count
+             FROM sound_alert_events
+            WHERE channel_id = $1 AND event_kind = 'played' AND created_at > NOW() - INTERVAL '30 days'
+            GROUP BY sound_id, sound_name
+            ORDER BY count DESC
+            LIMIT 10`,
+          [uid],
+        ),
+        db.query(
+          `SELECT viewer_user_id, COUNT(*)::int AS count
+             FROM sound_alert_events
+            WHERE channel_id = $1 AND event_kind = 'played' AND created_at > NOW() - INTERVAL '30 days'
+              AND viewer_user_id IS NOT NULL
+            GROUP BY viewer_user_id
+            ORDER BY count DESC
+            LIMIT 10`,
+          [uid],
+        ),
+      ]);
+      const topViewers = await Promise.all(
+        topViewersRes.rows.map(async (r) => ({
+          viewerUserId: r.viewer_user_id,
+          displayName: (await fetchUserDisplayName(r.viewer_user_id, uid).catch(() => null)) || r.viewer_user_id,
+          count: r.count,
+        })),
+      );
+      res.json({
+        topSounds: topSoundsRes.rows,
+        topViewers,
+      });
+    } catch (err) {
+      res.status(500).json({ error: err?.message || "Query failed" });
     }
   });
 

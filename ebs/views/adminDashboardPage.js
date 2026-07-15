@@ -1367,7 +1367,6 @@ export function renderAdminDashboardPage(options = {}) {
                   var previewSelBtn = document.createElement('button');
                   previewSelBtn.className = 'secondary';
                   previewSelBtn.textContent = '\\u25B6 Preview selection';
-                  previewSelBtn.disabled = true;
                   row.appendChild(previewSelBtn);
 
                   trimPanel.appendChild(row);
@@ -1424,23 +1423,21 @@ export function renderAdminDashboardPage(options = {}) {
                   });
                   window.addEventListener('mouseup', function() { dragging = null; });
 
-                  // Waveform rendering + trimmed-selection playback preview
-                  // are best-effort — if decoding fails (unsupported codec,
-                  // network hiccup) the slider/inputs still work fine, just
-                  // without the visual or the preview button.
-                  var actx = null;
-                  var decodedBuffer = null;
-                  var activeSource = null;
-                  fetch('/api/admin/official-library/' + encodeURIComponent(s.id) + '/audio', { credentials: 'same-origin' })
-                    .then(function(r) { return r.arrayBuffer(); })
-                    .then(function(buf) {
-                      var Ctx = window.AudioContext || window.webkitAudioContext;
-                      actx = new Ctx();
-                      return actx.decodeAudioData(buf);
+                  // Waveform is rendered from server-computed peaks (ffmpeg-decoded
+                  // — see the /waveform route) rather than the browser's Web Audio
+                  // API, since Safari can't decodeAudioData() FLAC (a format the
+                  // official library explicitly supports) and was silently leaving
+                  // this box empty. This fetch is independent of the
+                  // decode-for-playback fetch below, so the visual always works
+                  // even when the "Preview selection" button can't.
+                  fetch('/api/admin/official-library/' + encodeURIComponent(s.id) + '/waveform', { credentials: 'same-origin' })
+                    .then(function(r) {
+                      if (!r.ok) throw new Error();
+                      return r.json();
                     })
-                    .then(function(buffer) {
-                      decodedBuffer = buffer;
-                      previewSelBtn.disabled = false;
+                    .then(function(data) {
+                      var peaks = data.peaks || [];
+                      if (!peaks.length) return;
                       var dpr = window.devicePixelRatio || 1;
                       var w = waveWrap.clientWidth || 300;
                       var h = 64;
@@ -1448,49 +1445,60 @@ export function renderAdminDashboardPage(options = {}) {
                       waveCanvas.height = h * dpr;
                       var wctx = waveCanvas.getContext('2d');
                       wctx.scale(dpr, dpr);
-                      var chan = buffer.getChannelData(0);
-                      var step = Math.max(1, Math.ceil(chan.length / w));
                       var mid = h / 2;
                       wctx.strokeStyle = '#9146ff';
                       wctx.lineWidth = 1;
                       wctx.beginPath();
-                      for (var i = 0; i < w; i++) {
-                        var mn = 1.0, mx = -1.0;
-                        for (var j = 0; j < step; j++) {
-                          var idx = i * step + j;
-                          if (idx >= chan.length) break;
-                          var v = chan[idx];
-                          if (v < mn) mn = v;
-                          if (v > mx) mx = v;
-                        }
-                        if (mx < mn) { mn = 0; mx = 0; }
-                        wctx.moveTo(i + 0.5, mid + mn * mid * 0.9);
-                        wctx.lineTo(i + 0.5, mid + mx * mid * 0.9);
+                      for (var i = 0; i < peaks.length; i++) {
+                        var x = (i / peaks.length) * w;
+                        var mn = peaks[i][0];
+                        var mx = peaks[i][1];
+                        wctx.moveTo(x + 0.5, mid + mn * mid * 0.9);
+                        wctx.lineTo(x + 0.5, mid + mx * mid * 0.9);
                       }
                       wctx.stroke();
                     })
-                    .catch(function() {});
+                    .catch(function() {
+                      var failMsg = document.createElement('div');
+                      failMsg.style.cssText = 'position:absolute; inset:0; display:flex; align-items:center; justify-content:center; font-size:11px; opacity:0.5; pointer-events:none;';
+                      failMsg.textContent = 'Waveform unavailable';
+                      waveWrap.appendChild(failMsg);
+                    });
 
+                  // Trimmed-selection playback preview plays through a plain
+                  // <audio> element pointed at the same /audio route the ordinary
+                  // Preview button already uses, seeking to the selection and
+                  // pausing at its end — rather than decoding via the Web Audio
+                  // API (AudioContext.decodeAudioData), which Safari can't do for
+                  // FLAC (a format the official library explicitly supports).
+                  // <audio> element playback supports every format ffmpeg can
+                  // trim, so this covers everything the ordinary Preview does.
+                  var selAudio = null;
                   previewSelBtn.addEventListener('click', function() {
-                    if (activeSource) {
-                      try { activeSource.stop(); } catch (e) {}
-                      activeSource = null;
-                      previewSelBtn.textContent = '\\u25B6 Preview selection';
+                    if (selAudio) {
+                      selAudio.pause();
                       return;
                     }
-                    if (!decodedBuffer || !actx) return;
                     var ps = parseFloat(startInput.value) || 0;
                     var pe = parseFloat(endInput.value) || duration;
                     if (pe <= ps) return;
-                    var src = actx.createBufferSource();
-                    src.buffer = decodedBuffer;
-                    src.connect(actx.destination);
-                    src.onended = function() {
-                      activeSource = null;
+                    var audio = new Audio('/api/admin/official-library/' + encodeURIComponent(s.id) + '/audio');
+                    selAudio = audio;
+                    var onTime = function() {
+                      if (audio.currentTime >= pe) audio.pause();
+                    };
+                    audio.addEventListener('timeupdate', onTime);
+                    var cleanup = function() {
+                      audio.removeEventListener('timeupdate', onTime);
+                      selAudio = null;
                       previewSelBtn.textContent = '\\u25B6 Preview selection';
                     };
-                    src.start(0, ps, pe - ps);
-                    activeSource = src;
+                    audio.onpause = cleanup;
+                    audio.onerror = cleanup;
+                    audio.addEventListener('loadedmetadata', function() {
+                      audio.currentTime = ps;
+                      audio.play().catch(cleanup);
+                    });
                     previewSelBtn.textContent = '\\u25A0 Stop';
                   });
 

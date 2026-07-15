@@ -170,6 +170,54 @@ export function mountOfficialLibraryRoutes(app) {
     }
   });
 
+  // Waveform peaks for the trim UI's visualizer. Computed server-side via
+  // ffmpeg (raw PCM decode) rather than the browser's Web Audio API — Safari
+  // in particular can't decodeAudioData() FLAC (a format the official
+  // library explicitly supports, since Freesound exports in it), which was
+  // silently failing and leaving the waveform box empty. ffmpeg has no such
+  // gap, so this works for every format the trim/duration routes already do.
+  app.get("/api/admin/official-library/:soundId/waveform", async (req, res) => {
+    if (!requireSuperAdmin(req, res)) return;
+    const sound = getSound(OFFICIAL_LIBRARY_UID, req.params.soundId);
+    if (!sound) return res.status(404).json({ error: "Sound not found" });
+
+    let probeTarget;
+    if (r2Enabled) {
+      probeTarget = await getR2PresignedUrl(r2SoundKey(OFFICIAL_LIBRARY_UID, sound.filename), 300);
+    } else {
+      probeTarget = getSoundFilePath(OFFICIAL_LIBRARY_UID, sound);
+    }
+
+    const BUCKETS = 300;
+    const SAMPLE_RATE = 8000;
+    try {
+      const { stdout } = await execFileAsync(
+        "ffmpeg",
+        ["-v", "error", "-i", probeTarget, "-ac", "1", "-ar", String(SAMPLE_RATE), "-f", "s16le", "pipe:1"],
+        { timeout: 10000, maxBuffer: 25 * 1024 * 1024, encoding: "buffer" },
+      );
+      const totalSamples = Math.floor(stdout.length / 2);
+      const perBucket = Math.max(1, Math.floor(totalSamples / BUCKETS));
+      const peaks = [];
+      for (let i = 0; i < BUCKETS; i++) {
+        const start = i * perBucket;
+        if (start >= totalSamples) break;
+        const end = Math.min(totalSamples, start + perBucket);
+        let min = 1, max = -1;
+        for (let j = start; j < end; j++) {
+          const v = stdout.readInt16LE(j * 2) / 32768;
+          if (v < min) min = v;
+          if (v > max) max = v;
+        }
+        peaks.push([Number(min.toFixed(3)), Number(max.toFixed(3))]);
+      }
+      res.json({ peaks });
+    } catch (err) {
+      logger.error("official_library_waveform_failed", { soundId: sound.id, detail: err?.stderr || err?.message });
+      res.status(500).json({ error: "Could not generate waveform" });
+    }
+  });
+
   // Trim a sound in place (server-side ffmpeg) — mirrors the broadcaster-facing
   // /api/sounds/:soundId/trim in routes_sounds.js exactly (same R2-safe
   // download-trim-reupload approach), just scoped to the official library.

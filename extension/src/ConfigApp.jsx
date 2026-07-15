@@ -61,11 +61,13 @@ function ConfigApp() {
   const [sounds, setSounds] = useState([]);
   const [officialSounds, setOfficialSounds] = useState([]);
   const [addingOfficialId, setAddingOfficialId] = useState(null);
+  const [previewingOfficialId, setPreviewingOfficialId] = useState(null);
+  const officialPreviewAudioRef = useRef(null);
   const [settings, setSettings] = useState({
     enabled: true,
     globalVolume: 100,
     globalCooldownMs: 3000,
-    maxQueueSize: 200,
+    maxQueueSize: 150,
     overlayDurationMs: 5000,
   });
   const [tiers, setTiers] = useState([]);
@@ -92,6 +94,7 @@ function ConfigApp() {
   const [initialLoadFailed, setInitialLoadFailed] = useState(false);
   const [bannerDismissed, setBannerDismissed] = useState(false);
   const [twitchTheme, setTwitchTheme] = useState("dark");
+  const [quickSetupOpen, setQuickSetupOpen] = useState(false);
   const previewAudioRef = useRef(null);
 
   const t = THEME_TOKENS[twitchTheme] || THEME_TOKENS.dark;
@@ -163,15 +166,19 @@ function ConfigApp() {
         .then((data) => { if (data.features) setExtConfig(data); })
         .catch(() => {});
 
-      // A handful of curated official sounds so new broadcasters have
-      // something to add immediately, without leaving the panel. Full
-      // browse/search stays dashboard-only — see plan notes on scope.
+      // Curated official sounds so new broadcasters have something to add
+      // immediately, without leaving the panel. Full browse/search stays
+      // dashboard-only — see plan notes on scope. We fetch the whole official
+      // pool (not just the first 10) so that once a broadcaster has added
+      // one, the panel can slide the next not-yet-owned sound into its place
+      // instead of just graying the button out — see the visibleOfficial
+      // derivation near the render, which filters+slices to 10 on the fly.
       fetch(`${EBS_BASE}/api/sounds/library`, {
         headers: { Authorization: `Bearer ${authData.token}` },
       })
         .then((r) => r.json())
         .then((data) => {
-          const official = (data.sounds || []).filter((s) => s.isOfficial).slice(0, 10);
+          const official = (data.sounds || []).filter((s) => s.isOfficial);
           setOfficialSounds(official);
         })
         .catch(() => {});
@@ -325,6 +332,59 @@ function ConfigApp() {
     } catch (e) {
       setError(e.message);
     }
+  }
+
+  function toggleOfficialPreview(sound) {
+    if (officialPreviewAudioRef.current) {
+      officialPreviewAudioRef.current.pause();
+      officialPreviewAudioRef.current = null;
+      const wasPlayingThis = previewingOfficialId === sound.id;
+      setPreviewingOfficialId(null);
+      if (wasPlayingThis) return;
+    }
+    setPreviewingOfficialId(sound.id);
+    // Get a short-lived token, then fetch the audio bytes as a blob and play
+    // via a blob: URL — mirrors playVoicePreview below. Twitch's extension
+    // iframe enforces its own CSP media-src that blocks <audio src> pointed
+    // directly at a cross-origin (livestreamerhub.com) URL even though the
+    // request itself is CORS-permitted; a blob: URL isn't subject to that
+    // check since the actual network fetch happens under connect-src.
+    fetch(
+      `${EBS_BASE}/api/sounds/preview-token/${sound.id}?channelId=${sound.ownerUserId}`,
+      { headers: { Authorization: `Bearer ${auth.token}` } },
+    )
+      .then((r) => {
+        if (!r.ok) throw new Error();
+        return r.json();
+      })
+      .then(({ token }) =>
+        fetch(
+          `${EBS_BASE}/api/sounds/preview/${sound.id}?pt=${encodeURIComponent(token)}&channelId=${sound.ownerUserId}`,
+        ),
+      )
+      .then((r) => {
+        if (!r.ok) throw new Error();
+        return r.blob();
+      })
+      .then((blob) => {
+        const url = URL.createObjectURL(blob);
+        const audio = new Audio(url);
+        officialPreviewAudioRef.current = audio;
+        audio.onended = () => {
+          URL.revokeObjectURL(url);
+          officialPreviewAudioRef.current = null;
+          setPreviewingOfficialId(null);
+        };
+        audio.onerror = () => {
+          URL.revokeObjectURL(url);
+          officialPreviewAudioRef.current = null;
+          setPreviewingOfficialId(null);
+        };
+        audio.play().catch(() => {});
+      })
+      .catch(() => {
+        setPreviewingOfficialId(null);
+      });
   }
 
   async function handleAddOfficialSound(sound) {
@@ -544,25 +604,95 @@ function ConfigApp() {
         </a>
       </div>
 
-      {/* Setup Guide */}
-      <div style={{ ...styles.card, marginBottom: 12 }}>
-        <h3 style={{ ...styles.subHeading, marginBottom: 8 }}>Quick Setup</h3>
-        <ol style={{ margin: 0, paddingLeft: 18, fontSize: 12, lineHeight: 1.8, opacity: 0.85 }}>
-          <li>Copy your <strong>OBS Overlay URL</strong> from the Settings section below.</li>
-          <li>In OBS, add a <strong>Browser Source</strong> at 1920×1080 and paste the URL.</li>
-          <li>Use <strong>Create Alert</strong> to upload sounds and set their Bits amount.</li>
-          <li>Make sure <strong>Enabled</strong> is checked so the viewer panel shows your alerts.</li>
-          <li>Viewers use Bits in your Twitch panel to trigger sounds and TTS on stream.</li>
-        </ol>
-        <p style={{ margin: "8px 0 0", fontSize: 11, opacity: 0.5 }}>
-          The overlay page must be open (in OBS or a browser) for alerts to play. An "Overlay not active" warning appears in the viewer panel when it is not connected.
-        </p>
+      {/* OBS Overlay URL — pinned near the top since it's the one thing
+          broadcasters need before anything else works, and easy to miss
+          when it was buried inside the Settings card further down. */}
+      {overlayUrl && (
+        <div style={{ ...styles.card, marginBottom: 12, padding: "10px 14px" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+            <span style={{ fontSize: 12, fontWeight: 600, flexShrink: 0 }}>OBS Overlay URL</span>
+            <div
+              style={{
+                flex: "1 1 240px",
+                minWidth: 0,
+                padding: "5px 8px",
+                background: t.inputBg,
+                borderRadius: 6,
+                border: `1px solid ${t.inputBorder}`,
+                fontSize: 10,
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+                whiteSpace: "nowrap",
+                fontFamily: "monospace",
+              }}
+              title={overlayUrl}
+            >
+              {overlayUrl}
+            </div>
+            <button
+              style={{ ...styles.btnSmall, flexShrink: 0 }}
+              onClick={() => {
+                navigator.clipboard
+                  .writeText(overlayUrl)
+                  .then(() => {
+                    setUrlCopied(true);
+                    setTimeout(() => setUrlCopied(false), 2000);
+                  })
+                  .catch(() => {});
+              }}
+            >
+              {urlCopied ? "Copied!" : "Copy URL"}
+            </button>
+          </div>
+          <p style={{ margin: "6px 0 0", fontSize: 10, opacity: 0.5 }}>
+            Add this as a Browser Source in OBS (1920×1080). Alerts only play while this page is open.
+          </p>
+        </div>
+      )}
+
+      {/* Setup Guide — collapsed by default to save space; the steps rarely
+          change once a broadcaster has set up once, so keep it out of the
+          way but easy to reopen. */}
+      <div style={{ ...styles.card, marginBottom: 12, padding: "8px 14px" }}>
+        <button
+          onClick={() => setQuickSetupOpen((v) => !v)}
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            width: "100%",
+            background: "none",
+            border: "none",
+            color: t.text,
+            cursor: "pointer",
+            padding: "4px 0",
+            font: "inherit",
+          }}
+        >
+          <h3 style={{ ...styles.subHeading, margin: 0 }}>Quick Setup</h3>
+          <span style={{ fontSize: 11, opacity: 0.6, transform: quickSetupOpen ? "rotate(180deg)" : "none", transition: "transform 0.15s" }}>
+            &#9660;
+          </span>
+        </button>
+        {quickSetupOpen && (
+          <>
+            <ol style={{ margin: "8px 0 0", paddingLeft: 18, fontSize: 12, lineHeight: 1.8, opacity: 0.85 }}>
+              <li>Copy your <strong>OBS Overlay URL</strong> above into an OBS Browser Source.</li>
+              <li>Use <strong>Add New Alert Media</strong> to upload sounds and set their Bits amount.</li>
+              <li>Make sure <strong>Enabled</strong> is checked in Settings so the viewer panel shows your alerts.</li>
+              <li>Viewers use Bits in your Twitch panel to trigger sounds and TTS on stream.</li>
+            </ol>
+            <p style={{ margin: "8px 0 0", fontSize: 11, opacity: 0.5 }}>
+              The overlay page must be open (in OBS or a browser) for alerts to play. An "Overlay not active" warning appears in the viewer panel when it is not connected.
+            </p>
+          </>
+        )}
       </div>
 
-      {officialSounds.length > 0 && (
+      {officialSounds.some((s) => !s.owned) && (
         <div style={{ ...styles.card, marginBottom: 12 }}>
           <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", marginBottom: 8 }}>
-            <h3 style={styles.subHeading}>Official Sound Alerts</h3>
+            <h3 style={styles.subHeading}>Popular Sound Alerts</h3>
             <a
               href={`${EBS_BASE}/sounds/config#library`}
               target="_blank"
@@ -576,35 +706,52 @@ function ConfigApp() {
             A few ready-made alerts to get you started — add any of these instantly, no files needed.
           </p>
           <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-            {officialSounds.map((s) => (
-              <div
-                key={s.id}
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 8,
-                  padding: "6px 10px",
-                  borderRadius: 8,
-                  background: t.surfaceMuted,
-                  border: `1px solid ${t.surfaceBorder}`,
-                  fontSize: 12,
-                }}
-              >
-                <span>{s.name}</span>
-                <button
+            {officialSounds
+              .filter((s) => !s.owned)
+              .slice(0, 10)
+              .map((s) => (
+                <div
+                  key={s.id}
                   style={{
-                    ...styles.btnSmall,
-                    background: s.owned ? t.secondaryBtnBg : t.accent,
-                    color: s.owned ? t.secondaryBtnText : "#fff",
-                    padding: "3px 8px",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 8,
+                    padding: "6px 10px",
+                    borderRadius: 8,
+                    background: t.surfaceMuted,
+                    border: `1px solid ${t.surfaceBorder}`,
+                    fontSize: 12,
                   }}
-                  disabled={s.owned || addingOfficialId === s.id}
-                  onClick={() => handleAddOfficialSound(s)}
                 >
-                  {s.owned ? "Added" : addingOfficialId === s.id ? "Adding..." : "+ Add"}
-                </button>
-              </div>
-            ))}
+                  <button
+                    title="Preview"
+                    onClick={() => toggleOfficialPreview(s)}
+                    style={{
+                      ...styles.btnSmall,
+                      background: "transparent",
+                      border: `1px solid ${t.surfaceBorder}`,
+                      color: t.text,
+                      padding: "3px 7px",
+                      lineHeight: 1,
+                    }}
+                  >
+                    {previewingOfficialId === s.id ? "■" : "▶"}
+                  </button>
+                  <span>{s.name}</span>
+                  <button
+                    style={{
+                      ...styles.btnSmall,
+                      background: t.accent,
+                      color: "#fff",
+                      padding: "3px 8px",
+                    }}
+                    disabled={addingOfficialId === s.id}
+                    onClick={() => handleAddOfficialSound(s)}
+                  >
+                    {addingOfficialId === s.id ? "Adding..." : "+ Add"}
+                  </button>
+                </div>
+              ))}
           </div>
         </div>
       )}
@@ -612,334 +759,235 @@ function ConfigApp() {
       {error && <div style={styles.error}>{error}</div>}
       {success && <div style={styles.success}>{success}</div>}
 
-      {/* Row 1: Settings + Create Alert side by side */}
-      <div style={styles.twoCol}>
-        {/* Global Settings */}
-        <div style={styles.card}>
-          <h3 style={styles.subHeading}>Settings</h3>
-          <label style={styles.row}>
-            <span>Enabled</span>
-            <input
-              type="checkbox"
-              checked={settings.enabled}
-              onChange={(e) =>
-                handleSettingsUpdate({ enabled: e.target.checked })
-              }
-            />
-          </label>
-          <label style={styles.row}>
-            <span>Global Volume</span>
-            <input
-              type="range"
-              min="0"
-              max="100"
-              value={settings.globalVolume}
-              onChange={(e) =>
-                handleSettingsUpdate({ globalVolume: Number(e.target.value) })
-              }
-              style={{ width: 120 }}
-            />
-            <span style={styles.muted}>{settings.globalVolume}%</span>
-          </label>
-          <label style={styles.row}>
-            <span>Cooldown (sec)</span>
-            <input
-              type="number"
-              min="0"
-              max="60"
-              value={Math.round(settings.globalCooldownMs / 1000)}
-              onChange={(e) =>
-                handleSettingsUpdate({
-                  globalCooldownMs: Number(e.target.value) * 1000,
-                })
-              }
-              style={styles.numberInput}
-            />
-          </label>
-          <label style={styles.row}>
-            <span>Max Queue</span>
-            <input
-              type="number"
-              min="1"
-              max="200"
-              value={settings.maxQueueSize}
-              onChange={(e) =>
-                handleSettingsUpdate({ maxQueueSize: Number(e.target.value) })
-              }
-              style={styles.numberInput}
-            />
-          </label>
-
-          {/* OBS Overlay URL — nested inside Settings */}
-          {overlayUrl && (
-            <div style={{ marginTop: 12, paddingTop: 12, borderTop: `1px solid ${t.surfaceBorder}` }}>
-              <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 6 }}>OBS Browser Source</div>
-              <p style={{ fontSize: 11, opacity: 0.6, marginBottom: 6 }}>
-                Add this URL as a Browser Source in OBS to play alerts on stream.
-              </p>
-              <div
-                style={{
-                  padding: "6px 8px",
-                  background: t.inputBg,
-                  borderRadius: 6,
-                  border: `1px solid ${t.inputBorder}`,
-                  fontSize: 10,
-                  wordBreak: "break-all",
-                  fontFamily: "monospace",
-                  marginBottom: 8,
-                  lineHeight: 1.4,
-                }}
-              >
-                {overlayUrl}
-              </div>
-              <button
-                style={styles.btnSmall}
-                onClick={() => {
-                  navigator.clipboard
-                    .writeText(overlayUrl)
-                    .then(() => {
-                      setUrlCopied(true);
-                      setTimeout(() => setUrlCopied(false), 2000);
-                    })
-                    .catch(() => {});
-                }}
-              >
-                {urlCopied ? "Copied!" : "Copy URL"}
-              </button>
-            </div>
-          )}
+      {/* Add New Alert Media */}
+      <div style={styles.card}>
+        <h3 style={styles.subHeading}>Add New Alert Media</h3>
+        {/* Tabs */}
+        <div style={{ display: "flex", gap: 4, marginBottom: 10 }}>
+          {[
+            { key: "sound", label: "Sound" },
+            ...(settings.videoClipsEnabled
+              ? [
+                  { key: "clip", label: "Twitch Clip" },
+                  { key: "video", label: "Video" },
+                ]
+              : []),
+          ].map((tab) => (
+            <button
+              key={tab.key}
+              onClick={() => setCreateTab(tab.key)}
+              style={{
+                ...styles.btnSmall,
+                background: createTab === tab.key ? t.accent : t.surfaceBorder,
+                opacity: createTab === tab.key ? 1 : 0.7,
+              }}
+            >
+              {tab.label}
+            </button>
+          ))}
         </div>
-
-        {/* Create Alert */}
-        <div style={styles.card}>
-          <h3 style={styles.subHeading}>Create Alert</h3>
-          {/* Tabs */}
-          <div style={{ display: "flex", gap: 4, marginBottom: 10 }}>
-            {[
-              { key: "sound", label: "Sound" },
-              ...(settings.videoClipsEnabled
-                ? [
-                    { key: "clip", label: "Twitch Clip" },
-                    { key: "video", label: "Video" },
-                  ]
-                : []),
-            ].map((tab) => (
-              <button
-                key={tab.key}
-                onClick={() => setCreateTab(tab.key)}
-                style={{
-                  ...styles.btnSmall,
-                  background: createTab === tab.key ? t.accent : t.surfaceBorder,
-                  opacity: createTab === tab.key ? 1 : 0.7,
-                }}
-              >
-                {tab.label}
-              </button>
-            ))}
+        {!settings.videoClipsEnabled && (
+          <div style={{ fontSize: 11, opacity: 0.5, marginBottom: 8 }}>
+            Video &amp; clip alerts are a Pro feature.
           </div>
-          {!settings.videoClipsEnabled && (
+        )}
+
+        {/* Sound tab */}
+        {createTab === "sound" && (
+          <form onSubmit={handleUpload}>
             <div style={{ fontSize: 11, opacity: 0.5, marginBottom: 8 }}>
-              Video &amp; clip alerts are a Pro feature.
+              Max 1 MB. Accepted: MP3, OGG, WAV, WebM, M4A.
             </div>
-          )}
-
-          {/* Sound tab */}
-          {createTab === "sound" && (
-            <form onSubmit={handleUpload}>
-              <div style={{ fontSize: 11, opacity: 0.5, marginBottom: 8 }}>
-                Max 1 MB. Accepted: MP3, OGG, WAV, WebM, M4A.
-              </div>
-              <div style={{ marginBottom: 8 }}>
-                <input
-                  ref={fileRef}
-                  type="file"
-                  accept="audio/mpeg,audio/ogg,audio/wav,audio/webm,audio/mp4"
-                  style={styles.fileInput}
-                />
-              </div>
-              <div style={{ marginBottom: 8 }}>
-                <input
-                  type="text"
-                  placeholder="Sound name"
-                  value={newName}
-                  onChange={(e) => setNewName(e.target.value)}
-                  style={styles.textInput}
-                  maxLength={100}
-                />
-              </div>
-              <div style={styles.row}>
-                <select
-                  value={newTier}
-                  onChange={(e) => setNewTier(e.target.value)}
-                  style={styles.select}
-                >
-                  {(tiers.length ? tiers : Object.keys(TIER_LABELS)).map((t) => (
-                    <option key={t} value={t}>
-                      {TIER_LABELS[t] || t}
-                    </option>
-                  ))}
-                </select>
-                <label style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                  Vol
-                  <input
-                    type="range"
-                    min="0"
-                    max="100"
-                    value={newVolume}
-                    onChange={(e) => setNewVolume(Number(e.target.value))}
-                    style={{ width: 80 }}
-                  />
-                  <span style={styles.muted}>{newVolume}%</span>
-                </label>
-              </div>
-              <button
-                type="submit"
-                disabled={uploading}
-                style={{
-                  ...styles.btn,
-                  marginTop: 8,
-                  opacity: uploading ? 0.6 : 1,
-                }}
+            <div style={{ marginBottom: 8 }}>
+              <input
+                ref={fileRef}
+                type="file"
+                accept="audio/mpeg,audio/ogg,audio/wav,audio/webm,audio/mp4"
+                style={styles.fileInput}
+              />
+            </div>
+            <div style={{ marginBottom: 8 }}>
+              <input
+                type="text"
+                placeholder="Sound name"
+                value={newName}
+                onChange={(e) => setNewName(e.target.value)}
+                style={styles.textInput}
+                maxLength={100}
+              />
+            </div>
+            <div style={styles.row}>
+              <select
+                value={newTier}
+                onChange={(e) => setNewTier(e.target.value)}
+                style={styles.select}
               >
-                {uploading ? "Uploading..." : "Upload Sound"}
-              </button>
-            </form>
-          )}
+                {(tiers.length ? tiers : Object.keys(TIER_LABELS)).map((t) => (
+                  <option key={t} value={t}>
+                    {TIER_LABELS[t] || t}
+                  </option>
+                ))}
+              </select>
+              <label style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                Vol
+                <input
+                  type="range"
+                  min="0"
+                  max="100"
+                  value={newVolume}
+                  onChange={(e) => setNewVolume(Number(e.target.value))}
+                  style={{ width: 80 }}
+                />
+                <span style={styles.muted}>{newVolume}%</span>
+              </label>
+            </div>
+            <button
+              type="submit"
+              disabled={uploading}
+              style={{
+                ...styles.btn,
+                marginTop: 8,
+                opacity: uploading ? 0.6 : 1,
+              }}
+            >
+              {uploading ? "Uploading..." : "Upload Sound"}
+            </button>
+          </form>
+        )}
 
-          {/* Clip tab */}
-          {createTab === "clip" && (
-            <form onSubmit={handleClipCreate}>
-              <div style={{ fontSize: 11, opacity: 0.5, marginBottom: 8 }}>
-                Paste a Twitch Clip URL. The clip will play in the OBS overlay
-                when redeemed.
-              </div>
-              <div style={{ marginBottom: 8 }}>
-                <input
-                  type="text"
-                  placeholder="https://clips.twitch.tv/..."
-                  value={clipUrl}
-                  onChange={(e) => setClipUrl(e.target.value)}
-                  style={styles.textInput}
-                />
-              </div>
-              <div style={{ marginBottom: 8 }}>
-                <input
-                  type="text"
-                  placeholder="Alert name"
-                  value={newName}
-                  onChange={(e) => setNewName(e.target.value)}
-                  style={styles.textInput}
-                  maxLength={100}
-                />
-              </div>
-              <div style={styles.row}>
-                <select
-                  value={newTier}
-                  onChange={(e) => setNewTier(e.target.value)}
-                  style={styles.select}
-                >
-                  {(tiers.length ? tiers : Object.keys(TIER_LABELS)).map((t) => (
-                    <option key={t} value={t}>
-                      {TIER_LABELS[t] || t}
-                    </option>
-                  ))}
-                </select>
-                <label style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                  Vol
-                  <input
-                    type="range"
-                    min="0"
-                    max="100"
-                    value={newVolume}
-                    onChange={(e) => setNewVolume(Number(e.target.value))}
-                    style={{ width: 80 }}
-                  />
-                  <span style={styles.muted}>{newVolume}%</span>
-                </label>
-              </div>
-              <button
-                type="submit"
-                disabled={uploading}
-                style={{
-                  ...styles.btn,
-                  marginTop: 8,
-                  opacity: uploading ? 0.6 : 1,
-                }}
+        {/* Clip tab */}
+        {createTab === "clip" && (
+          <form onSubmit={handleClipCreate}>
+            <div style={{ fontSize: 11, opacity: 0.5, marginBottom: 8 }}>
+              Paste a Twitch Clip URL. The clip will play in the OBS overlay
+              when redeemed.
+            </div>
+            <div style={{ marginBottom: 8 }}>
+              <input
+                type="text"
+                placeholder="https://clips.twitch.tv/..."
+                value={clipUrl}
+                onChange={(e) => setClipUrl(e.target.value)}
+                style={styles.textInput}
+              />
+            </div>
+            <div style={{ marginBottom: 8 }}>
+              <input
+                type="text"
+                placeholder="Alert name"
+                value={newName}
+                onChange={(e) => setNewName(e.target.value)}
+                style={styles.textInput}
+                maxLength={100}
+              />
+            </div>
+            <div style={styles.row}>
+              <select
+                value={newTier}
+                onChange={(e) => setNewTier(e.target.value)}
+                style={styles.select}
               >
-                {uploading ? "Creating..." : "Add Clip"}
-              </button>
-            </form>
-          )}
+                {(tiers.length ? tiers : Object.keys(TIER_LABELS)).map((t) => (
+                  <option key={t} value={t}>
+                    {TIER_LABELS[t] || t}
+                  </option>
+                ))}
+              </select>
+              <label style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                Vol
+                <input
+                  type="range"
+                  min="0"
+                  max="100"
+                  value={newVolume}
+                  onChange={(e) => setNewVolume(Number(e.target.value))}
+                  style={{ width: 80 }}
+                />
+                <span style={styles.muted}>{newVolume}%</span>
+              </label>
+            </div>
+            <button
+              type="submit"
+              disabled={uploading}
+              style={{
+                ...styles.btn,
+                marginTop: 8,
+                opacity: uploading ? 0.6 : 1,
+              }}
+            >
+              {uploading ? "Creating..." : "Add Clip"}
+            </button>
+          </form>
+        )}
 
-          {/* Video tab */}
-          {createTab === "video" && (
-            <form onSubmit={handleVideoUpload}>
-              <div style={{ fontSize: 11, opacity: 0.5, marginBottom: 8 }}>
-                Max 10 MB. Accepted: MP4, WebM.
-              </div>
-              <div style={{ marginBottom: 8 }}>
-                <input
-                  ref={videoFileRef}
-                  type="file"
-                  accept="video/mp4,video/webm"
-                  style={styles.fileInput}
-                />
-              </div>
-              <div style={{ marginBottom: 8 }}>
-                <input
-                  type="text"
-                  placeholder="Video name"
-                  value={newName}
-                  onChange={(e) => setNewName(e.target.value)}
-                  style={styles.textInput}
-                  maxLength={100}
-                />
-              </div>
-              <div style={styles.row}>
-                <select
-                  value={newTier}
-                  onChange={(e) => setNewTier(e.target.value)}
-                  style={styles.select}
-                >
-                  {(tiers.length ? tiers : Object.keys(TIER_LABELS)).map((t) => (
-                    <option key={t} value={t}>
-                      {TIER_LABELS[t] || t}
-                    </option>
-                  ))}
-                </select>
-                <label style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                  Vol
-                  <input
-                    type="range"
-                    min="0"
-                    max="100"
-                    value={newVolume}
-                    onChange={(e) => setNewVolume(Number(e.target.value))}
-                    style={{ width: 80 }}
-                  />
-                  <span style={styles.muted}>{newVolume}%</span>
-                </label>
-              </div>
-              <button
-                type="submit"
-                disabled={uploading}
-                style={{
-                  ...styles.btn,
-                  marginTop: 8,
-                  opacity: uploading ? 0.6 : 1,
-                }}
+        {/* Video tab */}
+        {createTab === "video" && (
+          <form onSubmit={handleVideoUpload}>
+            <div style={{ fontSize: 11, opacity: 0.5, marginBottom: 8 }}>
+              Max 10 MB. Accepted: MP4, WebM.
+            </div>
+            <div style={{ marginBottom: 8 }}>
+              <input
+                ref={videoFileRef}
+                type="file"
+                accept="video/mp4,video/webm"
+                style={styles.fileInput}
+              />
+            </div>
+            <div style={{ marginBottom: 8 }}>
+              <input
+                type="text"
+                placeholder="Video name"
+                value={newName}
+                onChange={(e) => setNewName(e.target.value)}
+                style={styles.textInput}
+                maxLength={100}
+              />
+            </div>
+            <div style={styles.row}>
+              <select
+                value={newTier}
+                onChange={(e) => setNewTier(e.target.value)}
+                style={styles.select}
               >
-                {uploading ? "Uploading..." : "Upload Video"}
-              </button>
-            </form>
-          )}
-        </div>
+                {(tiers.length ? tiers : Object.keys(TIER_LABELS)).map((t) => (
+                  <option key={t} value={t}>
+                    {TIER_LABELS[t] || t}
+                  </option>
+                ))}
+              </select>
+              <label style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                Vol
+                <input
+                  type="range"
+                  min="0"
+                  max="100"
+                  value={newVolume}
+                  onChange={(e) => setNewVolume(Number(e.target.value))}
+                  style={{ width: 80 }}
+                />
+                <span style={styles.muted}>{newVolume}%</span>
+              </label>
+            </div>
+            <button
+              type="submit"
+              disabled={uploading}
+              style={{
+                ...styles.btn,
+                marginTop: 8,
+                opacity: uploading ? 0.6 : 1,
+              }}
+            >
+              {uploading ? "Uploading..." : "Upload Video"}
+            </button>
+          </form>
+        )}
       </div>
 
-      {/* Row 2: Alert List — full width */}
+      {/* Alerts List — full width */}
       <div style={styles.card}>
         <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between" }}>
-          <h3 style={styles.subHeading}>Alerts ({sounds.length}/20)</h3>
+          <h3 style={styles.subHeading}>Your Alerts ({sounds.length}/20)</h3>
           <a
             href={`${EBS_BASE}/sounds/config#activity`}
             target="_blank"
@@ -949,6 +997,9 @@ function ConfigApp() {
             View Activity &rarr;
           </a>
         </div>
+        <p style={{ margin: "0 0 10px", fontSize: 11, opacity: 0.6 }}>
+          These are the alerts shown to your viewers. Uncheck one to hide it without deleting it.
+        </p>
         {sounds.length === 0 && (
           <p style={styles.muted}>No alerts created yet.</p>
         )}
@@ -970,10 +1021,80 @@ function ConfigApp() {
         ))}
       </div>
 
+      {/* General Settings — thin horizontal row, kept toward the bottom since
+          broadcasters set these once and rarely revisit them. */}
+      <div style={{ ...styles.card, padding: "10px 14px" }}>
+        <h3 style={{ ...styles.subHeading, marginBottom: 8 }}>Settings</h3>
+        <div style={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: 16 }}>
+          <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12 }}>
+            <input
+              type="checkbox"
+              checked={settings.enabled}
+              onChange={(e) =>
+                handleSettingsUpdate({ enabled: e.target.checked })
+              }
+            />
+            Enabled
+          </label>
+          <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12 }}>
+            Global Volume
+            <input
+              type="range"
+              min="0"
+              max="100"
+              value={settings.globalVolume}
+              onChange={(e) =>
+                handleSettingsUpdate({ globalVolume: Number(e.target.value) })
+              }
+              style={{ width: 90 }}
+            />
+            <span style={styles.muted}>{settings.globalVolume}%</span>
+          </label>
+          <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12 }}>
+            Cooldown (sec)
+            <input
+              type="number"
+              min="0"
+              max="60"
+              value={Math.round(settings.globalCooldownMs / 1000)}
+              onChange={(e) =>
+                handleSettingsUpdate({
+                  globalCooldownMs: Number(e.target.value) * 1000,
+                })
+              }
+              style={styles.numberInput}
+            />
+          </label>
+          <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12 }}>
+            Max Queue
+            <input
+              type="number"
+              min="1"
+              max="200"
+              value={settings.maxQueueSize}
+              onChange={(e) =>
+                handleSettingsUpdate({ maxQueueSize: Number(e.target.value) })
+              }
+              style={styles.numberInput}
+            />
+          </label>
+        </div>
+      </div>
+
       {/* Row 3: TTS Settings — full width */}
       {ttsSettings && (
         <div style={styles.card}>
-          <h3 style={styles.subHeading}>Text-to-Speech</h3>
+          <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between" }}>
+            <h3 style={styles.subHeading}>TTS Settings</h3>
+            <a
+              href={`${EBS_BASE}/sounds/config#queue`}
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{ ...styles.link, marginBottom: 10 }}
+            >
+              View Alert Queue &rarr;
+            </a>
+          </div>
           {!ttsProActive && !ttsSettings.granted && (
             <div style={{ fontSize: 11, opacity: 0.5, marginBottom: 8 }}>
               TTS alerts require a Pro plan or admin grant.
@@ -1072,25 +1193,12 @@ function ConfigApp() {
                 >
                   Test TTS
                 </button>
-                <button
-                  style={{ ...styles.btn, background: t.danger }}
-                  onClick={async () => {
-                    try {
-                      await fetch(`${EBS_BASE}/api/tts/skip`, {
-                        method: "POST",
-                        headers: headers(),
-                      });
-                    } catch {}
-                  }}
-                >
-                  Skip Alert
-                </button>
               </div>
             </div>
 
             <div>
               <div style={{ marginBottom: 10 }}>
-                <div style={{ fontSize: 13, marginBottom: 6, fontWeight: 500 }}>Allowed Voices</div>
+                <div style={{ fontSize: 13, marginBottom: 6, fontWeight: 500 }}>Available Voices</div>
                 <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
                   {ttsVoices.map((v) => (
                     <label
@@ -1239,10 +1347,13 @@ function SoundRow({
       return;
     }
     setPreviewing(true);
-    // Fetch a short-lived preview token (small same-origin JSON response — safe to
-    // read via fetch) rather than streaming the audio itself through fetch()+blob,
-    // since the actual audio bytes come from cross-origin storage and reading that
-    // response would require CORS, which media playback doesn't need.
+    // Get a short-lived preview token, then fetch the audio bytes as a blob
+    // and play via a blob: URL (mirrors playVoicePreview in the parent
+    // component). Twitch's extension iframe enforces its own CSP media-src
+    // that blocks <audio src> pointed directly at a cross-origin
+    // (livestreamerhub.com) URL even when the request itself is
+    // CORS-permitted; a blob: URL sidesteps that since the network fetch
+    // happens under connect-src instead.
     fetch(
       `${EBS_BASE}/api/sounds/preview-token/${sound.id}?channelId=${auth.channelId}`,
       { headers: { Authorization: `Bearer ${auth.token}` } },
@@ -1251,15 +1362,26 @@ function SoundRow({
         if (!r.ok) throw new Error();
         return r.json();
       })
-      .then(({ token }) => {
-        const url = `${EBS_BASE}/api/sounds/preview/${sound.id}?pt=${encodeURIComponent(token)}&channelId=${auth.channelId}`;
+      .then(({ token }) =>
+        fetch(
+          `${EBS_BASE}/api/sounds/preview/${sound.id}?pt=${encodeURIComponent(token)}&channelId=${auth.channelId}`,
+        ),
+      )
+      .then((r) => {
+        if (!r.ok) throw new Error();
+        return r.blob();
+      })
+      .then((blob) => {
+        const url = URL.createObjectURL(blob);
         const audio = new Audio(url);
         soundAudioRef.current = audio;
         audio.onended = () => {
+          URL.revokeObjectURL(url);
           soundAudioRef.current = null;
           setPreviewing(false);
         };
         audio.onerror = () => {
+          URL.revokeObjectURL(url);
           soundAudioRef.current = null;
           setPreviewing(false);
           onError?.("Preview failed");
@@ -1504,12 +1626,17 @@ function SoundRow({
             flexShrink: 0,
           }}
         >
-          <input
-            type="checkbox"
-            checked={sound.enabled}
-            onChange={(e) => onToggle(sound.id, e.target.checked)}
-            title="Enabled"
-          />
+          <label
+            style={{ display: "flex", alignItems: "center", gap: 3, fontSize: 11, opacity: 0.8, cursor: "pointer" }}
+            title="Show this alert to viewers"
+          >
+            <input
+              type="checkbox"
+              checked={sound.enabled}
+              onChange={(e) => onToggle(sound.id, e.target.checked)}
+            />
+            Show
+          </label>
           <button style={styles.btnSmall} onClick={() => setEditing(true)}>
             Edit
           </button>

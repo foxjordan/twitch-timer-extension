@@ -83,7 +83,7 @@ const DEFAULT_SOUND_SETTINGS = {
   enabled: true,
   globalVolume: 100,
   globalCooldownMs: 3000,
-  maxQueueSize: 200,
+  maxQueueSize: 150,
   overlayDurationMs: 5000,
   videoClipsEnabled: true,
   videoSize: "medium", // "small"=640×360, "medium"=1280×720, "large"=1920×1080, "fullscreen"

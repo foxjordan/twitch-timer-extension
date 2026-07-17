@@ -67,13 +67,13 @@ const MIME_TO_EXT = {
   "audio/x-flac": "flac",
 };
 
-export const MAX_FILE_SIZE = 1 * 1024 * 1024; // 1 MB — regular per-broadcaster uploads
+export const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5 MB — regular per-broadcaster uploads
 // Admin-curated official library isn't subject to the same storage-abuse
 // concerns as arbitrary broadcaster uploads, and lossless source files (e.g.
 // FLAC from Freesound) run larger — generous cap rather than no cap at all,
 // just to guard against a wildly mis-selected file.
 export const MAX_OFFICIAL_LIBRARY_FILE_SIZE = 100 * 1024 * 1024; // 100 MB
-export const MAX_VIDEO_FILE_SIZE = 10 * 1024 * 1024; // 10 MB
+export const MAX_VIDEO_FILE_SIZE = 25 * 1024 * 1024; // 25 MB
 export const MAX_SOUNDS_PER_USER = 20;
 
 // VALID_TIERS and DEFAULT_TIER are imported from ./tiers.js — the single source of truth

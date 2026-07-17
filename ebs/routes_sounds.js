@@ -718,7 +718,7 @@ export function mountSoundRoutes(app, deps = {}) {
 
     if (!req.file) {
       return res.status(400).json({
-        error: "No video file provided or unsupported format. Accepted: MP4, WebM (max 10 MB)",
+        error: "No video file provided or unsupported format. Accepted: MP4, WebM (max 25 MB)",
       });
     }
 

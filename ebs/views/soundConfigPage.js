@@ -289,7 +289,7 @@ export function renderSoundConfigPage(options = {}) {
 
         <!-- Sound upload tab -->
         <form id="soundUploadForm" class="tab-panel" data-tab="sound">
-          <div class="hint" style="margin-bottom:8px;">Max 1 MB. Accepted formats: MP3, OGG, WAV, WebM, M4A.</div>
+          <div class="hint" style="margin-bottom:8px;">Max 5 MB. Accepted formats: MP3, OGG, WAV, WebM, M4A.</div>
           <div style="margin-bottom:8px;">
             <input type="file" id="soundFile" accept="audio/mpeg,audio/ogg,audio/wav,audio/webm,audio/mp4" style="font-size:12px;">
           </div>
@@ -348,7 +348,7 @@ export function renderSoundConfigPage(options = {}) {
 
         <!-- Video upload tab -->
         <form id="videoUploadForm" class="tab-panel" data-tab="video" style="display:none;">
-          <div class="hint" style="margin-bottom:8px;">Max 10 MB. Accepted formats: MP4, WebM. The video will play through the browser source when redeemed.</div>
+          <div class="hint" style="margin-bottom:8px;">Max 25 MB. Accepted formats: MP4, WebM. The video will play through the browser source when redeemed.</div>
           <div style="margin-bottom:8px;">
             <input type="file" id="videoFile" accept="video/mp4,video/webm" style="font-size:12px;">
           </div>
@@ -1515,7 +1515,7 @@ export function renderSoundConfigPage(options = {}) {
             e.preventDefault();
             var file = soundFileEl ? soundFileEl.files[0] : null;
             if (!file) { if (soundUploadHintEl) soundUploadHintEl.textContent = 'Select an audio file'; return; }
-            if (file.size > 1024 * 1024) { if (soundUploadHintEl) soundUploadHintEl.textContent = 'File must be under 1 MB'; return; }
+            if (file.size > 5 * 1024 * 1024) { if (soundUploadHintEl) soundUploadHintEl.textContent = 'File must be under 5 MB'; return; }
             flashButton(soundUploadBtn);
             setBusy(soundUploadBtn, true);
             if (soundUploadHintEl) soundUploadHintEl.textContent = 'Uploading…';
@@ -1607,7 +1607,7 @@ export function renderSoundConfigPage(options = {}) {
             var videoUploadHintEl = document.getElementById('videoUploadHint');
             var file = videoFileEl ? videoFileEl.files[0] : null;
             if (!file) { if (videoUploadHintEl) videoUploadHintEl.textContent = 'Select a video file'; return; }
-            if (file.size > 10 * 1024 * 1024) { if (videoUploadHintEl) videoUploadHintEl.textContent = 'File must be under 10 MB'; return; }
+            if (file.size > 25 * 1024 * 1024) { if (videoUploadHintEl) videoUploadHintEl.textContent = 'File must be under 25 MB'; return; }
             flashButton(videoUploadBtn);
             setBusy(videoUploadBtn, true);
             if (videoUploadHintEl) videoUploadHintEl.textContent = 'Uploading…';

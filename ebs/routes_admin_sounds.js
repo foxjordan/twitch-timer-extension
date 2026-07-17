@@ -197,7 +197,7 @@ export function mountAdminSoundRoutes(app, ctx = {}) {
     const uid = String(req.params.userId);
 
     if (!req.file) {
-      return res.status(400).json({ error: "No video file provided or unsupported format. Accepted: MP4, WebM (max 10 MB)" });
+      return res.status(400).json({ error: "No video file provided or unsupported format. Accepted: MP4, WebM (max 25 MB)" });
     }
 
     try {

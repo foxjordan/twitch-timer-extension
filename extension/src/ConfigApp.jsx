@@ -211,7 +211,7 @@ function ConfigApp() {
     setError(null);
     const file = fileRef.current?.files?.[0];
     if (!file) return setError("Select an audio file");
-    if (file.size > 1024 * 1024) return setError("File must be under 1 MB");
+    if (file.size > 5 * 1024 * 1024) return setError("File must be under 5 MB");
 
     setUploading(true);
     try {
@@ -284,8 +284,8 @@ function ConfigApp() {
     setError(null);
     const file = videoFileRef.current?.files?.[0];
     if (!file) return setError("Select a video file");
-    if (file.size > 10 * 1024 * 1024)
-      return setError("Video must be under 10 MB");
+    if (file.size > 25 * 1024 * 1024)
+      return setError("Video must be under 25 MB");
 
     setUploading(true);
     try {
@@ -796,7 +796,7 @@ function ConfigApp() {
         {createTab === "sound" && (
           <form onSubmit={handleUpload}>
             <div style={{ fontSize: 11, opacity: 0.5, marginBottom: 8 }}>
-              Max 1 MB. Accepted: MP3, OGG, WAV, WebM, M4A.
+              Max 5 MB. Accepted: MP3, OGG, WAV, WebM, M4A.
             </div>
             <div style={{ marginBottom: 8 }}>
               <input
@@ -924,7 +924,7 @@ function ConfigApp() {
         {createTab === "video" && (
           <form onSubmit={handleVideoUpload}>
             <div style={{ fontSize: 11, opacity: 0.5, marginBottom: 8 }}>
-              Max 10 MB. Accepted: MP4, WebM.
+              Max 25 MB. Accepted: MP4, WebM.
             </div>
             <div style={{ marginBottom: 8 }}>
               <input

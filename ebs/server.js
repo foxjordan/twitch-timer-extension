@@ -1,6 +1,8 @@
 import "dotenv/config";
 import express from "express";
 import session from "express-session";
+import connectPgSimple from "connect-pg-simple";
+import { db } from "./db.js";
 import { v4 as uuidv4 } from "uuid";
 import { RULES } from "./rules.js";
 import { connectEventSubWS } from "./eventsub-ws.js";
@@ -117,14 +119,19 @@ app.use(
     },
   })
 );
+const PgSessionStore = connectPgSimple(session);
 app.use(
   session({
     name: "overlay.sid",
+    // Persists sessions in Postgres instead of express-session's default
+    // MemoryStore, which never expires entries and leaks memory until the
+    // process is restarted.
+    store: new PgSessionStore({ pool: db, tableName: "session", createTableIfMissing: true }),
     secret:
       process.env.SESSION_SECRET || process.env.TWITCH_CLIENT_SECRET || crypto.randomBytes(16).toString("hex"),
     resave: false,
     saveUninitialized: false,
-    cookie: { httpOnly: true, sameSite: "lax", secure: "auto" },
+    cookie: { httpOnly: true, sameSite: "lax", secure: "auto", maxAge: 30 * 24 * 60 * 60 * 1000 },
   })
 );
 

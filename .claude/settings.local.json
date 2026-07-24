@@ -46,7 +46,21 @@
       "mcp__claude_ai_Supabase__get_logs",
       "mcp__claude_ai_Vercel__list_teams",
       "mcp__claude_ai_Vercel__list_projects",
-      "Bash(DATABASE_URL=postgres://u:p@localhost:5432/db node -e ' *)"
+      "Bash(DATABASE_URL=postgres://u:p@localhost:5432/db node -e ' *)",
+      "Bash(mkdir -p /private/tmp/claude-501/-Users-jordanfox-Documents-twitch-timer-extension/b8c14863-7ce6-480a-8568-c05bbc128513/scratchpad)",
+      "Bash(cp /tmp/nudge-preview.html /private/tmp/claude-501/-Users-jordanfox-Documents-twitch-timer-extension/b8c14863-7ce6-480a-8568-c05bbc128513/scratchpad/nudge-preview.html)",
+      "Bash(rm -f /tmp/nudge-preview.html)",
+      "Bash(python3 -m http.server 8931 --bind 127.0.0.1)",
+      "Bash(curl -sI http://127.0.0.1:8931/nudge-preview.html)",
+      "mcp__plugin_playwright_playwright__browser_evaluate",
+      "mcp__plugin_playwright_playwright__browser_resize",
+      "Bash(pkill -f \"http.server 8931\")",
+      "Bash(git checkout *)",
+      "Bash(fly version *)",
+      "Bash(flyctl version *)",
+      "Bash(fly status *)",
+      "Bash(fly logs *)",
+      "Bash(fly machine *)"
     ]
   }
 }

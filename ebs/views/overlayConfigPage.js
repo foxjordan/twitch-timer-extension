@@ -158,12 +158,30 @@ export function renderOverlayConfigPage(options = {}) {
       .global-footer a:hover { color: var(--accent-color); }
       .tour-btn { position: fixed; bottom: 20px; right: 20px; background: #9146ff; color: #fff; border: none; padding: 8px 16px; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; z-index: 100; opacity: 0.85; transition: opacity 0.15s; }
       .tour-btn:hover { opacity: 1; }
+      .sa-nudge { position: fixed; top: 50%; right: 12px; transform: translateY(-50%) translateX(16px); display: flex; align-items: center; gap: 6px; z-index: 150; opacity: 0; pointer-events: none; transition: opacity .4s ease, transform .4s ease; }
+      .sa-nudge.show { opacity: 1; pointer-events: auto; transform: translateY(-50%) translateX(0); }
+      .sa-nudge-arrow { font-size: 20px; line-height: 1; animation: saNudgeBounce 1.2s ease-in-out infinite; filter: drop-shadow(0 2px 3px rgba(0,0,0,0.35)); }
+      @keyframes saNudgeBounce { 0%, 100% { transform: translateX(0); } 50% { transform: translateX(-6px); } }
+      .sa-nudge-card { position: relative; max-width: 210px; background: var(--surface-color); border: 1px solid var(--accent-color); border-radius: 12px; padding: 12px 14px; box-shadow: -4px 6px 22px rgba(0,0,0,0.3); }
+      .sa-nudge-card .sa-nudge-close { position: absolute; top: 2px; right: 4px; background: none; border: none; color: var(--text-muted); font-size: 15px; padding: 3px 7px; cursor: pointer; line-height: 1; }
+      .sa-nudge-card .sa-nudge-close:hover { color: var(--text-color); background: none; box-shadow: none; }
+      .sa-nudge-card p { margin: 0 0 10px; font-size: 12.5px; line-height: 1.45; color: var(--text-color); padding-right: 12px; }
+      .sa-nudge-card a.sa-nudge-cta { display: inline-block; font-size: 12px; font-weight: 700; color: #fff; background: var(--accent-color); padding: 6px 12px; border-radius: 7px; text-decoration: none; }
+      @media (max-width: 720px) { .sa-nudge { display: none; } }
       ${THEME_TOGGLE_STYLES}
       ${GLOBAL_HEADER_STYLES}
     </style>
   </head>
   <body>
     <div id="reconnect-toast" class="reconnect-toast">Service updated — reconnected automatically</div>
+    <div id="saNudge" class="sa-nudge">
+      <span class="sa-nudge-arrow" aria-hidden="true">👉</span>
+      <div class="sa-nudge-card">
+        <button type="button" id="saNudgeClose" class="sa-nudge-close" aria-label="Dismiss">&times;</button>
+        <p><strong>Bits count toward your timer</strong> automatically when sent through Sound Alerts — Bits used on third-party alert extensions don't.</p>
+        <a href="/sounds/config" class="sa-nudge-cta" id="saNudgeCta">Try Sound Alerts →</a>
+      </div>
+    </div>
     ${renderGlobalHeader({
       base: "",
       adminName,
@@ -1601,6 +1619,34 @@ export function renderOverlayConfigPage(options = {}) {
       bind();
       refresh();
       saveStyle();
+
+      (function() {
+        var STORAGE_KEY = 'saNudgeDismissedAt';
+        var SNOOZE_DAYS = 30;
+        var SHOW_AFTER_MS = 20000;
+        var nudge = document.getElementById('saNudge');
+        if (!nudge) return;
+        var dismissedAt = Number(localStorage.getItem(STORAGE_KEY) || 0);
+        if (dismissedAt && (Date.now() - dismissedAt) / 86400000 < SNOOZE_DAYS) return;
+        var showTimer = setTimeout(function() { nudge.classList.add('show'); }, SHOW_AFTER_MS);
+        function dismiss() {
+          clearTimeout(showTimer);
+          nudge.classList.remove('show');
+          localStorage.setItem(STORAGE_KEY, String(Date.now()));
+        }
+        document.getElementById('saNudgeClose').addEventListener('click', dismiss);
+        document.getElementById('saNudgeCta').addEventListener('click', function() {
+          dismiss();
+          try {
+            fetch('/api/analytics/dashboard-event', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ event: 'sound_alerts_nudge_clicked', surface: 'countdown_config' }),
+              keepalive: true,
+            }).catch(function() {});
+          } catch (e) {}
+        });
+      })();
     </script>
     ${!delegateMode ? `<script>
       (function() {

@@ -60,7 +60,9 @@
       "Bash(flyctl version *)",
       "Bash(fly status *)",
       "Bash(fly logs *)",
-      "Bash(fly machine *)"
+      "Bash(fly machine *)",
+      "Bash(sort -t: -k2 -n -r)",
+      "WebFetch(domain:overlay.expert)"
     ]
   }
 }

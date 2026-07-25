@@ -12,6 +12,10 @@ export function renderSoundConfigPage(options = {}) {
   const adminName = String(options.adminName || "");
   const userKey = String(options.userKey || "");
   const apiBase = String(options.apiBase || "/api/sounds");
+  // Klipy's key stays server-side (unlike Giphy, which required client-side
+  // calls per their terms) — this just tells the client whether the GIF
+  // search button should render at all.
+  const klipyEnabled = Boolean(options.klipyEnabled);
   const ttsApiBase = String(options.ttsApiBase || "/api/tts/settings");
   const isAdminMode = Boolean(options.isAdminMode);
   const managedUserName = String(options.managedUserName || "");
@@ -233,6 +237,20 @@ export function renderSoundConfigPage(options = {}) {
         <div class="hint" style="margin-top:4px;">Add as a Browser Source</div>
       </div>
       `}
+
+      <!-- Live preview — a standing overlay connection so "Show in Preview" works
+           immediately, without needing OBS or the real browser source open first.
+           Lives outside the section-pages (visible on both Create Alert and
+           Alerts, hidden elsewhere via switchSection) since it's equally useful
+           while building a new alert as while managing existing ones. -->
+      <div id="livePreviewWrap" class="card" style="padding:12px 16px;">
+        <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:8px;">
+          <strong style="font-size:13px;">Live Preview</strong>
+          <span class="hint" style="margin:0;">This is what plays on your overlay — hit "Show in Preview" on any alert to see it here.</span>
+        </div>
+        <iframe id="soundLivePreview" allow="autoplay" referrerpolicy="no-referrer"
+          style="width:100%; height:200px; border:1px solid var(--surface-border); border-radius:10px; background:#0b0b0e;"></iframe>
+      </div>
 
       <div class="section-page" data-section="settings">
       <!-- Settings -->
@@ -543,6 +561,7 @@ export function renderSoundConfigPage(options = {}) {
     <script>
       (function() {
         var USER_KEY = ${JSON.stringify(userKey)};
+        var KLIPY_ENABLED = ${JSON.stringify(klipyEnabled)};
         var API_BASE = ${JSON.stringify(apiBase)};
         var TTS_API_BASE = ${JSON.stringify(ttsApiBase)};
         var IS_ADMIN_MODE = ${JSON.stringify(isAdminMode)};
@@ -563,7 +582,7 @@ export function renderSoundConfigPage(options = {}) {
         function stopSoundPreview() {
           if (soundPreviewAudio) { soundPreviewAudio.pause(); soundPreviewAudio = null; }
           if (soundPreviewAudioUrl) { URL.revokeObjectURL(soundPreviewAudioUrl); soundPreviewAudioUrl = null; }
-          if (soundPreviewBtn) { soundPreviewBtn.textContent = 'Preview'; soundPreviewBtn = null; }
+          if (soundPreviewBtn) { soundPreviewBtn.textContent = 'Listen'; soundPreviewBtn = null; }
         }
         var soundEnabledEl = document.getElementById('soundEnabled');
         var soundGlobalVolumeEl = document.getElementById('soundGlobalVolume');
@@ -584,10 +603,13 @@ export function renderSoundConfigPage(options = {}) {
 
         // Set OBS overlay URL
         var soundUrlEl = document.getElementById('soundOverlayUrl');
+        var soundLivePreviewEl = document.getElementById('soundLivePreview');
         if (soundUrlEl) {
           var p = new URLSearchParams();
           if (USER_KEY) p.set('key', USER_KEY);
-          soundUrlEl.textContent = window.location.origin + '/overlay/sounds' + (p.toString() ? ('?' + p.toString()) : '');
+          var overlayFullUrl = window.location.origin + '/overlay/sounds' + (p.toString() ? ('?' + p.toString()) : '');
+          soundUrlEl.textContent = overlayFullUrl;
+          if (soundLivePreviewEl) soundLivePreviewEl.src = overlayFullUrl;
         }
 
         if (soundGlobalVolumeEl) soundGlobalVolumeEl.addEventListener('input', function() {
@@ -641,6 +663,10 @@ export function renderSoundConfigPage(options = {}) {
           document.querySelectorAll('.sidebar-nav-item').forEach(function(el) {
             el.classList.toggle('active', el.getAttribute('data-section') === sectionId);
           });
+          var livePreviewWrapEl = document.getElementById('livePreviewWrap');
+          if (livePreviewWrapEl) {
+            livePreviewWrapEl.style.display = (sectionId === 'alerts' || sectionId === 'create') ? '' : 'none';
+          }
         }
         document.querySelectorAll('.sidebar-nav-item').forEach(function(btn) {
           btn.addEventListener('click', function() {
@@ -693,6 +719,25 @@ export function renderSoundConfigPage(options = {}) {
               soundListEl.appendChild(hint);
             }
           }
+        }
+
+        // After creating a sound/clip/video, drop the streamer straight into
+        // its editor — same emote/GIF thumbnail pickers as editing an
+        // existing alert, instead of leaving them to hunt for the new card
+        // and click Edit themselves.
+        async function openEditorForNewSound(soundId) {
+          await fetchSoundsAdmin();
+          // The sound list (and the editor we're about to inject into it)
+          // lives on the "Alerts" page, a separate section-page from
+          // "Create Alert" — without switching, the editor opens correctly
+          // but sits inside a display:none container the user never sees.
+          switchSection('alerts');
+          history.replaceState(null, '', '#alerts');
+          var card = soundListEl ? soundListEl.querySelector('[data-sound-id="' + soundId + '"]') : null;
+          var sound = soundsCache.find(function(x) { return x.id === soundId; });
+          if (!card || !sound) return;
+          openSoundEditor(sound, card);
+          card.scrollIntoView({ behavior: 'smooth', block: 'center' });
         }
 
         function renderSoundList(sounds) {
@@ -775,6 +820,7 @@ export function renderSoundConfigPage(options = {}) {
             var metaDiv = document.createElement('div');
             metaDiv.style.cssText = 'font-size:12px; opacity:0.6;';
             var metaText = (TIER_LABELS[s.tier] || s.tier) + ' \\u00b7 Vol ' + s.volume + '%';
+            if (s.channelPointsEnabled) metaText += ' \\u00b7 ' + s.channelPointsCost + ' Points';
             if (s.type === 'clip' && s.clipUrl) metaText += ' \\u00b7 ' + s.clipUrl.slice(0, 40);
             metaDiv.textContent = metaText;
 
@@ -799,7 +845,8 @@ export function renderSoundConfigPage(options = {}) {
             editBtn.addEventListener('click', function() { openSoundEditor(s, card); });
 
             var testBtn = document.createElement('button');
-            testBtn.textContent = 'Test';
+            testBtn.textContent = 'Show in Preview';
+            testBtn.title = 'Plays this alert in the Live Preview panel above, exactly as viewers would see it';
             testBtn.className = 'secondary';
             testBtn.style.cssText = 'font-size:12px; padding:3px 8px;';
             testBtn.addEventListener('click', async function() {
@@ -810,18 +857,18 @@ export function renderSoundConfigPage(options = {}) {
                 var statusRes = await fetch('/api/overlay/status');
                 var statusData = await statusRes.json().catch(function() { return {}; });
                 if (!statusData.connected) {
-                  if (soundTestHintEl) soundTestHintEl.textContent = 'Overlay not connected — open your OBS browser source or overlay page first.';
+                  if (soundTestHintEl) soundTestHintEl.textContent = 'Live Preview still connecting — try again in a moment.';
                   setBusy(testBtn, false);
                   return;
                 }
                 var r = await fetch(API_BASE + '/test/' + encodeURIComponent(s.id), { method: 'POST' });
                 if (!r.ok) throw new Error();
                 if (soundTestHintEl) {
-                  soundTestHintEl.textContent = 'Sent to overlay!';
+                  soundTestHintEl.textContent = 'Playing in Live Preview!';
                   setTimeout(function() { soundTestHintEl.textContent = ''; }, 2500);
                 }
               } catch (e) {
-                if (soundTestHintEl) soundTestHintEl.textContent = 'Test failed';
+                if (soundTestHintEl) soundTestHintEl.textContent = 'Couldn\\'t send to Live Preview';
               }
               setBusy(testBtn, false);
             });
@@ -829,7 +876,8 @@ export function renderSoundConfigPage(options = {}) {
             var previewBtn = null;
             if ((s.type || 'sound') === 'sound') {
               previewBtn = document.createElement('button');
-              previewBtn.textContent = 'Preview';
+              previewBtn.textContent = 'Listen';
+              previewBtn.title = 'Quickly plays the raw audio file in your browser only — not the actual alert';
               previewBtn.className = 'secondary';
               previewBtn.style.cssText = 'font-size:12px; padding:3px 8px;';
               previewBtn.addEventListener('click', function() {
@@ -845,7 +893,7 @@ export function renderSoundConfigPage(options = {}) {
                 soundPreviewAudio.onended = stopSoundPreview;
                 soundPreviewAudio.onerror = function() {
                   stopSoundPreview();
-                  if (soundTestHintEl) soundTestHintEl.textContent = 'Preview failed';
+                  if (soundTestHintEl) soundTestHintEl.textContent = 'Listen failed';
                 };
                 soundPreviewAudio.play().catch(function() { stopSoundPreview(); });
               });
@@ -1124,6 +1172,71 @@ export function renderSoundConfigPage(options = {}) {
           row.appendChild(tierSelect);
           row.appendChild(volLabel);
 
+          // Channel Points — a second, independent trigger alongside Bits.
+          // Unlike everything else in this form, this can't be a plain field:
+          // toggling it creates/updates/deletes a real Twitch Custom Reward,
+          // so it gets its own immediate action + status hint instead of
+          // waiting for the main Save button.
+          var cpRow = document.createElement('div');
+          cpRow.style.cssText = 'display:flex; align-items:center; gap:8px; flex-wrap:wrap;';
+
+          var cpLabel = document.createElement('label');
+          cpLabel.style.cssText = 'display:flex; align-items:center; gap:6px; font-size:12px;';
+          var cpCheckbox = document.createElement('input');
+          cpCheckbox.type = 'checkbox';
+          cpCheckbox.checked = Boolean(s.channelPointsEnabled);
+          cpLabel.appendChild(cpCheckbox);
+          cpLabel.appendChild(document.createTextNode('Channel Points'));
+
+          var cpCostInput = document.createElement('input');
+          cpCostInput.type = 'number';
+          cpCostInput.min = '1';
+          cpCostInput.step = '1';
+          cpCostInput.value = String(s.channelPointsCost || 500);
+          cpCostInput.style.cssText = 'width:80px; font-size:12px;';
+          cpCostInput.disabled = !s.channelPointsEnabled;
+
+          var cpUpdateBtn = document.createElement('button');
+          cpUpdateBtn.textContent = 'Update Cost';
+          cpUpdateBtn.className = 'secondary';
+          cpUpdateBtn.style.cssText = 'font-size:11px; padding:3px 8px; display:' + (s.channelPointsEnabled ? 'inline-block' : 'none') + ';';
+
+          var cpHint = document.createElement('span');
+          cpHint.className = 'hint';
+
+          async function applyChannelPoints(enabled) {
+            setBusy(cpCheckbox, true);
+            setBusy(cpUpdateBtn, true);
+            cpHint.textContent = enabled ? 'Setting up reward…' : 'Removing reward…';
+            try {
+              var r = await fetch(API_BASE + '/' + encodeURIComponent(s.id) + '/channel-points', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ enabled: enabled, cost: Number(cpCostInput.value) || undefined })
+              });
+              var body = await r.json().catch(function() { return {}; });
+              if (!r.ok) throw new Error(body.error || 'Failed to update Channel Points');
+              s.channelPointsEnabled = Boolean(body.sound && body.sound.channelPointsEnabled);
+              cpCostInput.disabled = !s.channelPointsEnabled;
+              cpUpdateBtn.style.display = s.channelPointsEnabled ? 'inline-block' : 'none';
+              cpHint.textContent = enabled ? 'Live on your Channel Points!' : 'Removed';
+              setTimeout(function() { cpHint.textContent = ''; }, 2500);
+            } catch (err) {
+              cpCheckbox.checked = !enabled;
+              cpHint.textContent = err.message || 'Failed';
+            }
+            setBusy(cpCheckbox, false);
+            setBusy(cpUpdateBtn, false);
+          }
+
+          cpCheckbox.addEventListener('change', function() { applyChannelPoints(cpCheckbox.checked); });
+          cpUpdateBtn.addEventListener('click', function() { applyChannelPoints(true); });
+
+          cpRow.appendChild(cpLabel);
+          cpRow.appendChild(cpCostInput);
+          cpRow.appendChild(cpUpdateBtn);
+          cpRow.appendChild(cpHint);
+
           var cdLabel = document.createElement('label');
           cdLabel.style.cssText = 'display:flex; align-items:center; gap:4px; font-size:12px;';
           cdLabel.textContent = 'Cooldown (sec) ';
@@ -1141,7 +1254,7 @@ export function renderSoundConfigPage(options = {}) {
 
           var imageLabel = document.createElement('label');
           imageLabel.style.cssText = 'font-size:12px; color:var(--text-muted);';
-          imageLabel.textContent = 'Card Image (max 256 KB, PNG/JPG/GIF/WebP)';
+          imageLabel.textContent = 'Card Image (max 1 MB, PNG/JPG/GIF/WebP)';
 
           var imageRow = document.createElement('div');
           imageRow.style.cssText = 'display:flex; gap:6px; align-items:center; margin-top:4px;';
@@ -1158,7 +1271,7 @@ export function renderSoundConfigPage(options = {}) {
           imageInput.addEventListener('change', async function() {
             var file = imageInput.files ? imageInput.files[0] : null;
             if (!file) return;
-            if (file.size > 256 * 1024) { imageHint.textContent = 'File too large (max 256 KB)'; return; }
+            if (file.size > 1024 * 1024) { imageHint.textContent = 'File too large (max 1 MB)'; return; }
             imageInput.disabled = true;
             imageHint.textContent = 'Uploading…';
             try {
@@ -1178,6 +1291,177 @@ export function renderSoundConfigPage(options = {}) {
 
           imageRow.appendChild(imageInput);
 
+          // Pick a thumbnail from an emote source instead of uploading a file
+          // — automatically on-brand, zero design effort. Shared by both the
+          // Twitch and 7TV pickers below (only the endpoint differs).
+          function createEmotePicker(label, fetchUrl) {
+            var btn = document.createElement('button');
+            btn.textContent = label;
+            btn.className = 'secondary';
+            btn.style.cssText = 'font-size:12px; padding:3px 8px;';
+
+            var panel = document.createElement('div');
+            panel.style.cssText = 'display:none; flex-direction:column; gap:6px; margin-top:6px; max-height:160px; overflow-y:auto; padding:6px; border:1px solid var(--border,#303038); border-radius:6px;';
+
+            var loaded = false;
+            btn.addEventListener('click', async function() {
+              var isOpen = panel.style.display !== 'none';
+              if (isOpen) { panel.style.display = 'none'; return; }
+              panel.style.display = 'flex';
+              if (loaded) return;
+              panel.textContent = 'Loading…';
+              try {
+                var r = await fetch(fetchUrl);
+                var body = await r.json().catch(function() { return {}; });
+                var emotes = body.emotes || [];
+                panel.textContent = '';
+                if (body.source === 'global') {
+                  var note = document.createElement('div');
+                  note.className = 'hint';
+                  note.textContent = 'Showing 7TV\\'s global emotes \\u2014 connect 7TV to your channel for your own set.';
+                  panel.appendChild(note);
+                }
+                var grid = document.createElement('div');
+                grid.style.cssText = 'display:flex; flex-wrap:wrap; gap:6px;';
+                if (!emotes.length) {
+                  grid.textContent = 'No emotes found.';
+                }
+                emotes.forEach(function(emote) {
+                  var img = document.createElement('img');
+                  img.src = emote.url;
+                  img.alt = emote.name;
+                  img.title = emote.name;
+                  img.style.cssText = 'width:32px; height:32px; object-fit:contain; cursor:pointer; border-radius:4px;';
+                  img.addEventListener('click', async function() {
+                    imageHint.textContent = 'Setting thumbnail…';
+                    try {
+                      var setRes = await fetch(API_BASE + '/' + encodeURIComponent(s.id) + '/thumbnail-from-url', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ url: emote.url })
+                      });
+                      var setBody = await setRes.json().catch(function() { return {}; });
+                      if (!setRes.ok) throw new Error(setBody.error || 'Failed to set thumbnail');
+                      imageHint.textContent = 'Thumbnail set!';
+                      setTimeout(function() { imageHint.textContent = ''; }, 2500);
+                      await fetchSoundsAdmin();
+                    } catch (e) {
+                      imageHint.textContent = e.message || 'Failed to set thumbnail';
+                    }
+                  });
+                  grid.appendChild(img);
+                });
+                panel.appendChild(grid);
+                loaded = true;
+              } catch (e) {
+                panel.textContent = 'Failed to load emotes';
+              }
+            });
+
+            return { btn: btn, panel: panel };
+          }
+
+          // GIF search is shaped differently from the emote pickers above —
+          // it needs a query box and re-fetches per keystroke. Unlike Giphy
+          // (which required Search to be called client-side per their
+          // terms), Klipy's search is proxied through our own backend at
+          // API_BASE + '/klipy-search' so the API key never reaches the
+          // browser. Only the final "use this one" step goes through our
+          // API either way, reusing the exact same thumbnail-from-url
+          // endpoint and SSRF allowlist as every other source.
+          function createGifSearchPicker() {
+            var btn = document.createElement('button');
+            btn.textContent = 'GIF Search';
+            btn.className = 'secondary';
+            btn.style.cssText = 'font-size:12px; padding:3px 8px;';
+
+            var panel = document.createElement('div');
+            panel.style.cssText = 'display:none; flex-direction:column; gap:6px; margin-top:6px; padding:6px; border:1px solid var(--border,#303038); border-radius:6px;';
+
+            var searchInput = document.createElement('input');
+            searchInput.type = 'text';
+            searchInput.placeholder = 'Search KLIPY\\u2026';
+            searchInput.style.cssText = 'font-size:12px; padding:4px 6px;';
+
+            var grid = document.createElement('div');
+            grid.style.cssText = 'display:flex; flex-wrap:wrap; gap:6px; margin-top:6px; max-height:160px; overflow-y:auto;';
+
+            var attribution = document.createElement('div');
+            attribution.className = 'hint';
+            attribution.style.cssText = 'font-size:10px; opacity:0.7; margin-top:2px;';
+            attribution.textContent = 'Powered by KLIPY';
+
+            panel.appendChild(searchInput);
+            panel.appendChild(grid);
+            panel.appendChild(attribution);
+
+            var debounceTimer = null;
+            searchInput.addEventListener('input', function() {
+              if (debounceTimer) clearTimeout(debounceTimer);
+              var query = searchInput.value.trim();
+              if (!query) { grid.textContent = ''; return; }
+              debounceTimer = setTimeout(function() { runSearch(query); }, 400);
+            });
+
+            async function runSearch(query) {
+              grid.textContent = 'Searching\\u2026';
+              try {
+                var r = await fetch(API_BASE + '/klipy-search?q=' + encodeURIComponent(query));
+                var body = await r.json().catch(function() { return {}; });
+                var results = body.gifs || [];
+                grid.textContent = '';
+                if (!results.length) grid.textContent = 'No results.';
+                results.forEach(function(gif) {
+                  if (!gif.thumbUrl || !gif.attachUrl) return;
+                  var img = document.createElement('img');
+                  img.src = gif.thumbUrl;
+                  img.alt = gif.title || '';
+                  img.title = gif.title || '';
+                  img.style.cssText = 'width:48px; height:48px; object-fit:cover; cursor:pointer; border-radius:4px;';
+                  img.addEventListener('click', async function() {
+                    imageHint.textContent = 'Setting thumbnail…';
+                    try {
+                      var setRes = await fetch(API_BASE + '/' + encodeURIComponent(s.id) + '/thumbnail-from-url', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ url: gif.attachUrl })
+                      });
+                      var setBody = await setRes.json().catch(function() { return {}; });
+                      if (!setRes.ok) throw new Error(setBody.error || 'Failed to set thumbnail');
+                      imageHint.textContent = 'Thumbnail set!';
+                      setTimeout(function() { imageHint.textContent = ''; }, 2500);
+                      await fetchSoundsAdmin();
+                    } catch (e) {
+                      imageHint.textContent = e.message || 'Failed to set thumbnail';
+                    }
+                  });
+                  grid.appendChild(img);
+                });
+              } catch (e) {
+                grid.textContent = 'Search failed';
+              }
+            }
+
+            btn.addEventListener('click', function() {
+              var isOpen = panel.style.display !== 'none';
+              panel.style.display = isOpen ? 'none' : 'flex';
+              if (!isOpen) searchInput.focus();
+            });
+
+            return { btn: btn, panel: panel };
+          }
+
+          // API_BASE already differs between the broadcaster's own view
+          // (/api/sounds) and the admin-managing-another-channel view
+          // (/api/admin/sounds/:userId) — must derive these the same way,
+          // not hardcode /api/sounds/... which would silently resolve to
+          // the wrong channel (or the admin's own) in the admin view.
+          var twitchEmotePicker = createEmotePicker('Twitch Emotes', API_BASE + '/twitch-emotes');
+          var sevenTvEmotePicker = createEmotePicker('7TV Emotes', API_BASE + '/seventv-emotes');
+          // Only offer GIF search if a key is actually configured — no point
+          // rendering a button that can only ever fail.
+          var gifSearchPicker = KLIPY_ENABLED ? createGifSearchPicker() : null;
+
           if (s.imageFilename) {
             var removeImgBtn = document.createElement('button');
             removeImgBtn.textContent = 'Remove';
@@ -1195,9 +1479,42 @@ export function renderSoundConfigPage(options = {}) {
             imageRow.appendChild(removeImgBtn);
           }
 
+          imageRow.appendChild(twitchEmotePicker.btn);
+          imageRow.appendChild(sevenTvEmotePicker.btn);
+          if (gifSearchPicker) imageRow.appendChild(gifSearchPicker.btn);
           imageRow.appendChild(imageHint);
           imageSection.appendChild(imageLabel);
           imageSection.appendChild(imageRow);
+          imageSection.appendChild(twitchEmotePicker.panel);
+          imageSection.appendChild(sevenTvEmotePicker.panel);
+          if (gifSearchPicker) imageSection.appendChild(gifSearchPicker.panel);
+
+          // Where the alert renders on the overlay — small corner toast
+          // (default, same as every alert today) or big and centered like
+          // video/clip alerts already are. Only visibly does anything once
+          // the sound has a thumbnail image (a GIF especially), same as the
+          // fallback icon glyph was never meant to be shown that large.
+          var popupStyleRow = document.createElement('div');
+          popupStyleRow.style.cssText = 'display:flex; align-items:center; gap:8px; margin-top:8px; flex-wrap:wrap;';
+          var popupStyleLabel = document.createElement('label');
+          popupStyleLabel.textContent = 'Overlay Display:';
+          popupStyleLabel.style.cssText = 'font-size:12px; opacity:0.8;';
+          var popupStyleSelect = document.createElement('select');
+          popupStyleSelect.style.cssText = 'font-size:12px; padding:3px 6px;';
+          [['corner', 'Small (corner)'], ['large', 'Large & Centered']].forEach(function(opt) {
+            var o = document.createElement('option');
+            o.value = opt[0];
+            o.textContent = opt[1];
+            if ((s.popupStyle || 'corner') === opt[0]) o.selected = true;
+            popupStyleSelect.appendChild(o);
+          });
+          var popupStyleHint = document.createElement('span');
+          popupStyleHint.className = 'hint';
+          popupStyleHint.textContent = 'Large only takes effect once this alert has a thumbnail image.';
+          popupStyleRow.appendChild(popupStyleLabel);
+          popupStyleRow.appendChild(popupStyleSelect);
+          popupStyleRow.appendChild(popupStyleHint);
+          imageSection.appendChild(popupStyleRow);
 
           // Trim section
           var trimSection = document.createElement('div');
@@ -1372,7 +1689,8 @@ export function renderSoundConfigPage(options = {}) {
               tier: tierSelect.value,
               volume: Number(volRange.value),
               cooldownMs: Number(cdInput.value) * 1000,
-              shared: sharedCb.checked
+              shared: sharedCb.checked,
+              popupStyle: popupStyleSelect.value
             };
             if (!s.type || s.type === 'sound') {
               patch.tags = tagsInput.value.split(',').map(function(t) { return t.trim(); }).filter(Boolean).slice(0, 5);
@@ -1424,6 +1742,7 @@ export function renderSoundConfigPage(options = {}) {
 
           form.appendChild(nameInput);
           form.appendChild(row);
+          form.appendChild(cpRow);
           form.appendChild(cdLabel);
           form.appendChild(imageSection);
           form.appendChild(sharedLabel);
@@ -1528,17 +1847,16 @@ export function renderSoundConfigPage(options = {}) {
               var shareEl = document.getElementById('soundShareToLibrary');
               fd.append('shared', shareEl && shareEl.checked ? 'true' : 'false');
               var r = await fetch(API_BASE, { method: 'POST', body: fd });
-              if (!r.ok) {
-                var body = await r.json().catch(function() { return {}; });
-                throw new Error(body.error || 'Upload failed');
-              }
+              var body = await r.json().catch(function() { return {}; });
+              if (!r.ok) throw new Error(body.error || 'Upload failed');
               if (soundFileEl) soundFileEl.value = '';
               if (soundNameEl) soundNameEl.value = '';
               if (soundUploadHintEl) {
-                soundUploadHintEl.textContent = 'Sound uploaded!';
-                setTimeout(function() { soundUploadHintEl.textContent = ''; }, 2500);
+                soundUploadHintEl.textContent = 'Sound uploaded! Add a thumbnail below \\u2014';
+                setTimeout(function() { soundUploadHintEl.textContent = ''; }, 4000);
               }
-              await fetchSoundsAdmin();
+              if (body.sound) await openEditorForNewSound(body.sound.id);
+              else await fetchSoundsAdmin();
             } catch (err) {
               if (soundUploadHintEl) soundUploadHintEl.textContent = err.message || 'Upload failed';
             }
@@ -1576,17 +1894,16 @@ export function renderSoundConfigPage(options = {}) {
                   shared: Boolean(document.getElementById('clipShareToLibrary') && document.getElementById('clipShareToLibrary').checked),
                 })
               });
-              if (!r.ok) {
-                var body = await r.json().catch(function() { return {}; });
-                throw new Error(body.error || 'Failed to create clip');
-              }
+              var body = await r.json().catch(function() { return {}; });
+              if (!r.ok) throw new Error(body.error || 'Failed to create clip');
               if (clipUrlEl) clipUrlEl.value = '';
               if (clipNameEl) clipNameEl.value = '';
               if (clipUploadHintEl) {
-                clipUploadHintEl.textContent = 'Clip added!';
-                setTimeout(function() { clipUploadHintEl.textContent = ''; }, 2500);
+                clipUploadHintEl.textContent = 'Clip added! Add a thumbnail below \\u2014';
+                setTimeout(function() { clipUploadHintEl.textContent = ''; }, 4000);
               }
-              await fetchSoundsAdmin();
+              if (body.sound) await openEditorForNewSound(body.sound.id);
+              else await fetchSoundsAdmin();
             } catch (err) {
               if (clipUploadHintEl) clipUploadHintEl.textContent = err.message || 'Failed';
             }
@@ -1620,17 +1937,16 @@ export function renderSoundConfigPage(options = {}) {
               var shareEl = document.getElementById('videoShareToLibrary');
               fd.append('shared', shareEl && shareEl.checked ? 'true' : 'false');
               var r = await fetch(API_BASE + '/video', { method: 'POST', body: fd });
-              if (!r.ok) {
-                var body = await r.json().catch(function() { return {}; });
-                throw new Error(body.error || 'Upload failed');
-              }
+              var body = await r.json().catch(function() { return {}; });
+              if (!r.ok) throw new Error(body.error || 'Upload failed');
               if (videoFileEl) videoFileEl.value = '';
               if (videoNameEl) videoNameEl.value = '';
               if (videoUploadHintEl) {
-                videoUploadHintEl.textContent = 'Video uploaded!';
-                setTimeout(function() { videoUploadHintEl.textContent = ''; }, 2500);
+                videoUploadHintEl.textContent = 'Video uploaded! Add a thumbnail below \\u2014';
+                setTimeout(function() { videoUploadHintEl.textContent = ''; }, 4000);
               }
-              await fetchSoundsAdmin();
+              if (body.sound) await openEditorForNewSound(body.sound.id);
+              else await fetchSoundsAdmin();
             } catch (err) {
               if (videoUploadHintEl) videoUploadHintEl.textContent = err.message || 'Upload failed';
             }
@@ -2288,6 +2604,8 @@ export function renderSoundConfigPage(options = {}) {
         function tourSwitchSection(s) {
           document.querySelectorAll('.section-page').forEach(function(el) { el.classList.toggle('active', el.getAttribute('data-section') === s); });
           document.querySelectorAll('.sidebar-nav-item').forEach(function(el) { el.classList.toggle('active', el.getAttribute('data-section') === s); });
+          var livePreviewWrapEl = document.getElementById('livePreviewWrap');
+          if (livePreviewWrapEl) livePreviewWrapEl.style.display = (s === 'alerts' || s === 'create') ? '' : 'none';
         }
         var tourSteps = [
           {

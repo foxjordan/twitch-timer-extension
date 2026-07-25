@@ -17,6 +17,9 @@ COPY ebs/ ./
 
 # Create data dir (volume may mount here in Fly)
 ENV DATA_DIR=/data
+# Without this, Express runs in development mode and leaks stack
+# traces/file paths to real visitors on any unhandled error.
+ENV NODE_ENV=production
 RUN mkdir -p /data
 EXPOSE 8080
 CMD ["node", "--import", "./instrument.js", "server.js"]

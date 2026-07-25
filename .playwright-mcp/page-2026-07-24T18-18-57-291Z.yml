@@ -1,0 +1,194 @@
+- generic [ref=f3e4]:
+  - navigation [ref=f3e5]:
+    - generic [ref=f3e7]:
+      - link [ref=f3e8] [cursor=pointer]:
+        - /url: /
+        - img "Sound Alerts" [ref=f3e9]
+      - list [ref=f3e10]:
+        - listitem [ref=f3e11]:
+          - link "Home" [ref=f3e12] [cursor=pointer]:
+            - /url: /
+        - listitem [ref=f3e13]:
+          - button "Features" [ref=f3e15] [cursor=pointer]
+        - listitem [ref=f3e18]:
+          - link "Blog" [ref=f3e19] [cursor=pointer]:
+            - /url: /blog
+        - listitem [ref=f3e20]:
+          - link "Streamers" [ref=f3e21] [cursor=pointer]:
+            - /url: /streamers
+        - listitem [ref=f3e22]:
+          - link "Help Center" [ref=f3e23] [cursor=pointer]:
+            - /url: https://support.soundalerts.com
+      - list [ref=f3e24]:
+        - listitem [ref=f3e25]:
+          - link "Get Coins" [ref=f3e26] [cursor=pointer]:
+            - /url: /coins
+        - listitem [ref=f3e28]:
+          - link "Streamer Dashboard" [ref=f3e29] [cursor=pointer]:
+            - /url: https://dashboard.soundalerts.com
+  - main [ref=f3e32]:
+    - generic [ref=f3e35]:
+      - img "stars" [ref=f3e36]
+      - generic [ref=f3e37]: Twitch Extension
+      - heading "The Soundboard your Audience will love" [level=1] [ref=f3e38]
+      - img "Twitch Extension" [ref=f3e42]
+      - img "planet-1" [ref=f3e44]
+      - img "planet-2" [ref=f3e45]
+    - generic [ref=f3e49]:
+      - generic [ref=f3e51]:
+        - heading "Receive Bits with every Stream Alert & boost your Livestream Income" [level=2] [ref=f3e52]
+        - img "Receive Bits with every Stream Alert & boost your Livestream Income" [ref=f3e55]
+      - generic [ref=f3e57]:
+        - heading "Compatible with all Extension Slots — Panel, Component & Overlay" [level=2] [ref=f3e58]
+        - img "Compatible with all Extension Slots — Panel, Component & Overlay" [ref=f3e61]
+      - generic [ref=f3e63]:
+        - heading "Upload your own Alert Media or browse our Community Library" [level=2] [ref=f3e64]
+        - img "Upload your own Alert Media or browse our Community Library" [ref=f3e67]
+      - generic [ref=f3e69]:
+        - heading "Choose from a Variety of Extension Designs to match your Channel Style" [level=2] [ref=f3e70]
+        - img "Choose from a Variety of Extension Designs to match your Channel Style" [ref=f3e73]
+      - generic [ref=f3e75]:
+        - heading "Use Text-to-Speech Alerts to enable personal Messages from your Viewers" [level=2] [ref=f3e76]
+        - img "Use Text-to-Speech Alerts to enable personal Messages from your Viewers" [ref=f3e79]
+      - generic [ref=f3e81]:
+        - heading "With Video Share, your Viewers can activate Twitch & YouTube Clips" [level=2] [ref=f3e82]
+        - img "With Video Share, your Viewers can activate Twitch & YouTube Clips" [ref=f3e85]
+    - generic [ref=f3e87]:
+      - generic [ref=f3e88]:
+        - heading "Video Showcase" [level=2] [ref=f3e89]
+        - application "YouTube Player - Placeholder" [ref=f3e92] [cursor=pointer]:
+          - img "Video placeholder" [ref=f3e95]
+      - link [ref=f3e100] [cursor=pointer]:
+        - /url: https://www.youtube.com/c/SoundAlerts
+    - generic [ref=f3e106]:
+      - heading "Frequently Asked Questions" [level=2] [ref=f3e107]
+      - paragraph [ref=f3e109]: Everything you need to know about this Feature
+      - generic [ref=f3e111]:
+        - generic [ref=f3e117]:
+          - heading "What does the Sound Alerts Twitch Extension do?" [level=4] [ref=f3e118]
+          - paragraph [ref=f3e120]: The Sound Alerts Twitch Extension is an interactive tool for streamers allowing your viewers to play sounds, videos, TTS, and more directly in your livestream.
+        - generic [ref=f3e126]:
+          - heading "How do I activate the Sound Alerts Twitch Extension?" [level=4] [ref=f3e127]
+          - paragraph [ref=f3e129]:
+            - text: To activate the Sound Alerts Twitch Extension on your channel, you can visit the
+            - link "Streamer Dashboard" [ref=f3e130] [cursor=pointer]:
+              - /url: https://dashboard.soundalerts.com
+            - text: or follow our
+            - link "video guide" [ref=f3e131] [cursor=pointer]:
+              - /url: https://www.youtube.com/watch?v=yv9vb47vVjY
+            - text: . The setup will take you less than 10 minutes.
+        - generic [ref=f3e137]:
+          - heading "Do my Viewers need to install anything?" [level=4] [ref=f3e138]
+          - paragraph [ref=f3e140]: No, not at all. As soon as you install the Twitch Extension, your viewers can use it on desktop devices and in the official Twitch app for iOS and Android.
+        - generic [ref=f3e146]:
+          - heading "Can I use Sound Alerts for my other Stream Alerts?" [level=4] [ref=f3e147]
+          - paragraph [ref=f3e149]:
+            - text: Yes, Sound Alerts is an all-in-one solution for alerts. You can set up events like Channel Points, Subs, Follows, Hype Trains, and more in our
+            - link "Streamer Dashboard" [ref=f3e150] [cursor=pointer]:
+              - /url: https://dashboard.soundalerts.com
+            - text: .
+        - generic [ref=f3e156]:
+          - heading "How do I earn money with the Twitch Extension?" [level=4] [ref=f3e157]
+          - paragraph [ref=f3e159]: Twitch Partners and Affiliates can earn Bits in the Extension. When viewers perform and confirm an action requiring Bits in our Extension, streamers will earn 80% of 1 U.S. cent per Bit used.
+        - generic [ref=f3e165]:
+          - heading "How does the Payout work for Sound Alerts?" [level=4] [ref=f3e166]
+          - paragraph [ref=f3e168]: Twitch handles the Sound Alerts revenue payout for Twitch Partners and Affiliates. It will be included in your regular Twitch payout, which usually arrives 15 days after the end of the month.
+        - generic [ref=f3e174]:
+          - heading "Is Sound Alerts DMCA-safe?" [level=4] [ref=f3e175]
+          - paragraph [ref=f3e177]:
+            - text: Our media library consists of user-generated media provided by the Sound Alerts community. Your viewers can only play the media you selected on the Dashboard. More info
+            - link "here" [ref=f3e178] [cursor=pointer]:
+              - /url: https://support.soundalerts.com/en/article/dmca-and-copyright
+            - text: .
+        - generic [ref=f3e184]:
+          - heading "Any open Questions or Issues?" [level=4] [ref=f3e185]
+          - paragraph [ref=f3e187]:
+            - text: We are ready to help you! Visit our
+            - link "Help Center" [ref=f3e188] [cursor=pointer]:
+              - /url: https://support.soundalerts.com
+            - text: to read our dedicated guides or join our
+            - link "Discord" [ref=f3e189] [cursor=pointer]:
+              - /url: https://discord.soundalerts.com
+            - text: to create a ticket and contact our support staff.
+      - link "Visit Help Center" [ref=f3e191] [cursor=pointer]:
+        - /url: https://support.soundalerts.com
+    - generic [ref=f3e195]:
+      - heading "Explore the Sound Alerts Ecosystem" [level=2] [ref=f3e196]
+      - generic [ref=f3e199]:
+        - generic [ref=f3e200]:
+          - link "Twitch Extension":
+            - /url: /twitch-extension
+        - link "Channel Points" [ref=f3e202] [cursor=pointer]:
+          - /url: /channel-points
+        - link "Tipping" [ref=f3e209] [cursor=pointer]:
+          - /url: /tipping
+        - link "Widgets" [ref=f3e216] [cursor=pointer]:
+          - /url: /scene-editor
+        - link "Other Alerts" [ref=f3e223] [cursor=pointer]:
+          - /url: /stream-alerts
+        - link "Animations" [ref=f3e230] [cursor=pointer]:
+          - /url: /animation-store
+        - link "Chatbot" [ref=f3e237] [cursor=pointer]:
+          - /url: /chatbot
+        - link "Library" [ref=f3e244] [cursor=pointer]:
+          - /url: /library
+  - contentinfo [ref=f3e250]:
+    - generic [ref=f3e252]:
+      - link "Sound Alerts" [ref=f3e254] [cursor=pointer]:
+        - /url: /
+        - img "Sound Alerts"
+      - list [ref=f3e255]:
+        - listitem [ref=f3e256]:
+          - link "https://x.com/SoundAlertsApp" [ref=f3e257] [cursor=pointer]:
+            - /url: https://x.com/SoundAlertsApp
+        - listitem [ref=f3e260]:
+          - link "https://discord.soundalerts.com" [ref=f3e261] [cursor=pointer]:
+            - /url: https://discord.soundalerts.com
+        - listitem [ref=f3e264]:
+          - link "https://instagram.com/soundalertsapp" [ref=f3e265] [cursor=pointer]:
+            - /url: https://instagram.com/soundalertsapp
+        - listitem [ref=f3e268]:
+          - link "https://www.tiktok.com/@soundalerts" [ref=f3e269] [cursor=pointer]:
+            - /url: https://www.tiktok.com/@soundalerts
+        - listitem [ref=f3e272]:
+          - link "https://www.youtube.com/c/SoundAlerts" [ref=f3e273] [cursor=pointer]:
+            - /url: https://www.youtube.com/c/SoundAlerts
+        - listitem [ref=f3e276]:
+          - link "https://www.linkedin.com/company/sound-alerts" [ref=f3e277] [cursor=pointer]:
+            - /url: https://www.linkedin.com/company/sound-alerts
+      - list [ref=f3e280]:
+        - listitem [ref=f3e281]:
+          - link "About" [ref=f3e282] [cursor=pointer]:
+            - /url: /about
+        - listitem [ref=f3e283]:
+          - link "Premium" [ref=f3e284] [cursor=pointer]:
+            - /url: /premium
+        - listitem [ref=f3e285]:
+          - link "Roadmap" [ref=f3e286] [cursor=pointer]:
+            - /url: https://feedback.soundalerts.com/roadmap
+        - listitem [ref=f3e287]:
+          - link "Changelog" [ref=f3e288] [cursor=pointer]:
+            - /url: https://feedback.soundalerts.com/changelog
+        - listitem [ref=f3e289]:
+          - link "Brand" [ref=f3e290] [cursor=pointer]:
+            - /url: /brand
+        - listitem [ref=f3e291]:
+          - link "Advertisers" [ref=f3e292] [cursor=pointer]:
+            - /url: /advertisers
+        - listitem [ref=f3e293]:
+          - link "Imprint" [ref=f3e294] [cursor=pointer]:
+            - /url: /imprint
+        - listitem [ref=f3e295]:
+          - link "Terms" [ref=f3e296] [cursor=pointer]:
+            - /url: /terms
+        - listitem [ref=f3e297]:
+          - link "Privacy" [ref=f3e298] [cursor=pointer]:
+            - /url: /privacy
+        - listitem [ref=f3e299]:
+          - button "Cookies" [ref=f3e300] [cursor=pointer]
+      - list [ref=f3e301]:
+        - listitem [ref=f3e302]:
+          - button "English" [ref=f3e304] [cursor=pointer]
+        - listitem [ref=f3e309]:
+          - button "Back to Top" [ref=f3e310] [cursor=pointer]
+    - generic [ref=f3e312]: 2026 Sound Alerts

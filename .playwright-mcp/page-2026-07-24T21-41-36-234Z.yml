@@ -1,0 +1,29 @@
+- generic [ref=f12e4]:
+  - textbox [ref=f12e5]: Test Sound
+  - generic [ref=f12e6]:
+    - combobox [ref=f12e7]:
+      - option "100 Bits" [selected]
+    - generic [ref=f12e8]:
+      - text: Vol
+      - slider "Vol 80%" [ref=f12e9]: "80"
+      - generic [ref=f12e10]: 80%
+  - generic [ref=f12e11]:
+    - generic [ref=f12e12]:
+      - checkbox "Channel Points" [ref=f12e13]
+      - text: Channel Points
+    - spinbutton [disabled] [ref=f12e14]: "500"
+  - generic [ref=f12e15]:
+    - text: Cooldown (sec)
+    - spinbutton "Cooldown (sec)" [ref=f12e16]: "5"
+  - generic [ref=f12e17]:
+    - text: Card Image (max 256 KB, PNG/JPG/GIF/WebP)
+    - button "Choose File" [ref=f12e19]
+  - generic [ref=f12e20]:
+    - checkbox "Share to Community Library" [ref=f12e21]
+    - text: Share to Community Library
+  - generic [ref=f12e22]: Tags (comma-separated, up to 5 â€” helps others find it in the library)
+  - textbox "e.g. anime, meme, horror" [ref=f12e23]
+  - button "Trim Audio" [ref=f12e25]
+  - generic [ref=f12e26]:
+    - button "Save" [ref=f12e27]
+    - button "Cancel" [ref=f12e28]

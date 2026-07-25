@@ -1,0 +1,97 @@
+- generic [active]:
+  - generic:
+    - generic [ref=f11e2]:
+      - banner [ref=f11e3]:
+        - generic [ref=f11e4]:
+          - button [ref=f11e5] [cursor=pointer]
+          - heading "For Streamers" [level=6] [ref=f11e8]
+          - link "Overlays" [ref=f11e9] [cursor=pointer]:
+            - /url: /overlays
+          - button "Sign in / Sign up" [ref=f11e10] [cursor=pointer]
+      - main [ref=f11e11]:
+        - heading "Create overlays for your live streams" [level=1] [ref=f11e14]
+        - generic [ref=f11e15]:
+          - article [ref=f11e16]:
+            - generic [ref=f11e19]:
+              - heading "Your brand; your overlay" [level=2] [ref=f11e21]
+              - paragraph [ref=f11e23]: Upload your images and sounds and create an overlay that represents you.
+          - article [ref=f11e24]:
+            - generic [ref=f11e27]:
+              - heading "Ruthlessly efficient" [level=2] [ref=f11e29]
+              - paragraph [ref=f11e31]: Your entire overlay, from informative panels to responsive alerts, runs in a single browser source.
+          - article [ref=f11e32]:
+            - generic [ref=f11e35]:
+              - heading "50+ integrations" [level=2] [ref=f11e37]
+              - paragraph [ref=f11e39]: Integrate your overlay with your favorite services like Twitch, Pretzel Rocks, Dropbox, Stripe … with more integrations added regularly.
+          - article [ref=f11e40]:
+            - generic [ref=f11e43]:
+              - heading "30+ alert animations" [level=2] [ref=f11e45]
+              - paragraph [ref=f11e47]: Choose the entry and exit animations for alerts that fit your unique style.
+          - article [ref=f11e48]:
+            - generic [ref=f11e51]:
+              - heading "800+ fonts" [level=2] [ref=f11e53]
+              - paragraph [ref=f11e55]: Bring out your personality with your choice from over 800 designer fonts, powered by Google Fonts.
+          - article [ref=f11e56]:
+            - generic [ref=f11e59]:
+              - heading "Get started — it's free!" [level=2] [ref=f11e61]
+              - button "Sign into Overlay Expert" [ref=f11e63] [cursor=pointer]
+        - generic [ref=f11e65]:
+          - generic [ref=f11e67]:
+            - generic [ref=f11e68]:
+              - heading "Overlay Expert" [level=6] [ref=f11e69]
+              - generic [ref=f11e70]:
+                - button "Sign in / Sign up" [ref=f11e71] [cursor=pointer]
+                - generic [ref=f11e72]:
+                  - button "English" [ref=f11e73] [cursor=pointer]
+                  - button "$ USD" [ref=f11e74] [cursor=pointer]
+            - generic [ref=f11e75]: © 2026 Overlay Expert Inc.
+          - generic [ref=f11e77]:
+            - generic [ref=f11e78]:
+              - paragraph [ref=f11e79]: Navigation
+              - separator [ref=f11e80]
+              - generic [ref=f11e81]:
+                - link "Home" [ref=f11e82] [cursor=pointer]:
+                  - /url: /
+                - link "For Streamers" [ref=f11e83] [cursor=pointer]:
+                  - /url: /streamers
+                - link "For Consoles" [ref=f11e84] [cursor=pointer]:
+                  - /url: /consoles
+                - link "For Designers" [ref=f11e85] [cursor=pointer]:
+                  - /url: /designers
+                - link "Celebrations" [ref=f11e86] [cursor=pointer]:
+                  - /url: /celebrations
+                - link "Marketplace" [ref=f11e87] [cursor=pointer]:
+                  - /url: /marketplace
+                - generic [ref=f11e88] [cursor=pointer]: Pricing
+                - link "Overlays" [ref=f11e89] [cursor=pointer]:
+                  - /url: /overlays
+            - generic [ref=f11e90]:
+              - paragraph [ref=f11e91]: Help
+              - separator [ref=f11e92]
+              - generic [ref=f11e93]:
+                - generic [ref=f11e94] [cursor=pointer]: Support
+                - link "Terms of Use" [ref=f11e95] [cursor=pointer]:
+                  - /url: /terms-of-use
+                - link "Privacy Policy" [ref=f11e96] [cursor=pointer]:
+                  - /url: /privacy-policy
+                - link "Refund Policy" [ref=f11e97] [cursor=pointer]:
+                  - /url: /refund-policy
+            - generic [ref=f11e98]:
+              - paragraph [ref=f11e99]: Follow
+              - separator [ref=f11e100]
+              - generic [ref=f11e101]:
+                - link "X" [ref=f11e102] [cursor=pointer]:
+                  - /url: https://x.com/OverlayExpert
+                - link "Twitch" [ref=f11e103] [cursor=pointer]:
+                  - /url: https://twitch.tv/OverlayExpert
+                - link "YouTube" [ref=f11e104] [cursor=pointer]:
+                  - /url: https://www.youtube.com/@overlayexpert
+                - link "Discord" [ref=f11e105] [cursor=pointer]:
+                  - /url: https://discord.com/invite/bhJThkq
+    - generic [ref=f11e108]:
+      - paragraph [ref=f11e111]:
+        - text: Overlay Expert uses cookies to deliver and enhance the quality of our services and to analyze traffic.
+        - link "Learn more" [ref=f11e112] [cursor=pointer]:
+          - /url: /privacy-policy
+        - text: .
+      - button "OK, got it" [ref=f11e113] [cursor=pointer]

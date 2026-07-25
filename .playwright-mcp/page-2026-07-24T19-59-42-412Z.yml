@@ -1,0 +1,280 @@
+- generic [ref=f3e4]:
+  - navigation [ref=f3e5]:
+    - generic [ref=f3e7]:
+      - link [ref=f3e8] [cursor=pointer]:
+        - /url: /
+        - img "Sound Alerts" [ref=f3e9]
+      - list [ref=f3e10]:
+        - listitem [ref=f3e11]:
+          - link "Home":
+            - /url: /
+        - listitem [ref=f3e12]:
+          - button "Features" [ref=f3e14] [cursor=pointer]
+        - listitem [ref=f3e17]:
+          - link "Blog" [ref=f3e18] [cursor=pointer]:
+            - /url: /blog
+        - listitem [ref=f3e19]:
+          - link "Streamers" [ref=f3e20] [cursor=pointer]:
+            - /url: /streamers
+        - listitem [ref=f3e21]:
+          - link "Help Center" [ref=f3e22] [cursor=pointer]:
+            - /url: https://support.soundalerts.com
+      - list [ref=f3e23]:
+        - listitem [ref=f3e24]:
+          - link "Get Coins" [ref=f3e25] [cursor=pointer]:
+            - /url: /coins
+        - listitem [ref=f3e27]:
+          - link "Streamer Dashboard" [ref=f3e28] [cursor=pointer]:
+            - /url: https://dashboard.soundalerts.com
+  - main [ref=f3e31]:
+    - generic [ref=f3e34]:
+      - img "stars" [ref=f3e35]
+      - heading "Unleash your Stream's full Potential with Sound Alerts" [level=1] [ref=f3e36]
+      - paragraph [ref=f3e39]:
+        - generic [ref=f3e40]: Set up and manage your streaming alerts, tips, scenes, overlays, animations, and sounds via the Sound Alerts Dashboard.
+      - img "Sound Alerts Extension" [ref=f3e42]
+      - img "planet-1" [ref=f3e44]
+      - img "planet-2" [ref=f3e45]
+    - generic [ref=f3e48]:
+      - generic [ref=f3e51]:
+        - generic [ref=f3e52]:
+          - heading "Revenue Booster" [level=2] [ref=f3e53]
+          - paragraph [ref=f3e55]: Increase your streaming income with our Tipping Page or interactive Twitch Bits alerts in our Extension.
+        - img "Revenue Booster" [ref=f3e57]
+      - generic [ref=f3e60]:
+        - generic [ref=f3e61]:
+          - heading "Endless Customization" [level=2] [ref=f3e62]
+          - paragraph [ref=f3e64]: Benefit from a vast media library, upload your own files, or use our editor to assemble custom animations.
+        - img "Endless Customization" [ref=f3e66]
+      - generic [ref=f3e69]:
+        - generic [ref=f3e70]:
+          - heading "100% Compatible" [level=2] [ref=f3e71]
+          - paragraph [ref=f3e73]: Sound Alerts works with all major broadcast tools, including OBS, mobile apps, and console streaming.
+        - img "100% Compatible" [ref=f3e75]
+    - generic [ref=f3e78]:
+      - heading "Key Features" [level=2] [ref=f3e79]
+      - generic [ref=f3e81]:
+        - generic [ref=f3e83]:
+          - generic [ref=f3e84]:
+            - generic [ref=f3e86]:
+              - generic [ref=f3e87]:
+                - heading "Interactive Twitch Extension" [level=3] [ref=f3e88]
+                - paragraph [ref=f3e90]: Let your viewers activate alerts via our customizable panel and fuel it with Bits.
+                - link "Learn More" [ref=f3e91] [cursor=pointer]:
+                  - /url: /twitch-extension
+              - img "Interactive Twitch Extension" [ref=f3e93]
+            - generic [ref=f3e94]:
+              - progressbar "progress"
+          - generic [ref=f3e95]:
+            - button "previous" [ref=f3e96] [cursor=pointer]
+            - generic [ref=f3e99]:
+              - button "Slide 1" [ref=f3e100] [cursor=pointer]
+              - button "Slide 2" [ref=f3e101] [cursor=pointer]
+              - button "Slide 3" [ref=f3e102] [cursor=pointer]
+              - button "Slide 4" [ref=f3e103] [cursor=pointer]
+              - button "Slide 5" [ref=f3e104] [cursor=pointer]
+              - button "Slide 6" [ref=f3e105] [cursor=pointer]
+            - button "next" [ref=f3e106] [cursor=pointer]
+        - img "Nebula" [ref=f3e109]
+        - img "Planet" [ref=f3e110]
+    - generic [ref=f3e113]:
+      - heading "Meet the Sound Alerts Community" [level=2] [ref=f3e114]
+      - region "Gallery" [ref=f3e116]:
+        - list [ref=f3e118]:
+          - listitem [ref=f3e119]:
+            - generic [ref=f3e121]:
+              - button [ref=f3e122] [cursor=pointer]
+              - generic [ref=f3e126]:
+                - generic [ref=f3e127]: The Everything Now Show!
+                - link [ref=f3e128] [cursor=pointer]:
+                  - /url: https://www.twitch.tv/everythingnowshow
+                  - text: twitch.tv/everythingnowshow
+          - listitem [ref=f3e129]:
+            - generic [ref=f3e131]:
+              - button [ref=f3e132] [cursor=pointer]
+              - generic [ref=f3e136]:
+                - generic [ref=f3e137]: Filian
+                - link [ref=f3e138] [cursor=pointer]:
+                  - /url: https://www.twitch.tv/filian
+                  - text: twitch.tv/filian
+          - listitem [ref=f3e139]:
+            - generic [ref=f3e141]:
+              - button "toggle" [ref=f3e142] [cursor=pointer]
+              - generic [ref=f3e146]:
+                - generic [ref=f3e147]: Dan Ryckert
+                - link "twitch.tv/danryckert" [ref=f3e148] [cursor=pointer]:
+                  - /url: https://www.twitch.tv/danryckert
+          - listitem [ref=f3e149]:
+            - generic [ref=f3e151]:
+              - button "toggle" [ref=f3e152] [cursor=pointer]
+              - generic [ref=f3e156]:
+                - generic [ref=f3e157]: Ironmouse
+                - link "twitch.tv/ironmouse" [ref=f3e158] [cursor=pointer]:
+                  - /url: https://www.twitch.tv/ironmouse
+          - listitem [ref=f3e159]:
+            - generic [ref=f3e161]:
+              - button "toggle" [ref=f3e162] [cursor=pointer]
+              - generic [ref=f3e166]:
+                - generic [ref=f3e167]: Elmza
+                - link "twitch.tv/elmza" [ref=f3e168] [cursor=pointer]:
+                  - /url: https://www.twitch.tv/elmza
+          - listitem [ref=f3e169]:
+            - generic [ref=f3e171]:
+              - button "toggle" [ref=f3e172] [cursor=pointer]
+              - generic [ref=f3e176]:
+                - generic [ref=f3e177]: The Everything Now Show!
+                - link "twitch.tv/everythingnowshow" [ref=f3e178] [cursor=pointer]:
+                  - /url: https://www.twitch.tv/everythingnowshow
+          - listitem [ref=f3e179]:
+            - generic [ref=f3e181]:
+              - button "toggle" [ref=f3e182] [cursor=pointer]
+              - generic [ref=f3e186]:
+                - generic [ref=f3e187]: Filian
+                - link "twitch.tv/filian" [ref=f3e188] [cursor=pointer]:
+                  - /url: https://www.twitch.tv/filian
+        - generic [ref=f3e189]: Item 1 of 5
+      - generic [ref=f3e190]:
+        - button "previous" [ref=f3e191] [cursor=pointer]
+        - button "Bits 100 Fart Fart" [ref=f3e196] [cursor=pointer]:
+          - generic [ref=f3e197]:
+            - generic [ref=f3e198]:
+              - img "Bits" [ref=f3e199]
+              - text: "100"
+            - img "Fart" [ref=f3e201]
+            - generic [ref=f3e205]: Fart
+        - button "next" [ref=f3e206] [cursor=pointer]
+      - generic [ref=f3e210]:
+        - progressbar "progress"
+      - paragraph [ref=f3e211]: Millions of streamers worldwide trust the Sound Alerts ecosystem.
+      - img "Spaceship"
+    - generic [ref=f3e214]:
+      - heading "Sound Alerts in Numbers" [level=2] [ref=f3e215]
+      - generic [ref=f3e217]:
+        - generic [ref=f3e220]:
+          - generic [ref=f3e223]: 359K+
+          - heading "Bits Alerts in the last Month" [level=3] [ref=f3e224]
+        - generic [ref=f3e227]:
+          - generic [ref=f3e230]: 3M+
+          - heading "Monthly Active Users" [level=3] [ref=f3e231]
+        - generic [ref=f3e234]:
+          - generic [ref=f3e237]: 2.1M+
+          - heading "Sounds & Videos" [level=3] [ref=f3e238]
+        - generic [ref=f3e241]:
+          - generic [ref=f3e244]: 3M+
+          - heading "Streamers" [level=3] [ref=f3e245]
+      - paragraph [ref=f3e246]: While these numbers represent some of our most significant achievements, none of them would be possible without the constant feedback and support of our great community of content creators.
+    - generic [ref=f3e249]:
+      - heading "The Sound Alerts Blog" [level=2] [ref=f3e250]
+      - generic [ref=f3e252]:
+        - generic [ref=f3e254]:
+          - link [ref=f3e256] [cursor=pointer]:
+            - /url: /blog/display-your-livestream-opinion-with-trending-words
+            - img "Display your Livestream's Opinion with Trending Words" [ref=f3e258]
+          - generic [ref=f3e259]:
+            - generic [ref=f3e260]: Tuesday, July 7, 2026
+            - link [ref=f3e261] [cursor=pointer]:
+              - /url: /blog/display-your-livestream-opinion-with-trending-words
+              - heading "Display your Livestream's Opinion with Trending Words" [level=3] [ref=f3e262]
+            - paragraph [ref=f3e265]: In this guide, we want to showcase a more engaging way to highlight your live chat's perspective with just a few clicks.
+            - link "Read more..." [ref=f3e267] [cursor=pointer]:
+              - /url: /blog/display-your-livestream-opinion-with-trending-words
+        - generic [ref=f3e270]:
+          - link [ref=f3e272] [cursor=pointer]:
+            - /url: /blog/may-2026-changelog-rehaul-time
+            - img "13 May 2026 Changelog - Rehaul Time!" [ref=f3e274]
+          - generic [ref=f3e275]:
+            - generic [ref=f3e276]: Wednesday, May 13, 2026
+            - link [ref=f3e277] [cursor=pointer]:
+              - /url: /blog/may-2026-changelog-rehaul-time
+              - heading "13 May 2026 Changelog - Rehaul Time!" [level=3] [ref=f3e278]
+            - paragraph [ref=f3e281]: Improving your streaming experience remains our highest priority, and we are excited to show you what's new in this month's changelog!
+            - link "Read more..." [ref=f3e283] [cursor=pointer]:
+              - /url: /blog/may-2026-changelog-rehaul-time
+        - generic [ref=f3e286]:
+          - link [ref=f3e288] [cursor=pointer]:
+            - /url: /blog/sound-alerts-anniversary-update-2026
+            - img "Sound Alerts Anniversary Update — 2026" [ref=f3e290]
+          - generic [ref=f3e291]:
+            - generic [ref=f3e292]: Thursday, April 23, 2026
+            - link [ref=f3e293] [cursor=pointer]:
+              - /url: /blog/sound-alerts-anniversary-update-2026
+              - heading "Sound Alerts Anniversary Update — 2026" [level=3] [ref=f3e294]
+            - paragraph [ref=f3e297]: The 23rd of April marks the Sound Alerts birthday. On this date, we publish our yearly Anniversary Update, featuring product improvements, new features, and surprises related to Sound Alerts.
+            - link "Read more..." [ref=f3e299] [cursor=pointer]:
+              - /url: /blog/sound-alerts-anniversary-update-2026
+      - link "Open Blog" [ref=f3e302] [cursor=pointer]:
+        - /url: /blog
+    - generic [ref=f3e305]:
+      - generic [ref=f3e306]:
+        - heading "Video Showcase" [level=2] [ref=f3e307]
+        - application "YouTube Player - Placeholder" [ref=f3e310] [cursor=pointer]:
+          - img "Video placeholder" [ref=f3e313]
+      - link [ref=f3e318] [cursor=pointer]:
+        - /url: https://www.youtube.com/c/SoundAlerts
+    - generic [ref=f3e324]:
+      - heading "Start your Sound Alerts Journey" [level=2] [ref=f3e325]
+      - paragraph [ref=f3e327]: The setup will take you less than 10 minutes to complete — increase your community engagement and streaming income now!
+      - generic:
+        - img "Highlight Teaser"
+      - link [ref=f3e329] [cursor=pointer]:
+        - /url: https://dashboard.soundalerts.com
+  - contentinfo [ref=f3e333]:
+    - generic [ref=f3e335]:
+      - link "Sound Alerts" [ref=f3e337] [cursor=pointer]:
+        - /url: /
+        - img "Sound Alerts"
+      - list [ref=f3e338]:
+        - listitem [ref=f3e339]:
+          - link "https://x.com/SoundAlertsApp" [ref=f3e340] [cursor=pointer]:
+            - /url: https://x.com/SoundAlertsApp
+        - listitem [ref=f3e343]:
+          - link "https://discord.soundalerts.com" [ref=f3e344] [cursor=pointer]:
+            - /url: https://discord.soundalerts.com
+        - listitem [ref=f3e347]:
+          - link "https://instagram.com/soundalertsapp" [ref=f3e348] [cursor=pointer]:
+            - /url: https://instagram.com/soundalertsapp
+        - listitem [ref=f3e351]:
+          - link "https://www.tiktok.com/@soundalerts" [ref=f3e352] [cursor=pointer]:
+            - /url: https://www.tiktok.com/@soundalerts
+        - listitem [ref=f3e355]:
+          - link "https://www.youtube.com/c/SoundAlerts" [ref=f3e356] [cursor=pointer]:
+            - /url: https://www.youtube.com/c/SoundAlerts
+        - listitem [ref=f3e359]:
+          - link "https://www.linkedin.com/company/sound-alerts" [ref=f3e360] [cursor=pointer]:
+            - /url: https://www.linkedin.com/company/sound-alerts
+      - list [ref=f3e363]:
+        - listitem [ref=f3e364]:
+          - link "About" [ref=f3e365] [cursor=pointer]:
+            - /url: /about
+        - listitem [ref=f3e366]:
+          - link "Premium" [ref=f3e367] [cursor=pointer]:
+            - /url: /premium
+        - listitem [ref=f3e368]:
+          - link "Roadmap" [ref=f3e369] [cursor=pointer]:
+            - /url: https://feedback.soundalerts.com/roadmap
+        - listitem [ref=f3e370]:
+          - link "Changelog" [ref=f3e371] [cursor=pointer]:
+            - /url: https://feedback.soundalerts.com/changelog
+        - listitem [ref=f3e372]:
+          - link "Brand" [ref=f3e373] [cursor=pointer]:
+            - /url: /brand
+        - listitem [ref=f3e374]:
+          - link "Advertisers" [ref=f3e375] [cursor=pointer]:
+            - /url: /advertisers
+        - listitem [ref=f3e376]:
+          - link "Imprint" [ref=f3e377] [cursor=pointer]:
+            - /url: /imprint
+        - listitem [ref=f3e378]:
+          - link "Terms" [ref=f3e379] [cursor=pointer]:
+            - /url: /terms
+        - listitem [ref=f3e380]:
+          - link "Privacy" [ref=f3e381] [cursor=pointer]:
+            - /url: /privacy
+        - listitem [ref=f3e382]:
+          - button "Cookies" [ref=f3e383] [cursor=pointer]
+      - list [ref=f3e384]:
+        - listitem [ref=f3e385]:
+          - button "English" [ref=f3e387] [cursor=pointer]
+        - listitem [ref=f3e392]:
+          - button "Back to Top" [ref=f3e393] [cursor=pointer]
+    - generic [ref=f3e395]: 2026 Sound Alerts

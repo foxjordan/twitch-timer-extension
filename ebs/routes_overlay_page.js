@@ -155,6 +155,7 @@ ${channels.length === 0 ? '<p style="color:#adadb8;font-size:13px;">No one has a
       base: "",
       adminName,
       userKey,
+      klipyEnabled: Boolean(process.env.KLIPY_API_KEY),
       showAdminLink: superAdmin,
       isSuperAdmin: superAdmin,
       delegateMode: isManagingOther,

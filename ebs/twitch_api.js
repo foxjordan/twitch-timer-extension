@@ -207,6 +207,37 @@ export async function fetchLiveStreamStatus(userIds = []) {
   return live;
 }
 
+// Get Channel Emotes doesn't require any user scope — an app access token is
+// enough, so this works for every broadcaster regardless of what their own
+// stored token can do.
+export async function fetchChannelEmotes(broadcasterId) {
+  const id = broadcasterId ? String(broadcasterId) : null;
+  if (!id) return [];
+  const clientId = process.env.TWITCH_CLIENT_ID;
+  const token = await getAppAccessToken();
+  if (!clientId || !token) return [];
+
+  try {
+    const res = await fetch(
+      `https://api.twitch.tv/helix/chat/emotes?broadcaster_id=${encodeURIComponent(id)}`,
+      { headers: { "Client-Id": clientId, Authorization: `Bearer ${token}` } },
+    );
+    if (!res.ok) {
+      logger.warn("twitch_emotes_fetch_failed", { status: res.status, broadcasterId: id });
+      return [];
+    }
+    const json = await res.json();
+    return (json.data || []).map((e) => ({
+      id: e.id,
+      name: e.name,
+      url: e.images?.url_4x || e.images?.url_2x || e.images?.url_1x,
+    })).filter((e) => e.url);
+  } catch (err) {
+    logger.error("twitch_emotes_fetch_error", { message: err?.message, broadcasterId: id });
+    return [];
+  }
+}
+
 export async function fetchActiveSubscriberCount({ broadcasterId }) {
   const id = broadcasterId ? String(broadcasterId) : null;
   if (!id) return null;

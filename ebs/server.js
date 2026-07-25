@@ -2,7 +2,7 @@ import "dotenv/config";
 import express from "express";
 import session from "express-session";
 import connectPgSimple from "connect-pg-simple";
-import { db } from "./db.js";
+import { db, sessionDb } from "./db.js";
 import { v4 as uuidv4 } from "uuid";
 import { RULES } from "./rules.js";
 import { connectEventSubWS } from "./eventsub-ws.js";
@@ -78,7 +78,7 @@ import { fetchActiveSubscriberCount } from "./twitch_api.js";
 import { mountSoundRoutes } from "./routes_sounds.js";
 import { mountAdminRoutes } from "./routes_admin.js";
 import { mountAdminSoundRoutes } from "./routes_admin_sounds.js";
-import { loadSoundAlerts, listSounds, getSoundSettings, setSoundSettings } from "./sounds_store.js";
+import { loadSoundAlerts, listSounds, getSoundSettings, setSoundSettings, getSoundByChannelPointsRewardId } from "./sounds_store.js";
 import { loadBans, isBanned } from "./bans.js";
 import { loadSubscriptions } from "./subscription_store.js";
 import { mountStripeWebhookRoute, mountStripeRoutes } from "./routes_stripe.js";
@@ -126,7 +126,7 @@ app.use(
     // Persists sessions in Postgres instead of express-session's default
     // MemoryStore, which never expires entries and leaks memory until the
     // process is restarted.
-    store: new PgSessionStore({ pool: db, tableName: "session", createTableIfMissing: true }),
+    store: new PgSessionStore({ pool: sessionDb, tableName: "session", createTableIfMissing: true }),
     secret:
       process.env.SESSION_SECRET || process.env.TWITCH_CLIENT_SECRET || crypto.randomBytes(16).toString("hex"),
     resave: false,
@@ -975,6 +975,126 @@ mountGoalRoutes(app, {
   onGoalsChanged: (uid) => broadcastGoalSnapshot(uid),
 });
 
+// Shared by both trigger paths: a real Bits redemption (routes_sounds.js's
+// notify(), passing `tier`) and a Channel Points redemption (the EventSub
+// handler below, passing `channelPointsAmount` instead) — same overlay
+// broadcast, same extension pubsub, same chat notification either way, just
+// different wording for what the viewer actually spent.
+function handleSoundAlert({ channelId, soundId, soundName, tier, txId, viewerUserId, type, clipSlug, volume, channelPointsAmount, imageFilename, popupStyle }) {
+  const isTestAlert = !txId || txId.startsWith('test_');
+  if (!isTestAlert) {
+    logSoundEvent({ channelId, viewerUserId, soundId, soundName, alertType: type, tier, txId, clipSlug, eventKind: 'played' });
+  }
+  const alertId = crypto.randomUUID().slice(0, 12);
+  const bitsAmount = tier ? (Number(tier.replace(/^[^_]+_/, '')) || null) : null;
+  const queueItem = {
+    alertId,
+    type: type || 'sound',
+    soundName,
+    soundId,
+    viewerUserId: viewerUserId || null,
+    viewerDisplayName: null,
+    bitsAmount,
+    channelPointsAmount: channelPointsAmount || null,
+    hasImage: Boolean(imageFilename),
+    enqueuedAt: Date.now(),
+    expiresAt: Date.now() + ALERT_QUEUE_TTL_MS,
+  };
+  const cq = pendingAlerts.get(String(channelId)) || [];
+  cq.push(queueItem);
+  pendingAlerts.set(String(channelId), cq);
+  const logEntry = addLogEntry({
+    type: "sound_alert",
+    userId: String(channelId),
+    soundId,
+    soundName,
+    alertType: type || "sound",
+    volume: volume || 80,
+    viewerUserId: viewerUserId || undefined,
+    txId: txId || undefined,
+  });
+  const payload = JSON.stringify({
+    alertId,
+    soundId,
+    soundName,
+    channelId,
+    txId,
+    ts: Date.now(),
+    type: type || "sound",
+    clipSlug: clipSlug || "",
+    volume: volume || 80,
+    // Just a flag, not the filename itself — the overlay already knows its
+    // own key and constructs the image URL the same way it does for audio.
+    hasImage: Boolean(imageFilename),
+    popupStyle: popupStyle === "large" ? "large" : "corner",
+  });
+  for (const client of Array.from(sseClients)) {
+    if (
+      client.timerUserId &&
+      String(client.timerUserId) !== String(channelId)
+    )
+      continue;
+    try {
+      client.res.write("event: sound_alert\n");
+      client.res.write(`data: ${payload}\n\n`);
+    } catch (e) {
+      sseClients.delete(client);
+    }
+  }
+  broadcastToChannel({
+    broadcasterId: channelId,
+    type: "sound_alert",
+    payload: { soundId, soundName },
+  }).catch(() => {});
+
+  // Add timer time for Bits-in-Extensions usage (same rules as cheers) —
+  // skipped for test-fired alerts, which must never mutate real timer state.
+  // Channel Points redemptions never reach this branch (no `tier`), matching
+  // the original design intent that only Bits count toward the timer.
+  if (tier && !isTestAlert) {
+    const bits = Number(tier.replace("sound_", "")) || 0;
+    if (bits > 0) {
+      logEntry.bitsAmount = bits;
+      const timerUid = String(channelId);
+      const RULES = getRules(timerUid);
+      const per = Math.max(1, Number(RULES.bits?.per || 0));
+      const addSec = Math.max(0, Number(RULES.bits?.add_seconds || 0));
+      if (addSec > 0) {
+        const userState = state.users.get(timerUid) || { bitsCarry: 0 };
+        userState.bitsCarry = Math.max(0, Math.floor((userState.bitsCarry || 0) + bits));
+        state.users.set(timerUid, userState);
+        const units = Math.floor(userState.bitsCarry / per);
+        userState.bitsCarry = userState.bitsCarry % per;
+        if (units > 0) {
+          const secs = units * addSec;
+          addSeconds(timerUid, secs);
+          logEntry.secondsAdded = secs;
+          logger.info("bits_in_ext_timer_add", { userId: timerUid, bits, seconds: secs, source: "sound_alert" });
+        }
+      }
+    }
+  }
+
+  // Post to chat (async, best-effort) — also backfill display name on the log entry
+  if (viewerUserId && (tier || channelPointsAmount)) {
+    const costText = tier ? `${tier.replace("sound_", "")} Bits` : `${channelPointsAmount} Channel Points`;
+    (async () => {
+      const displayName = await fetchUserDisplayName(viewerUserId, channelId);
+      if (displayName) {
+        logEntry.viewerDisplayName = displayName;
+        queueItem.viewerDisplayName = displayName;
+      }
+      const who = displayName || viewerUserId;
+      const accessToken = await getValidAccessToken(String(channelId)).catch(() => null);
+      await sendBroadcasterChatMessage({
+        broadcasterId: channelId,
+        accessToken,
+        text: `${who} played "${soundName}" for ${costText}!`,
+      });
+    })().catch(() => {});
+  }
+}
+
 mountSoundRoutes(app, {
   requireOverlayAuth,
   getSessionUserId: (req) => req.session?.managingAs || req.session?.twitchUser?.id,
@@ -996,112 +1116,7 @@ mountSoundRoutes(app, {
       } catch { sseClients.delete(client); }
     }
   },
-  onSoundAlert: ({ channelId, soundId, soundName, tier, txId, viewerUserId, type, clipSlug, volume }) => {
-    const isTestAlert = !txId || txId.startsWith('test_');
-    if (!isTestAlert) {
-      logSoundEvent({ channelId, viewerUserId, soundId, soundName, alertType: type, tier, txId, clipSlug, eventKind: 'played' });
-    }
-    const alertId = crypto.randomUUID().slice(0, 12);
-    const bitsAmount = tier ? (Number(tier.replace(/^[^_]+_/, '')) || null) : null;
-    const queueItem = {
-      alertId,
-      type: type || 'sound',
-      soundName,
-      soundId,
-      viewerUserId: viewerUserId || null,
-      viewerDisplayName: null,
-      bitsAmount,
-      enqueuedAt: Date.now(),
-      expiresAt: Date.now() + ALERT_QUEUE_TTL_MS,
-    };
-    const cq = pendingAlerts.get(String(channelId)) || [];
-    cq.push(queueItem);
-    pendingAlerts.set(String(channelId), cq);
-    const logEntry = addLogEntry({
-      type: "sound_alert",
-      userId: String(channelId),
-      soundId,
-      soundName,
-      alertType: type || "sound",
-      volume: volume || 80,
-      viewerUserId: viewerUserId || undefined,
-      txId: txId || undefined,
-    });
-    const payload = JSON.stringify({
-      alertId,
-      soundId,
-      soundName,
-      channelId,
-      txId,
-      ts: Date.now(),
-      type: type || "sound",
-      clipSlug: clipSlug || "",
-      volume: volume || 80,
-    });
-    for (const client of Array.from(sseClients)) {
-      if (
-        client.timerUserId &&
-        String(client.timerUserId) !== String(channelId)
-      )
-        continue;
-      try {
-        client.res.write("event: sound_alert\n");
-        client.res.write(`data: ${payload}\n\n`);
-      } catch (e) {
-        sseClients.delete(client);
-      }
-    }
-    broadcastToChannel({
-      broadcasterId: channelId,
-      type: "sound_alert",
-      payload: { soundId, soundName },
-    }).catch(() => {});
-
-    // Add timer time for Bits-in-Extensions usage (same rules as cheers) —
-    // skipped for test-fired alerts, which must never mutate real timer state.
-    if (tier && !isTestAlert) {
-      const bits = Number(tier.replace("sound_", "")) || 0;
-      if (bits > 0) {
-        logEntry.bitsAmount = bits;
-        const timerUid = String(channelId);
-        const RULES = getRules(timerUid);
-        const per = Math.max(1, Number(RULES.bits?.per || 0));
-        const addSec = Math.max(0, Number(RULES.bits?.add_seconds || 0));
-        if (addSec > 0) {
-          const userState = state.users.get(timerUid) || { bitsCarry: 0 };
-          userState.bitsCarry = Math.max(0, Math.floor((userState.bitsCarry || 0) + bits));
-          state.users.set(timerUid, userState);
-          const units = Math.floor(userState.bitsCarry / per);
-          userState.bitsCarry = userState.bitsCarry % per;
-          if (units > 0) {
-            const secs = units * addSec;
-            addSeconds(timerUid, secs);
-            logEntry.secondsAdded = secs;
-            logger.info("bits_in_ext_timer_add", { userId: timerUid, bits, seconds: secs, source: "sound_alert" });
-          }
-        }
-      }
-    }
-
-    // Post to chat (async, best-effort) — also backfill display name on the log entry
-    if (viewerUserId && tier) {
-      const bits = tier.replace("sound_", "");
-      (async () => {
-        const displayName = await fetchUserDisplayName(viewerUserId, channelId);
-        if (displayName) {
-          logEntry.viewerDisplayName = displayName;
-          queueItem.viewerDisplayName = displayName;
-        }
-        const who = displayName || viewerUserId;
-        const accessToken = await getValidAccessToken(String(channelId)).catch(() => null);
-        await sendBroadcasterChatMessage({
-          broadcasterId: channelId,
-          accessToken,
-          text: `${who} played "${soundName}" for ${bits} Bits!`,
-        });
-      })().catch(() => {});
-    }
-  },
+  onSoundAlert: handleSoundAlert,
   deduplicateTx: (txId) => {
     const key = `soundtx:${txId}`;
     if (state.seen.has(key)) return true;
@@ -1653,6 +1668,29 @@ async function handleEventSub(notification, expectedUserId = null) {
     return;
   }
 
+  // Channel Points redemptions never touch the timer — they're a separate,
+  // free-to-viewers trigger for sound alerts only (see handleSoundAlert).
+  if (subType === "channel.channel_points_custom_reward_redemption.add") {
+    const rewardId = e.reward?.id;
+    const sound = rewardId ? getSoundByChannelPointsRewardId(timerUid, rewardId) : null;
+    if (sound) {
+      handleSoundAlert({
+        channelId: timerUid,
+        soundId: sound.id,
+        soundName: sound.name,
+        txId: e.id,
+        viewerUserId: e.user_id,
+        type: sound.type || "sound",
+        clipSlug: sound.clipSlug || "",
+        volume: sound.volume || 80,
+        channelPointsAmount: e.reward?.cost || sound.channelPointsCost,
+        imageFilename: sound.imageFilename || "",
+        popupStyle: sound.popupStyle || "corner",
+      });
+    }
+    return;
+  }
+
   processEventTimer(notification, timerUid, id, now);
 }
 
@@ -2159,6 +2197,20 @@ process.on("SIGINT", () => gracefulShutdown("SIGINT"));
 
 // Must be registered after all routes so Sentry can capture Express errors
 Sentry.setupExpressErrorHandler(app);
+
+// Final fallback: any error not already handled by a route (including ones
+// thrown by middleware, like a session store hiccup) lands here instead of
+// Express's default handler, which leaks stack traces/file paths to the
+// client whenever NODE_ENV isn't "production".
+app.use((err, req, res, _next) => {
+  logger.error("unhandled_request_error", {
+    requestId: req.requestId,
+    path: req.path,
+    message: err?.message,
+  });
+  if (res.headersSent) return;
+  res.status(500).json({ error: "Something went wrong. Please try again." });
+});
 
 const port = process.env.PORT || 8080;
 app.listen(port, () => console.log(`EBS listening on :${port} (boot ${SERVER_BOOT_ID})`));

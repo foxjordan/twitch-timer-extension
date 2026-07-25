@@ -61,6 +61,7 @@ export async function connectEventSubWS({
         { type: 'channel.hype_train.begin', version: '2' },
         { type: 'channel.hype_train.progress', version: '2' },
         { type: 'channel.hype_train.end', version: '2' },
+        { type: 'channel.channel_points_custom_reward_redemption.add', version: '1' },
         { type: 'channel.follow', version: '2' },
         { type: 'channel.chat.message', version: '1' },
       ];

@@ -1,0 +1,57 @@
+- generic [active] [ref=e1]:
+  - generic [ref=e3]:
+    - generic [ref=e4]:
+      - link [ref=e5] [cursor=pointer]:
+        - /url: https://soundalerts.com
+        - img "Sound Alerts" [ref=e6]
+      - link [ref=e8] [cursor=pointer]:
+        - /url: https://soundalerts.com
+        - button "Return" [ref=e9]
+      - generic [ref=e13]:
+        - generic [ref=e14]: Welcome to Sound Alerts!
+        - generic [ref=e16]:
+          - link "Login with Twitch" [ref=e17] [cursor=pointer]:
+            - /url: https://functions.soundalerts.com/auth-twitch?return_url=https%3A%2F%2Fdashboard.soundalerts.com%2F&state=7x39rs62129
+          - generic [ref=e21]:
+            - text: By logging in, you agree to our
+            - link "Terms" [ref=e22] [cursor=pointer]:
+              - /url: https://soundalerts.com/terms
+        - generic [ref=e23]:
+          - generic [ref=e24]: "Follow us:"
+          - generic [ref=e25]:
+            - link "Discord" [ref=e26] [cursor=pointer]:
+              - /url: https://discord.soundalerts.com
+            - link "Instagram" [ref=e29] [cursor=pointer]:
+              - /url: https://instagram.com/soundalertsapp
+            - link "X" [ref=e32] [cursor=pointer]:
+              - /url: https://twitter.com/SoundAlertsApp
+            - link "YouTube" [ref=e35] [cursor=pointer]:
+              - /url: https://www.youtube.com/soundalerts
+            - link "TikTok" [ref=e38] [cursor=pointer]:
+              - /url: https://www.tiktok.com/@soundalerts
+            - link "LinkedIn" [ref=e41] [cursor=pointer]:
+              - /url: https://www.linkedin.com/company/sound-alerts
+    - navigation "Footer" [ref=e44]:
+      - link "© 2026 Sound Alerts" [ref=e45] [cursor=pointer]:
+        - /url: https://soundalerts.com
+      - link "•Terms" [ref=e46] [cursor=pointer]:
+        - /url: https://soundalerts.com/terms
+      - link "•Privacy" [ref=e47] [cursor=pointer]:
+        - /url: https://soundalerts.com/privacy
+      - link "•Cookies" [ref=e48] [cursor=pointer]:
+        - /url: "#"
+      - link "•Help us translate" [ref=e49] [cursor=pointer]:
+        - /url: https://crowdin.com/project/soundalerts-dashboard
+      - generic [ref=e50]:
+        - text: •
+        - button [ref=e52] [cursor=pointer]
+  - generic:
+    - generic:
+      - generic: English
+      - generic: French
+      - generic: German
+      - generic: Italian
+      - generic: Portuguese
+      - generic: Portuguese
+      - generic: Russian
+      - generic: Spanish

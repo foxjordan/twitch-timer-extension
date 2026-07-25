@@ -102,7 +102,7 @@ export function renderHomePage(options = {}) {
       .feature-ctas { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
 
       /* Screenshots */
-      .feature-screenshots { display: flex; flex-direction: column; gap: 14px; }
+      .feature-screenshots { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; align-items: start; }
       .screenshot-card { background: var(--surface-color); border: 1px solid var(--surface-border); border-radius: 14px; overflow: hidden; box-shadow: 0 8px 32px var(--goal-card-shadow); }
       .screenshot-card img { width: 100%; height: auto; display: block; }
       .screenshot-card img.compact { max-height: 200px; object-fit: cover; object-position: top; }
@@ -114,6 +114,11 @@ export function renderHomePage(options = {}) {
       .utilities-header p { color: var(--text-muted); font-size: 16px; margin: 0 auto; max-width: 540px; }
       .utilities-screenshots { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; max-width: 800px; margin: 0 auto 24px; }
       .utilities-cta { text-align: center; }
+
+      /* Story */
+      .story-section { margin-bottom: 64px; text-align: center; }
+      .story-section h2 { font-size: 26px; font-weight: 700; margin: 0 0 14px; }
+      .story-section p { color: var(--text-muted); font-size: 16px; line-height: 1.7; max-width: 620px; margin: 0 auto; }
 
       /* Steps */
       .steps-section { margin-bottom: 64px; }
@@ -152,6 +157,7 @@ export function renderHomePage(options = {}) {
         .feature-block.reverse .feature-screenshots { order: 2; }
         .steps-grid { grid-template-columns: 1fr; }
         .utilities-screenshots { grid-template-columns: 1fr; max-width: 480px; }
+        .feature-screenshots { grid-template-columns: 1fr; max-width: 420px; margin: 0 auto; }
       }
       @media (max-width: 600px) {
         main { padding: 0 18px 56px; }
@@ -234,19 +240,10 @@ export function renderHomePage(options = {}) {
         </div>
         <div class="feature-screenshots">
           <div class="screenshot-card">
-            <img src="/assets/screenshots/new_bit_viewerOverlayScreenshot.png" alt="Bit Alerts component overlay — viewers browse and redeem sounds without leaving the video" loading="lazy" />
-          </div>
-          <div class="screenshot-card">
-            <img src="/assets/screenshots/new_bitTTS_viewerOverlayscreenshot.png" alt="Text-to-Speech on the component overlay — viewers pick a voice and send a message" loading="lazy" />
-          </div>
-          <div class="screenshot-card">
             <img src="/assets/screenshots/new_bitSounds_viewerPanelScreenshot.png" alt="Bit Alerts panel view showing sound and video alert cards" loading="lazy" />
           </div>
           <div class="screenshot-card">
             <img src="/assets/screenshots/new_bitTTS_viewerPanelScreenshot.png" alt="Text-to-Speech panel view with voice selection and message input" loading="lazy" />
-          </div>
-          <div class="screenshot-card">
-            <img src="/assets/screenshots/new_twitchConfig_tts_screenshot.png" class="compact" alt="TTS configuration — voices, moderation filters, banned words, and cooldowns" loading="lazy" />
           </div>
         </div>
       </div>
@@ -272,6 +269,12 @@ export function renderHomePage(options = {}) {
             : `<span style="font-size:14px; color:var(--text-muted)">Available to registered broadcasters after signing in.</span>`}
         </div>
       </div>
+
+      <!-- Why this exists -->
+      <section class="story-section">
+        <h2>Why this exists</h2>
+        <p>This started as a favor. One of my own favorite streamers ran regular boost streams and kept running into timer tools that were clunky, unreliable, or missing basic features. I built one that actually worked for how they streamed &mdash; and it turned out other streamers had the exact same problem. What began as a one-off tool for one person has grown from there.</p>
+      </section>
 
       <!-- How to get started -->
       <section class="steps-section">

@@ -1,0 +1,115 @@
+- generic [active] [ref=f9e1]:
+  - banner [ref=f9e2]:
+    - link [ref=f9e4] [cursor=pointer]:
+      - /url: /
+      - img "Livestreamer Hub" [ref=f9e5]
+    - generic [ref=f9e6]:
+      - navigation [ref=f9e7]:
+        - link "Home" [ref=f9e8] [cursor=pointer]:
+          - /url: /
+        - link "Countdown" [ref=f9e9] [cursor=pointer]:
+          - /url: /overlay/config
+        - link "Sound Alerts" [ref=f9e10] [cursor=pointer]:
+          - /url: /sounds/config
+        - link "Goals" [ref=f9e11] [cursor=pointer]:
+          - /url: /goals/config
+      - generic [ref=f9e14]:
+        - button "System theme" [pressed] [ref=f9e15] [cursor=pointer]
+        - button "Light theme" [ref=f9e18] [cursor=pointer]
+        - button "Dark theme" [ref=f9e25] [cursor=pointer]
+  - main [ref=f9e28]:
+    - generic [ref=f9e29]:
+      - generic [ref=f9e30]: Livestreamer Hub
+      - heading "The complete toolkit for Twitch broadcasters" [level=1] [ref=f9e31]
+      - paragraph [ref=f9e32]: A charity & subathon countdown timer, live Bit Alerts, interactive stream utilities, and OBS-ready overlays — built for streamers, all in one place.
+      - generic [ref=f9e33]:
+        - link "Sign in with Twitch" [ref=f9e34] [cursor=pointer]:
+          - /url: /auth/login?next=%2Foverlay%2Fconfig
+        - link "Open Configurator" [ref=f9e35] [cursor=pointer]:
+          - /url: /overlay/config
+      - generic [ref=f9e36]: Not signed in. Sign in with your broadcaster account to manage settings.
+    - generic [ref=f9e37]: What’s included
+    - generic [ref=f9e38]:
+      - generic [ref=f9e39]:
+        - generic [ref=f9e40]: Timer Overlay
+        - heading "A timer that rewards your community" [level=2] [ref=f9e41]
+        - paragraph [ref=f9e42]: Fully configurable countdown timer for subathons, charity streams, and any event where viewer contributions keep the clock alive.
+        - list [ref=f9e43]:
+          - listitem [ref=f9e44]: ✓ Live style editor with real-time overlay preview
+          - listitem [ref=f9e45]: ✓ Bits, subs, gift subs, follows, hype train, and charity donations
+          - listitem [ref=f9e46]: ✓ Pause, resume, and manual time controls
+          - listitem [ref=f9e47]: ✓ Goal bar trackers for milestone fundraising
+          - listitem [ref=f9e48]: ✓ OBS Browser Source URL generated automatically
+        - link "Open Configurator" [ref=f9e50] [cursor=pointer]:
+          - /url: /overlay/config
+      - generic [ref=f9e51]:
+        - img "Timer overlay configurator with live preview and controls" [ref=f9e53]
+        - img "Goal bar configurator with live preview and appearance controls" [ref=f9e55]
+    - generic [ref=f9e56]:
+      - generic [ref=f9e57]:
+        - generic [ref=f9e58]: Twitch Extension
+        - heading "Live Bit Alerts for your stream" [level=2] [ref=f9e59]
+        - paragraph [ref=f9e60]: A companion Twitch Extension that fires custom sound effects when viewers use Bits. Available as both a panel below the video and a component overlay on top of it — viewers never have to scroll away from the action.
+        - list [ref=f9e61]:
+          - listitem [ref=f9e62]: ✓ Component overlay lets viewers browse and redeem sounds without leaving the video
+          - listitem [ref=f9e63]: ✓ Panel view also available below the stream for a traditional layout
+          - listitem [ref=f9e64]: ✓ Upload custom sounds and card images for any Bit threshold
+          - listitem [ref=f9e65]: ✓ Configure directly from the Twitch Extension dashboard
+          - listitem [ref=f9e66]: ✓ OBS Browser Source overlay for on-screen alerts
+        - generic [ref=f9e67]:
+          - link "Add to Your Channel" [ref=f9e68] [cursor=pointer]:
+            - /url: https://dashboard.twitch.tv/extensions/l7iuxz2tipmi4ly2g2vg5uzmdqkhx3-0.0.7
+          - link "Manage Sounds" [ref=f9e69] [cursor=pointer]:
+            - /url: /sounds/config
+      - generic [ref=f9e70]:
+        - img "Bit Alerts component overlay — viewers browse and redeem sounds without leaving the video" [ref=f9e72]
+        - img "Text-to-Speech on the component overlay — viewers pick a voice and send a message" [ref=f9e74]
+        - img "Bit Alerts panel view showing sound and video alert cards" [ref=f9e76]
+        - img "Text-to-Speech panel view with voice selection and message input" [ref=f9e78]
+        - img "TTS configuration — voices, moderation filters, banned words, and cooldowns" [ref=f9e80]
+    - generic [ref=f9e81]:
+      - generic [ref=f9e82]:
+        - generic [ref=f9e83]: Broadcaster Utilities
+        - heading "Bonus tools for your stream" [level=2] [ref=f9e84]
+        - paragraph [ref=f9e85]: Browser-projectable utilities you can use live on stream or add as OBS Browser Sources.
+      - generic [ref=f9e86]:
+        - img "Coin flip and dice roller utilities" [ref=f9e88]
+        - img "Wheel spinner utility" [ref=f9e90]
+      - generic [ref=f9e91]: Available to registered broadcasters after signing in.
+    - generic [ref=f9e92]:
+      - heading "Why this exists" [level=2] [ref=f9e93]
+      - paragraph [ref=f9e94]: This started as a favor. One of my own favorite streamers ran regular boost streams and kept running into timer tools that were clunky, unreliable, or missing basic features. I built one that actually worked for how they streamed — and it turned out other streamers had the exact same problem. What began as a one-off tool for one person has grown from there.
+    - generic [ref=f9e95]:
+      - heading "How to get started" [level=2] [ref=f9e96]
+      - generic [ref=f9e97]:
+        - generic [ref=f9e98]:
+          - generic [ref=f9e99]: "1"
+          - heading "Sign in with Twitch" [level=3] [ref=f9e100]
+          - paragraph [ref=f9e101]: Use the button above with your broadcaster account. You need to be the channel owner to manage settings.
+        - generic [ref=f9e102]:
+          - generic [ref=f9e103]: "2"
+          - heading "Configure your tools" [level=3] [ref=f9e104]
+          - paragraph [ref=f9e105]: Set timer rules, upload Bit Alert sounds, style your overlays, and manage your overlay key in the configurator.
+        - generic [ref=f9e106]:
+          - generic [ref=f9e107]: "3"
+          - heading "Add overlays to OBS" [level=3] [ref=f9e108]
+          - paragraph [ref=f9e109]: Copy your Browser Source URL from the configurator and point an OBS source at it. Refresh after style changes.
+          - code [ref=f9e110]: /overlay
+    - generic [ref=f9e111]:
+      - generic [ref=f9e114]:
+        - heading "Join the community" [level=3] [ref=f9e115]
+        - paragraph [ref=f9e116]: Got questions, feedback, or feature requests? Come hang out on Discord.
+      - link "Join Discord" [ref=f9e117] [cursor=pointer]:
+        - /url: https://discord.gg/nwu4w5cUVd
+    - generic [ref=f9e118]: Not signed in. Use the Sign in button above to manage settings for your Twitch account.
+    - generic [ref=f9e119]:
+      - link "Terms of Service" [ref=f9e120] [cursor=pointer]:
+        - /url: /terms
+      - link "Privacy Policy" [ref=f9e121] [cursor=pointer]:
+        - /url: /privacy
+      - link "GDPR / UK GDPR Disclosure" [ref=f9e122] [cursor=pointer]:
+        - /url: /gdpr
+      - link "Discord" [ref=f9e123] [cursor=pointer]:
+        - /url: https://discord.gg/nwu4w5cUVd
+  - iframe [ref=f9e126]:
+    

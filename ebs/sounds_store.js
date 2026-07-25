@@ -54,7 +54,10 @@ const VIDEO_MIME_TO_EXT = {
   "video/webm": "webm",
 };
 
-export const MAX_IMAGE_SIZE = 256 * 1024; // 256 KB
+// Animated WebP thumbnails from GIF search routinely land well past 256 KB
+// (unlike emote/manual-upload images, which are tiny) — 1 MB gives real
+// headroom without letting things balloon out of control.
+export const MAX_IMAGE_SIZE = 1 * 1024 * 1024; // 1 MB
 
 const MIME_TO_EXT = {
   "audio/mpeg": "mp3",
@@ -75,6 +78,11 @@ export const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5 MB — regular per-broadcaste
 export const MAX_OFFICIAL_LIBRARY_FILE_SIZE = 100 * 1024 * 1024; // 100 MB
 export const MAX_VIDEO_FILE_SIZE = 25 * 1024 * 1024; // 25 MB
 export const MAX_SOUNDS_PER_USER = 20;
+export const DEFAULT_CHANNEL_POINTS_COST = 500;
+// Twitch caps a channel at 50 total custom rewards (shared with anything else
+// the streamer already has configured), so this stays well under that rather
+// than trying to claim the whole ceiling for sound alerts alone.
+export const MAX_CHANNEL_POINTS_SOUNDS = 20;
 
 // VALID_TIERS and DEFAULT_TIER are imported from ./tiers.js — the single source of truth
 export { VALID_TIERS, DEFAULT_TIER } from "./tiers.js";
@@ -166,6 +174,12 @@ async function persistSoundAlerts() {
 
 export const VALID_TYPES = ["sound", "clip", "video"];
 
+// How a sound alert's card image renders on the overlay: "corner" is the
+// original small/subtle toast icon; "large" shows it big and centered, the
+// same treatment video/clip alerts already get — mainly useful once a sound
+// has an animated GIF thumbnail instead of a static icon.
+export const VALID_POPUP_STYLES = ["corner", "large"];
+
 function normalizeSound(raw = {}, uid = null) {
   const now = nowIso();
   const isOfficial = uid === OFFICIAL_LIBRARY_UID;
@@ -178,9 +192,19 @@ function normalizeSound(raw = {}, uid = null) {
     mimeType: sanitizeString(raw.mimeType, "audio/mpeg"),
     sizeBytes: sanitizeNumber(raw.sizeBytes, 0, 0),
     imageFilename: sanitizeString(raw.imageFilename, ""),
+    popupStyle: VALID_POPUP_STYLES.includes(raw.popupStyle) ? raw.popupStyle : "corner",
     clipUrl: sanitizeString(raw.clipUrl, ""),
     clipSlug: sanitizeString(raw.clipSlug, ""),
     tier: VALID_TIERS.includes(raw.tier) ? raw.tier : DEFAULT_TIER,
+    // Channel Points is a second, independent trigger a sound can opt into
+    // alongside its Bits tier. channelPointsRewardId is the Twitch Custom
+    // Reward id backing it — only ever written by setSoundChannelPoints()
+    // after a real Helix create/update/delete call succeeds, never through
+    // the generic updateSound() patch whitelist below, so this field can't
+    // drift out of sync with what actually exists on Twitch's side.
+    channelPointsEnabled: false,
+    channelPointsCost: sanitizeNumber(raw.channelPointsCost, DEFAULT_CHANNEL_POINTS_COST, 1, 1_000_000),
+    channelPointsRewardId: "",
     enabled: typeof raw.enabled === "boolean" ? raw.enabled : true,
     volume: sanitizeNumber(raw.volume, 80, 0, 100),
     cooldownMs: sanitizeNumber(raw.cooldownMs, 5000, 0, 60000),
@@ -268,6 +292,7 @@ export function updateSound(uid, soundId, patch = {}) {
   if ("mimeType" in patch) sound.mimeType = sanitizeString(patch.mimeType, sound.mimeType);
   if ("sizeBytes" in patch) sound.sizeBytes = sanitizeNumber(patch.sizeBytes, sound.sizeBytes, 0);
   if ("imageFilename" in patch) sound.imageFilename = sanitizeString(patch.imageFilename, sound.imageFilename);
+  if ("popupStyle" in patch && VALID_POPUP_STYLES.includes(patch.popupStyle)) sound.popupStyle = patch.popupStyle;
   if ("clipUrl" in patch) sound.clipUrl = sanitizeString(patch.clipUrl, sound.clipUrl);
   if ("clipSlug" in patch) sound.clipSlug = sanitizeString(patch.clipSlug, sound.clipSlug);
   if ("tags" in patch && Array.isArray(patch.tags)) {
@@ -286,6 +311,41 @@ export function updateSound(uid, soundId, patch = {}) {
   sound.updatedAt = nowIso();
   persistSoundAlerts().catch(() => {});
   return deepClone(sound);
+}
+
+// Writes the result of a real Twitch Custom Reward create/update/delete call
+// (see channel_points_api.js) — deliberately separate from updateSound()'s
+// patch whitelist so this can only ever reflect what Twitch actually has,
+// never something a client claimed via the generic PUT endpoint.
+export function setSoundChannelPoints(uid, soundId, { enabled, cost, rewardId }) {
+  const user = ensureUser(uid);
+  const sound = user.sounds.get(String(soundId));
+  if (!sound) return null;
+  if (typeof enabled === "boolean") sound.channelPointsEnabled = enabled;
+  if (typeof cost === "number") sound.channelPointsCost = sanitizeNumber(cost, sound.channelPointsCost, 1, 1_000_000);
+  if (typeof rewardId === "string") sound.channelPointsRewardId = rewardId;
+  sound.updatedAt = nowIso();
+  persistSoundAlerts().catch(() => {});
+  return deepClone(sound);
+}
+
+export function getSoundByChannelPointsRewardId(uid, rewardId) {
+  const user = ensureUser(uid);
+  for (const sound of user.sounds.values()) {
+    if (sound.channelPointsEnabled && sound.channelPointsRewardId === String(rewardId)) {
+      return deepClone(sound);
+    }
+  }
+  return null;
+}
+
+export function countChannelPointsEnabledSounds(uid) {
+  const user = ensureUser(uid);
+  let count = 0;
+  for (const sound of user.sounds.values()) {
+    if (sound.channelPointsEnabled) count++;
+  }
+  return count;
 }
 
 export async function deleteSound(uid, soundId) {

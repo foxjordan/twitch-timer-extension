@@ -14,7 +14,10 @@ import { fetchClipInfo, downloadClipVideo, fetchUserDisplayName } from "./twitch
 import { DEFAULT_TIER } from "./tiers.js";
 import { db } from "./db.js";
 import { getPlayCountsForPairs } from "./alert_events_store.js";
-import { serveFileFromStorage, proxyImageFromStorage } from "./routes_sounds.js";
+import { serveFileFromStorage, proxyImageFromStorage, attachThumbnailFromUrl } from "./routes_sounds.js";
+import { fetchChannelEmotes } from "./twitch_api.js";
+import { fetchSevenTvChannelEmotes, fetchSevenTvGlobalEmotes } from "./seventv_api.js";
+import { searchKlipyGifs } from "./klipy_api.js";
 import { r2Enabled, r2SoundKey, copyR2Object } from "./r2.js";
 import {
   listSounds,
@@ -432,6 +435,54 @@ export function mountAdminSoundRoutes(app, ctx = {}) {
     }
     const updated = updateSound(uid, sound.id, { imageFilename: "" });
     res.json({ sound: updated });
+  });
+
+  // List Twitch/7TV emotes for a managed user's channel, and attach one as a
+  // thumbnail — mirrors the equivalent routes in routes_sounds.js, which
+  // only cover the broadcaster's own session and aren't reachable here
+  // (this view uses a different API base, :userId from the URL, not the
+  // logged-in admin's own id).
+  app.get("/api/admin/sounds/:userId/twitch-emotes", async (req, res) => {
+    if (!requireSuperAdmin(req, res)) return;
+    const uid = String(req.params.userId);
+    const emotes = await fetchChannelEmotes(uid);
+    res.json({ emotes });
+  });
+
+  app.get("/api/admin/sounds/:userId/seventv-emotes", async (req, res) => {
+    if (!requireSuperAdmin(req, res)) return;
+    const uid = String(req.params.userId);
+    const channelEmotes = await fetchSevenTvChannelEmotes(uid);
+    if (channelEmotes.length) return res.json({ emotes: channelEmotes, source: "channel" });
+    const globalEmotes = await fetchSevenTvGlobalEmotes();
+    res.json({ emotes: globalEmotes, source: "global" });
+  });
+
+  app.get("/api/admin/sounds/:userId/klipy-search", async (req, res) => {
+    if (!requireSuperAdmin(req, res)) return;
+    const uid = String(req.params.userId);
+    const query = String(req.query?.q || "").trim();
+    if (!query) return res.json({ gifs: [], hasNext: false });
+    const result = await searchKlipyGifs(query, { customerId: uid, page: req.query?.page || 1 });
+    res.json(result);
+  });
+
+  app.post("/api/admin/sounds/:userId/:soundId/thumbnail-from-url", async (req, res) => {
+    if (!requireSuperAdmin(req, res)) return;
+    const uid = String(req.params.userId);
+    const sound = getSound(uid, req.params.soundId);
+    if (!sound) return res.status(404).json({ error: "Sound not found" });
+    const imageUrl = String(req.body?.url || "");
+    if (!imageUrl) return res.status(400).json({ error: "url is required" });
+    try {
+      const result = await attachThumbnailFromUrl(uid, sound, imageUrl);
+      if (result.error) return res.status(400).json({ error: result.error });
+      logger.info("admin_sound_thumbnail_from_url", { admin: req.session.twitchUser.id, userId: uid, soundId: sound.id });
+      res.json({ sound: result.sound });
+    } catch (err) {
+      logger.error("admin_sound_thumbnail_from_url_failed", { userId: uid, soundId: sound.id, message: err?.message });
+      res.status(500).json({ error: "Failed to set thumbnail" });
+    }
   });
 
   // Get audio duration for a user's sound (for trim UI)

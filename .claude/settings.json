@@ -1,0 +1,27 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python3 -m http.server 8950 --bind 127.0.0.1)",
+      "Bash(curl -sI http://127.0.0.1:8950/cp-preview.html)",
+      "Bash(pkill -f \"http.server 8950\")",
+      "Bash(python3 -m http.server 8951 --bind 127.0.0.1)",
+      "Bash(curl -sI http://127.0.0.1:8951/editor-test.html)",
+      "Bash(curl -s http://127.0.0.1:8951/openSoundEditor.js)",
+      "Bash(pkill -f \"http.server 8951\")",
+      "Bash(pkill -f \"http.server 8955\")",
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:7tv.io)",
+      "Bash(pkill -f \"http.server 8960\")",
+      "Bash(pkill -f \"http.server 8965\")",
+      "Bash(pkill -f \"http.server 8970\")",
+      "WebFetch(domain:developers.giphy.com)",
+      "WebFetch(domain:api.giphy.com)",
+      "Bash(pkill -f \"http.server 8975\")",
+      "WebFetch(domain:klipy.com)",
+      "WebFetch(domain:docs.klipy.com)",
+      "WebFetch(domain:dev.to)",
+      "Bash(curl -sI \"https://docs.klipy.com\" -A \"Mozilla/5.0\")",
+      "Bash(curl -s \"https://docs.klipy.com\" -A \"Mozilla/5.0\")"
+    ]
+  }
+}

@@ -97,6 +97,7 @@ export function mountAdminRoutes(app, ctx) {
       base: "",
       adminName,
       userKey: "",
+      klipyEnabled: Boolean(process.env.KLIPY_API_KEY),
       apiBase: `/api/admin/sounds/${uid}`,
       ttsApiBase: `/api/admin/tts/settings/${uid}`,
       isAdminMode: true,
@@ -109,11 +110,20 @@ export function mountAdminRoutes(app, ctx) {
     res.send(html);
   });
 
-  app.get("/api/admin/stats", async (req, res) => {
-    if (!req.session?.isAdmin || !isSuperAdmin(req)) {
-      return res.status(403).json({ error: "Access denied" });
-    }
+  // The admin dashboard polls this every 10s (see adminDashboardPage.js).
+  // With 100+ registered users, the per-user aggregation below was fully
+  // synchronous and could take several seconds — on a single-threaded
+  // process that meant every other in-flight request (OBS overlay polling,
+  // timer updates, etc.) stalled for the whole duration. Caching the result
+  // briefly avoids recomputing on every overlapping poll, and yielding to
+  // the event loop between batches keeps one slow computation from starving
+  // everything else on the process while it runs.
+  const STATS_CACHE_TTL_MS = 8000;
+  const STATS_YIELD_BATCH_SIZE = 15;
+  let statsCache = null; // { data, computedAt }
+  let statsComputePromise = null;
 
+  async function computeAdminStats() {
     const registeredIds = getAllUserIds();
     const activeBroadcasters = getAllActiveBroadcasters();
 
@@ -132,7 +142,9 @@ export function mountAdminRoutes(app, ctx) {
       if (!getUserProfile?.(uid)?.login) backfillUserProfile(uid).catch(() => {});
     }
 
-    const users = registeredIds.map((uid) => {
+    const users = [];
+    for (let i = 0; i < registeredIds.length; i++) {
+      const uid = registeredIds[i];
       const conn = getBroadcasterConnection(uid);
       const totals = getTotals(uid);
       const remaining = getRemainingSeconds(uid);
@@ -177,7 +189,7 @@ export function mountAdminRoutes(app, ctx) {
 
       const profile = getUserProfile ? getUserProfile(uid) : null;
       const live = liveStatus.get(String(uid)) || null;
-      return {
+      users.push({
         userId: uid,
         login: conn?.broadcasterLogin || profile?.login || null,
         // Prefer the actual display name over the raw (always-lowercase)
@@ -208,12 +220,18 @@ export function mountAdminRoutes(app, ctx) {
         subscriptionStatus: subscription?.status || null,
         stripeCustomerId: subscription?.stripeCustomerId || null,
         isPro: isPro(uid),
-      };
-    });
+      });
+
+      // Yield to the event loop periodically so a long registered-user list
+      // doesn't block other requests for the entire duration of this loop.
+      if (i % STATS_YIELD_BATCH_SIZE === STATS_YIELD_BATCH_SIZE - 1) {
+        await new Promise((resolve) => setImmediate(resolve));
+      }
+    }
 
     const mem = process.memoryUsage();
 
-    res.json({
+    return {
       totalRegistered: registeredIds.length,
       totalConnected: activeBroadcasters.filter((uid) => {
         const conn = getBroadcasterConnection(uid);
@@ -236,7 +254,37 @@ export function mountAdminRoutes(app, ctx) {
         lastBroadcastError: observability.lastBroadcastErrorAt,
       },
       users,
-    });
+    };
+  }
+
+  app.get("/api/admin/stats", async (req, res) => {
+    if (!req.session?.isAdmin || !isSuperAdmin(req)) {
+      return res.status(403).json({ error: "Access denied" });
+    }
+
+    if (statsCache && Date.now() - statsCache.computedAt < STATS_CACHE_TTL_MS) {
+      return res.json(statsCache.data);
+    }
+
+    // Single-flight: concurrent polls (multiple admin tabs, etc.) during a
+    // recompute share the same in-flight promise instead of each kicking
+    // off their own full pass over the registered-user list.
+    if (!statsComputePromise) {
+      statsComputePromise = computeAdminStats()
+        .then((data) => {
+          statsCache = { data, computedAt: Date.now() };
+          return data;
+        })
+        .finally(() => {
+          statsComputePromise = null;
+        });
+    }
+
+    try {
+      res.json(await statsComputePromise);
+    } catch (err) {
+      res.status(500).json({ error: "Failed to compute admin stats" });
+    }
   });
 
   // Fetch event log for a specific broadcaster

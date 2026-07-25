@@ -4,7 +4,7 @@ import { isSuperAdmin } from "./routes_admin.js";
 import jwt from "jsonwebtoken";
 import { createHmac, timingSafeEqual } from "crypto";
 import multer from "multer";
-import { rename, stat as fsStat, unlink as fsUnlink } from "fs/promises";
+import { rename, stat as fsStat, unlink as fsUnlink, writeFile } from "fs/promises";
 import { createReadStream, createWriteStream } from "fs";
 import { execFile } from "child_process";
 import { promisify } from "util";
@@ -24,7 +24,9 @@ import {
 import { logSoundEvent, getPlayCountsForPairs } from "./alert_events_store.js";
 import { db } from "./db.js";
 import { backfillUserProfile } from "./user_profiles.js";
-import { fetchUserDisplayName } from "./twitch_api.js";
+import { fetchUserDisplayName, fetchChannelEmotes } from "./twitch_api.js";
+import { fetchSevenTvChannelEmotes, fetchSevenTvGlobalEmotes } from "./seventv_api.js";
+import { searchKlipyGifs } from "./klipy_api.js";
 import { getBannerConfig } from "./banner_store.js";
 
 const execFileAsync = promisify(execFile);
@@ -237,7 +239,17 @@ import {
   getSharedLibrary,
   getSoundLineage,
   copySoundToUser,
+  setSoundChannelPoints,
+  countChannelPointsEnabledSounds,
+  DEFAULT_CHANNEL_POINTS_COST,
+  MAX_CHANNEL_POINTS_SOUNDS,
 } from "./sounds_store.js";
+import { getValidAccessToken } from "./twitch_tokens.js";
+import {
+  createChannelPointsReward,
+  updateChannelPointsReward,
+  deleteChannelPointsReward,
+} from "./channel_points_api.js";
 
 const EXT_SECRET = process.env.EXTENSION_SECRET
   ? Buffer.from(process.env.EXTENSION_SECRET, "base64")
@@ -327,6 +339,82 @@ function verifyPreviewToken(pt, soundId, channelId) {
   } catch {
     return false;
   }
+}
+
+// Hosts attachThumbnailFromUrl is willing to fetch from. Exact hostname
+// match only (never startsWith/includes — that's spoofable with something
+// like "static-cdn.jtvnw.net.evil.com"). Extend this as new sources come
+// online; don't widen it to "anything" just to save a line here — this
+// endpoint takes a broadcaster-supplied URL and fetches it server-side, so
+// without an allowlist it's an open SSRF vector onto our own internal
+// network (Fly metadata, internal ports, etc.), not just the public web.
+const ALLOWED_THUMBNAIL_HOSTS = new Set([
+  "static-cdn.jtvnw.net", // Twitch emotes
+  "cdn.7tv.app", // 7TV emotes
+  "static.klipy.com", // Klipy GIF search
+]);
+
+function isAllowedThumbnailHost(hostname) {
+  return ALLOWED_THUMBNAIL_HOSTS.has(hostname);
+}
+
+// Shared by every "pick a thumbnail from somewhere else" source (Twitch/7TV
+// emotes, GIF search) — fetches an external image URL and attaches it to a
+// sound exactly like a manual upload would, reusing the same storage +
+// validation path as the POST /image route above.
+export async function attachThumbnailFromUrl(uid, sound, imageUrl) {
+  let parsed;
+  try {
+    parsed = new URL(imageUrl);
+  } catch {
+    return { error: "Invalid URL" };
+  }
+  if (parsed.protocol !== "https:" || !isAllowedThumbnailHost(parsed.hostname)) {
+    return { error: "That image source isn't supported" };
+  }
+
+  // Manual redirect handling: an allowlisted host redirecting to a
+  // non-allowlisted one must not be silently followed.
+  const res = await fetch(parsed.toString(), { redirect: "manual" });
+  if (res.status >= 300 && res.status < 400) {
+    return { error: "Image source redirected — not allowed" };
+  }
+  if (!res.ok) return { error: `Failed to fetch image (${res.status})` };
+
+  // Reject on the declared size before buffering anything into memory —
+  // the actual byte length is still re-checked below since Content-Length
+  // can be absent or wrong, but this avoids reading an arbitrarily large
+  // body from a misbehaving (even if allowlisted) host in the common case.
+  const contentLength = Number(res.headers.get("content-length") || 0);
+  if (contentLength > MAX_IMAGE_SIZE) {
+    return { error: "Image is too large (max 1 MB)" };
+  }
+
+  const mimeType = (res.headers.get("content-type") || "").split(";")[0].trim();
+  if (!ALLOWED_IMAGE_MIME_TYPES.includes(mimeType)) {
+    return { error: `Unsupported image type: ${mimeType || "unknown"}` };
+  }
+
+  const buffer = Buffer.from(await res.arrayBuffer());
+  if (buffer.length > MAX_IMAGE_SIZE) {
+    return { error: "Image is too large (max 1 MB)" };
+  }
+
+  const tmpPath = path.resolve(MULTER_TMP_DIR, `thumb_${crypto.randomUUID()}`);
+  await writeFile(tmpPath, buffer);
+
+  if (sound.imageFilename) {
+    await deleteFileFromStorage(uid, sound.imageFilename);
+    if (!r2Enabled) {
+      const oldPath = path.resolve(SOUNDS_FILE_DIR, String(uid), sound.imageFilename);
+      try { await fsUnlink(oldPath); } catch {}
+    }
+  }
+
+  const imageFilename = generateImageFilename(sound.id, mimeType);
+  await uploadToStorage(uid, imageFilename, tmpPath, mimeType);
+  const updated = updateSound(uid, sound.id, { imageFilename });
+  return { sound: updated };
 }
 
 export function mountSoundRoutes(app, deps = {}) {
@@ -902,6 +990,78 @@ export function mountSoundRoutes(app, deps = {}) {
     res.json({ sound });
   });
 
+  // Enable/disable/update Channel Points redemption for a sound. Unlike the
+  // generic PUT above, this can't be a simple patch — it has to create,
+  // update, or delete a real Twitch Custom Reward first, and only write our
+  // own record of it once that call actually succeeds (see setSoundChannelPoints
+  // in sounds_store.js for why this is kept separate from the patch whitelist).
+  app.post("/api/sounds/:soundId/channel-points", async (req, res) => {
+    const uid = requireBroadcaster(req, res);
+    if (!uid) return;
+    const sound = getSound(uid, req.params.soundId);
+    if (!sound) return res.status(404).json({ error: "Sound not found" });
+
+    const wantsEnabled = Boolean(req.body?.enabled);
+    const requestedCost = Number(req.body?.cost);
+    const cost = Number.isFinite(requestedCost) && requestedCost > 0
+      ? Math.round(requestedCost)
+      : (sound.channelPointsCost || DEFAULT_CHANNEL_POINTS_COST);
+
+    if (!wantsEnabled) {
+      if (sound.channelPointsEnabled && sound.channelPointsRewardId) {
+        const accessToken = await getValidAccessToken(uid).catch(() => null);
+        const result = await deleteChannelPointsReward({
+          broadcasterId: uid,
+          accessToken,
+          rewardId: sound.channelPointsRewardId,
+        });
+        if (result.error) {
+          logger.warn("channel_points_disable_reward_delete_failed", { userId: uid, soundId: sound.id, error: result.error });
+        }
+      }
+      const updated = setSoundChannelPoints(uid, sound.id, { enabled: false, rewardId: "" });
+      return res.json({ sound: updated });
+    }
+
+    // Enabling (or just changing the cost on an already-enabled sound)
+    const accessToken = await getValidAccessToken(uid).catch(() => null);
+    if (!accessToken) {
+      return res.status(400).json({
+        error: "Please reconnect your Twitch account to enable Channel Points (this needs a permission granted after you last logged in).",
+      });
+    }
+
+    if (sound.channelPointsEnabled && sound.channelPointsRewardId) {
+      const result = await updateChannelPointsReward({
+        broadcasterId: uid,
+        accessToken,
+        rewardId: sound.channelPointsRewardId,
+        soundName: sound.name,
+        cost,
+      });
+      if (result.error) return res.status(400).json({ error: result.error });
+      const updated = setSoundChannelPoints(uid, sound.id, { enabled: true, cost });
+      return res.json({ sound: updated });
+    }
+
+    if (countChannelPointsEnabledSounds(uid) >= MAX_CHANNEL_POINTS_SOUNDS) {
+      return res.status(400).json({
+        error: `You can enable Channel Points on up to ${MAX_CHANNEL_POINTS_SOUNDS} sounds at once.`,
+      });
+    }
+
+    const result = await createChannelPointsReward({
+      broadcasterId: uid,
+      accessToken,
+      soundName: sound.name,
+      cost,
+    });
+    if (result.error) return res.status(400).json({ error: result.error });
+    const updated = setSoundChannelPoints(uid, sound.id, { enabled: true, cost, rewardId: result.rewardId });
+    logger.info("channel_points_reward_created", { userId: uid, soundId: sound.id, rewardId: result.rewardId, cost });
+    res.json({ sound: updated });
+  });
+
   // Upload/replace image for a sound
   app.post("/api/sounds/:soundId/image", imageUpload.single("image"), async (req, res) => {
     const uid = requireBroadcaster(req, res);
@@ -954,6 +1114,61 @@ export function mountSoundRoutes(app, deps = {}) {
 
     const updated = updateSound(uid, sound.id, { imageFilename: "" });
     res.json({ sound: updated });
+  });
+
+  // List this broadcaster's Twitch emotes, for use as a sound's thumbnail —
+  // no upload needed, and it's automatically on-brand for their channel.
+  app.get("/api/sounds/twitch-emotes", async (req, res) => {
+    const uid = requireBroadcaster(req, res);
+    if (!uid) return;
+    const emotes = await fetchChannelEmotes(uid);
+    res.json({ emotes });
+  });
+
+  // List 7TV emotes for a thumbnail — the streamer's own channel set if
+  // they've connected 7TV, otherwise 7TV's global set (most streamers never
+  // connect a channel-specific set, so falling back keeps this useful for
+  // everyone instead of only the minority who have).
+  app.get("/api/sounds/seventv-emotes", async (req, res) => {
+    const uid = requireBroadcaster(req, res);
+    if (!uid) return;
+    const channelEmotes = await fetchSevenTvChannelEmotes(uid);
+    if (channelEmotes.length) {
+      return res.json({ emotes: channelEmotes, source: "channel" });
+    }
+    const globalEmotes = await fetchSevenTvGlobalEmotes();
+    res.json({ emotes: globalEmotes, source: "global" });
+  });
+
+  // GIF search for a thumbnail, via Klipy — server-side, unlike the emote
+  // endpoints' fixed lists, since it needs a live query per keystroke.
+  app.get("/api/sounds/klipy-search", async (req, res) => {
+    const uid = requireBroadcaster(req, res);
+    if (!uid) return;
+    const query = String(req.query?.q || "").trim();
+    if (!query) return res.json({ gifs: [], hasNext: false });
+    const result = await searchKlipyGifs(query, { customerId: uid, page: req.query?.page || 1 });
+    res.json(result);
+  });
+
+  // Attach a thumbnail from an external URL (Twitch/7TV emotes, Klipy GIFs)
+  // instead of an upload.
+  app.post("/api/sounds/:soundId/thumbnail-from-url", async (req, res) => {
+    const uid = requireBroadcaster(req, res);
+    if (!uid) return;
+    const sound = getSound(uid, req.params.soundId);
+    if (!sound) return res.status(404).json({ error: "Sound not found" });
+    const imageUrl = String(req.body?.url || "");
+    if (!imageUrl) return res.status(400).json({ error: "url is required" });
+    try {
+      const result = await attachThumbnailFromUrl(uid, sound, imageUrl);
+      if (result.error) return res.status(400).json({ error: result.error });
+      logger.info("sound_thumbnail_from_url", { userId: uid, soundId: sound.id });
+      res.json({ sound: result.sound });
+    } catch (err) {
+      logger.error("sound_thumbnail_from_url_failed", { userId: uid, soundId: sound.id, message: err?.message });
+      res.status(500).json({ error: "Failed to set thumbnail" });
+    }
   });
 
   // Serve sound image for admin preview (session/JWT auth)
@@ -1119,6 +1334,8 @@ export function mountSoundRoutes(app, deps = {}) {
       type: sound.type || "sound",
       clipSlug: sound.clipSlug || "",
       volume: sound.volume || 80,
+      imageFilename: sound.imageFilename || "",
+      popupStyle: sound.popupStyle || "corner",
     });
     res.json({ ok: true, sound: { id: sound.id, name: sound.name } });
   });
@@ -1339,6 +1556,31 @@ export function mountSoundRoutes(app, deps = {}) {
     });
   });
 
+  // Serve a sound's card image (for overlay playback — the on-screen alert
+  // popup shows this instead of a generic icon when one's set). Same
+  // key-based auth as the audio/video route below, since the overlay is a
+  // plain OBS browser source with no session cookie or extension JWT.
+  app.get("/api/sounds/file/:soundId/image", async (req, res) => {
+    if (!requireOverlayAuth(req, res)) return;
+
+    const { getUserIdForKey } = deps;
+    const key = req.query.key;
+    let uid = null;
+    if (typeof getUserIdForKey === "function" && key) {
+      uid = getUserIdForKey(key);
+    }
+    if (!uid && req?.session?.twitchUser?.id) {
+      uid = req.session.twitchUser.id;
+    }
+    if (!uid) return res.status(400).json({ error: "Cannot resolve channel" });
+
+    const sound = getSound(String(uid), req.params.soundId);
+    if (!sound || !sound.imageFilename) {
+      return res.status(404).json({ error: "Image not found" });
+    }
+    await proxyImageFromStorage(res, uid, sound.imageFilename, "public, max-age=86400");
+  });
+
   // Serve sound/video file (for overlay playback)
   app.get("/api/sounds/file/:soundId", async (req, res) => {
     if (!requireOverlayAuth(req, res)) return;
@@ -1436,6 +1678,8 @@ export function mountSoundRoutes(app, deps = {}) {
       type: sound.type || "sound",
       clipSlug: sound.clipSlug || "",
       volume: sound.volume || 80,
+      imageFilename: sound.imageFilename || "",
+      popupStyle: sound.popupStyle || "corner",
     });
 
     res.json({ ok: true, sound: { id: sound.id, name: sound.name } });

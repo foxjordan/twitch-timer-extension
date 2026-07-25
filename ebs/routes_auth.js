@@ -86,7 +86,7 @@ export function mountAuthRoutes(app, opts = {}) {
       client_id: clientId,
       redirect_uri: redirectUri,
       response_type: 'code',
-      scope: 'channel:read:subscriptions bits:read channel:read:charity channel:read:hype_train moderator:read:followers moderation:read user:read:chat user:write:chat',
+      scope: 'channel:read:subscriptions bits:read channel:read:charity channel:read:hype_train moderator:read:followers moderation:read user:read:chat user:write:chat channel:manage:redemptions',
       force_verify: 'true',
       state
     });

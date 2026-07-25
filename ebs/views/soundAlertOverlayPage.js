@@ -85,6 +85,9 @@ export function renderSoundAlertOverlayPage() {
       .media-container video {
         display: block;
       }
+      .media-container img {
+        display: block;
+      }
       .media-container iframe {
         display: block;
         border: none;
@@ -99,6 +102,11 @@ export function renderSoundAlertOverlayPage() {
         height: 100vh;
       }
       .media-container.fullscreen video {
+        width: 100%;
+        height: 100%;
+        object-fit: contain;
+      }
+      .media-container.fullscreen img {
         width: 100%;
         height: 100%;
         object-fit: contain;
@@ -203,18 +211,50 @@ export function renderSoundAlertOverlayPage() {
         }
 
         function playSound(item) {
-          showPopup(item.soundName, 'sound');
+          showPopup(item.soundName, 'sound', item.hasImage, item.soundId);
           var vol = Math.min(1, Math.max(0, (item.volume || 100) / 100));
           var audio = new Audio('/api/sounds/file/' + encodeURIComponent(item.soundId) + '?key=' + encodeURIComponent(overlayKey));
           audio.volume = vol;
           currentAudio = audio;
-          audio.onended = advance;
-          audio.onerror = advance;
-          audio.play().catch(advance);
+
+          // "large" mirrors the video/clip treatment — big and centered,
+          // using the same Video/Clip Size setting — instead of the small
+          // corner toast alone. Mainly useful once a sound has a real
+          // (often animated) thumbnail rather than the generic icon.
+          if (item.popupStyle === 'large' && item.hasImage) {
+            var bigContainer = document.createElement('div');
+            bigContainer.className = 'media-container';
+            currentMediaContainer = bigContainer;
+            var img = document.createElement('img');
+            img.src = '/api/sounds/file/' + encodeURIComponent(item.soundId) + '/image?key=' + encodeURIComponent(overlayKey);
+            img.alt = '';
+            applyVideoSize(img, bigContainer);
+            img.onerror = function() {
+              // Thumbnail failed to load — drop the big container rather than
+              // showing a broken image for the whole alert; the corner toast
+              // (with its own separate fallback) already covers this case.
+              if (bigContainer.parentNode) bigContainer.remove();
+              if (currentMediaContainer === bigContainer) currentMediaContainer = null;
+            };
+            bigContainer.appendChild(img);
+            document.body.appendChild(bigContainer);
+          }
+
+          function finish() {
+            if (currentMediaContainer && currentMediaContainer.parentNode) {
+              var c = currentMediaContainer;
+              c.classList.add('exit');
+              setTimeout(function() { c.remove(); }, 350);
+            }
+            advance();
+          }
+          audio.onended = finish;
+          audio.onerror = finish;
+          audio.play().catch(finish);
         }
 
         function playClip(item) {
-          showPopup(item.soundName, 'clip');
+          showPopup(item.soundName, 'clip', item.hasImage, item.soundId);
           var vol = Math.min(1, Math.max(0, (item.volume || 100) / 100));
 
           // Play clip as a video file (downloaded at creation time)
@@ -254,7 +294,7 @@ export function renderSoundAlertOverlayPage() {
         }
 
         function playVideo(item) {
-          showPopup(item.soundName, 'video');
+          showPopup(item.soundName, 'video', item.hasImage, item.soundId);
           var vol = Math.min(1, Math.max(0, (item.volume || 100) / 100));
 
           var container = document.createElement('div');
@@ -342,18 +382,39 @@ export function renderSoundAlertOverlayPage() {
           }, ttsDuration);
         }
 
-        function showPopup(name, type) {
+        function fallbackIconGlyph(type) {
+          if (type === 'clip') return '\\u{1F3AC}';
+          if (type === 'video') return '\\u{1F4F9}';
+          return '\\u{1F50A}';
+        }
+
+        function showPopup(name, type, hasImage, soundId) {
           var el = document.createElement('div');
           el.className = 'alert-popup';
 
           var icon = document.createElement('div');
           icon.className = 'alert-icon';
-          if (type === 'clip') {
-            icon.textContent = '\\u{1F3AC}';
-          } else if (type === 'video') {
-            icon.textContent = '\\u{1F4F9}';
+          if (hasImage && soundId) {
+            // Animated GIFs/WebPs (e.g. from an emote picker) animate for
+            // free here — a plain <img> renders them natively, no extra work.
+            icon.style.background = 'transparent';
+            icon.style.overflow = 'hidden';
+            icon.style.padding = '0';
+            var img = document.createElement('img');
+            img.src = '/api/sounds/file/' + encodeURIComponent(soundId) + '/image?key=' + encodeURIComponent(overlayKey);
+            img.alt = '';
+            img.style.cssText = 'width:100%; height:100%; object-fit:cover;';
+            img.onerror = function() {
+              // Thumbnail failed to load for any reason — fall back to the
+              // generic icon rather than showing a broken image.
+              icon.style.background = 'linear-gradient(135deg, #9146FF, #772CE8)';
+              icon.style.overflow = '';
+              icon.style.padding = '';
+              icon.textContent = fallbackIconGlyph(type);
+            };
+            icon.appendChild(img);
           } else {
-            icon.textContent = '\\u{1F50A}';
+            icon.textContent = fallbackIconGlyph(type);
           }
           el.appendChild(icon);
 

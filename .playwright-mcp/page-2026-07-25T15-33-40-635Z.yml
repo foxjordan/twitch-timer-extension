@@ -1,0 +1,33 @@
+- generic [ref=f2e4]:
+  - textbox [ref=f2e5]: Test Sound
+  - generic [ref=f2e6]:
+    - combobox [ref=f2e7]:
+      - option "100 Bits" [selected]
+    - generic [ref=f2e8]:
+      - text: Vol
+      - slider "Vol 80%" [ref=f2e9]: "80"
+      - generic [ref=f2e10]: 80%
+  - generic [ref=f2e11]:
+    - generic [ref=f2e12]:
+      - checkbox "Channel Points" [ref=f2e13]
+      - text: Channel Points
+    - spinbutton [disabled] [ref=f2e14]: "500"
+  - generic [ref=f2e15]:
+    - text: Cooldown (sec)
+    - spinbutton "Cooldown (sec)" [ref=f2e16]: "5"
+  - generic [ref=f2e17]:
+    - text: Card Image (max 256 KB, PNG/JPG/GIF/WebP)
+    - generic [ref=f2e18]:
+      - button "Choose File" [ref=f2e19]
+      - button "Twitch Emotes" [ref=f2e20]
+      - button "7TV Emotes" [ref=f2e21]
+      - button "GIF Search" [ref=f2e22]
+  - generic [ref=f2e23]:
+    - checkbox "Share to Community Library" [ref=f2e24]
+    - text: Share to Community Library
+  - generic [ref=f2e25]: Tags (comma-separated, up to 5 â€” helps others find it in the library)
+  - textbox "e.g. anime, meme, horror" [ref=f2e26]
+  - button "Trim Audio" [ref=f2e28]
+  - generic [ref=f2e29]:
+    - button "Save" [ref=f2e30]
+    - button "Cancel" [ref=f2e31]

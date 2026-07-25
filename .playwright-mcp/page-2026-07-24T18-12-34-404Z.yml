@@ -1,0 +1,102 @@
+- generic [active]:
+  - generic:
+    - generic [ref=e2]:
+      - banner [ref=e3]:
+        - generic [ref=e4]:
+          - button [ref=e5] [cursor=pointer]
+          - button "Support" [ref=e8] [cursor=pointer]
+          - link "Overlays" [ref=e9] [cursor=pointer]:
+            - /url: /overlays
+          - button "Sign in / Sign up" [ref=e10] [cursor=pointer]
+      - main [ref=e11]:
+        - generic [ref=e13]:
+          - img "Overlay Expert logo" [ref=e14]
+          - heading "Overlay Expert" [level=1] [ref=e15]
+          - paragraph [ref=e16]: Join the thousands of creators that stream with Overlay Expert every day
+          - link "Create your overlay now — it's free" [ref=e17] [cursor=pointer]:
+            - /url: /builder
+        - generic [ref=e19]:
+          - generic [ref=e21]:
+            - link [ref=e22] [cursor=pointer]:
+              - /url: /streamers
+              - generic [ref=e23]:
+                - heading "For Streamers" [level=2] [ref=e27]
+                - paragraph [ref=e28]: Your brand; your overlay; create a stream that represents you
+            - link "Learn more" [ref=e30] [cursor=pointer]:
+              - /url: /streamers
+          - generic [ref=e32]:
+            - link [ref=e33] [cursor=pointer]:
+              - /url: /consoles
+              - generic [ref=e34]:
+                - heading "For Consoles" [level=2] [ref=e38]
+                - paragraph [ref=e39]: Stream directly from your console with an overlay; no PC required
+            - link "Learn more" [ref=e41] [cursor=pointer]:
+              - /url: /consoles
+          - generic [ref=e43]:
+            - link [ref=e44] [cursor=pointer]:
+              - /url: /designers
+              - generic [ref=e45]:
+                - heading "For Designers" [level=2] [ref=e49]
+                - paragraph [ref=e50]: Earn income on your overlay designs by listing them on the Marketplace
+            - link "Learn more" [ref=e52] [cursor=pointer]:
+              - /url: /designers
+        - generic [ref=e54]:
+          - generic [ref=e56]:
+            - generic [ref=e57]:
+              - heading "Overlay Expert" [level=6] [ref=e58]
+              - generic [ref=e59]:
+                - button "Sign in / Sign up" [ref=e60] [cursor=pointer]
+                - generic [ref=e61]:
+                  - button "English" [ref=e62] [cursor=pointer]
+                  - button "$ USD" [ref=e63] [cursor=pointer]
+            - generic [ref=e64]: © 2026 Overlay Expert Inc.
+          - generic [ref=e66]:
+            - generic [ref=e67]:
+              - paragraph [ref=e68]: Navigation
+              - separator [ref=e69]
+              - generic [ref=e70]:
+                - link "Home" [ref=e71] [cursor=pointer]:
+                  - /url: /
+                - link "For Streamers" [ref=e72] [cursor=pointer]:
+                  - /url: /streamers
+                - link "For Consoles" [ref=e73] [cursor=pointer]:
+                  - /url: /consoles
+                - link "For Designers" [ref=e74] [cursor=pointer]:
+                  - /url: /designers
+                - link "Celebrations" [ref=e75] [cursor=pointer]:
+                  - /url: /celebrations
+                - link "Marketplace" [ref=e76] [cursor=pointer]:
+                  - /url: /marketplace
+                - generic [ref=e77] [cursor=pointer]: Pricing
+                - link "Overlays" [ref=e78] [cursor=pointer]:
+                  - /url: /overlays
+            - generic [ref=e79]:
+              - paragraph [ref=e80]: Help
+              - separator [ref=e81]
+              - generic [ref=e82]:
+                - generic [ref=e83] [cursor=pointer]: Support
+                - link "Terms of Use" [ref=e84] [cursor=pointer]:
+                  - /url: /terms-of-use
+                - link "Privacy Policy" [ref=e85] [cursor=pointer]:
+                  - /url: /privacy-policy
+                - link "Refund Policy" [ref=e86] [cursor=pointer]:
+                  - /url: /refund-policy
+            - generic [ref=e87]:
+              - paragraph [ref=e88]: Follow
+              - separator [ref=e89]
+              - generic [ref=e90]:
+                - link "X" [ref=e91] [cursor=pointer]:
+                  - /url: https://x.com/OverlayExpert
+                - link "Twitch" [ref=e92] [cursor=pointer]:
+                  - /url: https://twitch.tv/OverlayExpert
+                - link "YouTube" [ref=e93] [cursor=pointer]:
+                  - /url: https://www.youtube.com/@overlayexpert
+                - link "Discord" [ref=e94] [cursor=pointer]:
+                  - /url: https://discord.com/invite/bhJThkq
+    - generic [ref=e97]:
+      - paragraph [ref=e100]:
+        - text: Overlay Expert uses cookies to deliver and enhance the quality of our services and to analyze traffic.
+        - link "Learn more" [ref=e101] [cursor=pointer]:
+          - /url: /privacy-policy
+        - text: .
+      - button "OK, got it" [ref=e102] [cursor=pointer]

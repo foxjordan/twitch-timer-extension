@@ -11,6 +11,7 @@ import path from "path";
 import crypto from "crypto";
 import fetch from "node-fetch";
 import { fetchClipInfo, downloadClipVideo, fetchUserDisplayName } from "./twitch_api.js";
+import { isYoutubeUrl, fetchYoutubeInfo, downloadYoutubeVideo } from "./youtube_api.js";
 import { DEFAULT_TIER } from "./tiers.js";
 import { db } from "./db.js";
 import { getPlayCountsForPairs } from "./alert_events_store.js";
@@ -251,20 +252,29 @@ export function mountAdminSoundRoutes(app, ctx = {}) {
     const { name, clipUrl, tier, volume, cooldownMs, audioOnly } = req.body || {};
     if (!clipUrl) return res.status(400).json({ error: "clipUrl is required" });
 
-    const clipSlug = extractClipSlug(clipUrl);
-    if (!clipSlug) return res.status(400).json({ error: "Invalid Twitch Clip URL" });
+    const isYoutube = isYoutubeUrl(clipUrl);
+    const clipSlug = isYoutube ? null : extractClipSlug(clipUrl);
+    if (!isYoutube && !clipSlug) {
+      return res.status(400).json({ error: "Invalid clip URL. Use a Twitch Clip URL or a YouTube video URL." });
+    }
 
     try {
       const soundId = `snd_${crypto.randomUUID().slice(0, 12)}`;
-      const clipInfo = await fetchClipInfo(clipSlug, { userId: uid });
-      if (!clipInfo) return res.status(400).json({ error: "Could not fetch clip info from Twitch" });
-      if (!clipInfo.video_url) return res.status(400).json({ error: "Could not determine video URL for this clip" });
+      const clipInfo = isYoutube
+        ? await fetchYoutubeInfo(clipUrl)
+        : await fetchClipInfo(clipSlug, { userId: uid });
+      if (!clipInfo || clipInfo.error) {
+        return res.status(400).json({ error: (clipInfo && clipInfo.error) || "Could not fetch clip info" });
+      }
+      if (!isYoutube && !clipInfo.video_url) return res.status(400).json({ error: "Could not determine video URL for this clip" });
 
       const videoFilename = `${soundId}.mp4`;
       await ensureSoundDir(uid);
       const videoDestPath = path.resolve(SOUNDS_FILE_DIR, String(uid), videoFilename);
-      const dlResult = await downloadClipVideo(clipInfo.video_url, videoDestPath);
-      if (!dlResult.ok) return res.status(400).json({ error: "Failed to download clip video" });
+      const dlResult = isYoutube
+        ? await downloadYoutubeVideo(clipUrl, videoDestPath)
+        : await downloadClipVideo(clipInfo.video_url, videoDestPath);
+      if (!dlResult.ok) return res.status(400).json({ error: dlResult.error || "Failed to download clip video" });
 
       let sizeBytes = 0;
       try { sizeBytes = (await fsStat(videoDestPath)).size; } catch {}
@@ -310,7 +320,7 @@ export function mountAdminSoundRoutes(app, ctx = {}) {
       const result = createSound(uid, {
         id: soundId,
         type: finalType,
-        name: name || clipInfo.title || `Clip ${clipSlug.slice(0, 20)}`,
+        name: name || clipInfo.title || (isYoutube ? "YouTube Video" : `Clip ${clipSlug.slice(0, 20)}`),
         filename: finalFilename,
         mimeType: finalMimeType,
         sizeBytes,

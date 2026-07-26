@@ -1,0 +1,86 @@
+- generic [active] [ref=f36e1]:
+  - banner [ref=f36e2]:
+    - link [ref=f36e4] [cursor=pointer]:
+      - /url: /
+      - img "Livestreamer Hub" [ref=f36e5]
+    - generic [ref=f36e6]:
+      - navigation [ref=f36e7]:
+        - link "Home" [ref=f36e8] [cursor=pointer]:
+          - /url: /
+        - link "Countdown" [ref=f36e9] [cursor=pointer]:
+          - /url: /overlay/config
+        - link "Sound Alerts" [ref=f36e10] [cursor=pointer]:
+          - /url: /sounds/config
+        - link "Goals" [ref=f36e11] [cursor=pointer]:
+          - /url: /goals/config
+        - link "Manage Channels" [ref=f36e12] [cursor=pointer]:
+          - /url: /manage
+        - link "Extras (WIP)" [ref=f36e13] [cursor=pointer]:
+          - /url: /utilities
+      - generic [ref=f36e14]:
+        - generic [ref=f36e16]:
+          - button "System theme" [pressed] [ref=f36e17] [cursor=pointer]
+          - button "Light theme" [ref=f36e20] [cursor=pointer]
+          - button "Dark theme" [ref=f36e27] [cursor=pointer]
+        - generic [ref=f36e30]: Hi, TestAdmin!
+        - link [ref=f36e31] [cursor=pointer]:
+          - /url: https://docs.google.com/forms/d/e/1FAIpQLSdanikaYMRTjwm9TS5HQ4zMMc8tiDRbz9dqyrJ00Zl518hxbw/viewform?usp=dialog
+          - button "Feedback" [ref=f36e32]
+        - button "Logout" [ref=f36e33] [cursor=pointer]
+  - complementary [ref=f36e34]:
+    - generic [ref=f36e35]: Twitch Extension
+    - generic [ref=f36e38]: Let viewers trigger sounds directly from your channel page.
+    - link "Install Extension" [ref=f36e39] [cursor=pointer]:
+      - /url: https://dashboard.twitch.tv/extensions/l7iuxz2tipmi4ly2g2vg5uzmdqkhx3-0.0.7
+  - main [ref=f36e40]:
+    - navigation [ref=f36e41]:
+      - generic [ref=f36e42]:
+        - button "Alerts" [ref=f36e43] [cursor=pointer]
+        - button "Create Alert" [ref=f36e44] [cursor=pointer]
+        - button "Community Library" [ref=f36e45] [cursor=pointer]
+        - button "Settings" [ref=f36e46] [cursor=pointer]
+        - button "Text-to-Speech" [ref=f36e47] [cursor=pointer]
+        - button "Queue" [ref=f36e48] [cursor=pointer]
+        - button "Alert History" [ref=f36e49] [cursor=pointer]
+        - button "Activity" [ref=f36e50] [cursor=pointer]
+        - button "Delegates" [ref=f36e51] [cursor=pointer]
+    - generic [ref=f36e52]:
+      - heading "Sound Alerts" [level=1] [ref=f36e53]
+      - paragraph [ref=f36e54]: Viewers use Bits to trigger sound alerts on your stream.
+      - generic [ref=f36e55]:
+        - generic [ref=f36e56]:
+          - button "Copy URL" [ref=f36e57] [cursor=pointer]
+          - code [ref=f36e58]: http://127.0.0.1:8940/overlay/sounds?key=testkey123
+        - generic [ref=f36e59]: Add as a Browser Source
+      - generic [ref=f36e60]:
+        - generic [ref=f36e61]:
+          - strong [ref=f36e62]: Live Preview
+          - generic [ref=f36e63]: This is what plays on your overlay — hit "Show in Preview" on any alert to see it here.
+        - iframe [ref=f36e64]:
+          - generic [ref=f37e1]:
+            - heading "Error response" [level=1] [ref=f37e2]
+            - paragraph [ref=f37e3]: "Error code: 404"
+            - paragraph [ref=f37e4]: "Message: File not found."
+            - paragraph [ref=f37e5]: "Error code explanation: HTTPStatus.NOT_FOUND - Nothing matches the given URI."
+      - generic [ref=f36e66]:
+        - heading "Alerts (1/20)" [level=2] [ref=f36e67]
+        - generic [ref=f36e69]:
+          - generic [ref=f36e71]:
+            - generic [ref=f36e72]: Existing Sound
+            - generic [ref=f36e73]: 10 Bits · Vol 80%
+          - generic [ref=f36e74]:
+            - checkbox "Enabled" [checked] [ref=f36e75]
+            - button "Edit" [ref=f36e76] [cursor=pointer]
+            - button "Listen" [ref=f36e77] [cursor=pointer]
+            - button "Show in Preview" [ref=f36e78] [cursor=pointer]
+            - button "Del" [ref=f36e79] [cursor=pointer]
+  - contentinfo [ref=f36e80]:
+    - link "Terms of Service" [ref=f36e81] [cursor=pointer]:
+      - /url: /terms
+    - link "Privacy Policy" [ref=f36e82] [cursor=pointer]:
+      - /url: /privacy
+    - link "GDPR / UK GDPR Disclosure" [ref=f36e83] [cursor=pointer]:
+      - /url: /gdpr
+    - link "Discord" [ref=f36e84] [cursor=pointer]:
+      - /url: https://discord.gg/nwu4w5cUVd
+  - button "Take A Tour" [ref=f36e87] [cursor=pointer]

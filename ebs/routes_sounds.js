@@ -212,6 +212,7 @@ async function extractAudio(videoPath, audioPath) {
 import { getBaseUrl } from "./base_url.js";
 import { getOrCreateUserKey } from "./keys.js";
 import { fetchClipInfo, downloadClipVideo } from "./twitch_api.js";
+import { isYoutubeUrl, fetchYoutubeInfo, downloadYoutubeVideo } from "./youtube_api.js";
 import {
   listSounds,
   getSound,
@@ -542,24 +543,32 @@ export function mountSoundRoutes(app, deps = {}) {
       return res.status(400).json({ error: "clipUrl is required" });
     }
 
-    const clipSlug = extractClipSlug(clipUrl);
-    if (!clipSlug) {
+    // Twitch Clip and YouTube sources go through completely different fetch
+    // + download mechanics (Helix API + direct fetch vs yt-dlp), but produce
+    // the same shape from here on (clipInfo.title/thumbnail_url, a dlResult
+    // with ok/error) so the rest of this route doesn't need to know which.
+    const isYoutube = isYoutubeUrl(clipUrl);
+    const clipSlug = isYoutube ? null : extractClipSlug(clipUrl);
+    if (!isYoutube && !clipSlug) {
       return res.status(400).json({
-        error: "Invalid Twitch Clip URL. Use a URL like https://clips.twitch.tv/SlugHere or https://twitch.tv/channel/clip/SlugHere",
+        error: "Invalid clip URL. Use a Twitch Clip URL (https://clips.twitch.tv/...) or a YouTube video URL.",
       });
     }
 
     try {
       const soundId = `snd_${crypto.randomUUID().slice(0, 12)}`;
 
-      // Fetch clip metadata from Twitch Helix API
-      const clipInfo = await fetchClipInfo(clipSlug, { userId: uid });
-      if (!clipInfo) {
+      // Fetch metadata (Twitch Helix API, or yt-dlp for YouTube)
+      const clipInfo = isYoutube
+        ? await fetchYoutubeInfo(clipUrl)
+        : await fetchClipInfo(clipSlug, { userId: uid });
+      if (!clipInfo || clipInfo.error) {
         return res.status(400).json({
-          error: "Could not fetch clip info from Twitch. Check that the clip URL is valid and the clip exists.",
+          error: (clipInfo && clipInfo.error) ||
+            "Could not fetch clip info. Check that the URL is valid and the clip/video exists.",
         });
       }
-      if (!clipInfo.video_url) {
+      if (!isYoutube && !clipInfo.video_url) {
         return res.status(400).json({
           error: "Could not determine video URL for this clip. The clip may not be available for download.",
         });
@@ -571,10 +580,12 @@ export function mountSoundRoutes(app, deps = {}) {
         ? path.resolve(MULTER_TMP_DIR, videoFilename)
         : path.resolve(SOUNDS_FILE_DIR, String(uid), videoFilename);
       if (!r2Enabled) await ensureSoundDir(uid);
-      const dlResult = await downloadClipVideo(clipInfo.video_url, videoDestPath);
+      const dlResult = isYoutube
+        ? await downloadYoutubeVideo(clipUrl, videoDestPath)
+        : await downloadClipVideo(clipInfo.video_url, videoDestPath);
       if (!dlResult.ok) {
         return res.status(400).json({
-          error: "Failed to download clip video. The clip may be unavailable or region-restricted.",
+          error: dlResult.error || "Failed to download clip video. The clip may be unavailable or region-restricted.",
           debug: {
             thumbnail_url: clipInfo.thumbnail_url,
             derived_video_url: clipInfo.video_url,
@@ -682,7 +693,7 @@ export function mountSoundRoutes(app, deps = {}) {
       const result = createSound(uid, {
         id: soundId,
         type: finalType,
-        name: name || clipInfo.title || `Clip ${clipSlug.slice(0, 20)}`,
+        name: name || clipInfo.title || (isYoutube ? "YouTube Video" : `Clip ${clipSlug.slice(0, 20)}`),
         filename: finalFilename,
         mimeType: finalMimeType,
         sizeBytes,

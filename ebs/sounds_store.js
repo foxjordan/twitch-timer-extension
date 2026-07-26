@@ -195,7 +195,10 @@ function normalizeSound(raw = {}, uid = null) {
     popupStyle: VALID_POPUP_STYLES.includes(raw.popupStyle) ? raw.popupStyle : "corner",
     clipUrl: sanitizeString(raw.clipUrl, ""),
     clipSlug: sanitizeString(raw.clipSlug, ""),
-    tier: VALID_TIERS.includes(raw.tier) ? raw.tier : DEFAULT_TIER,
+    // null means "no Bits tier at all" — a Channel-Points-only alert. Only an
+    // explicit null opts into that; anything else missing/invalid still
+    // falls back to DEFAULT_TIER, same as before this existed.
+    tier: raw.tier === null ? null : (VALID_TIERS.includes(raw.tier) ? raw.tier : DEFAULT_TIER),
     // Channel Points is a second, independent trigger a sound can opt into
     // alongside its Bits tier. channelPointsRewardId is the Twitch Custom
     // Reward id backing it — only ever written by setSoundChannelPoints()
@@ -284,7 +287,10 @@ export function updateSound(uid, soundId, patch = {}) {
   if (!sound) return null;
   if ("name" in patch) sound.name = sanitizeString(patch.name, sound.name);
   if ("type" in patch && VALID_TYPES.includes(patch.type)) sound.type = patch.type;
-  if ("tier" in patch && VALID_TIERS.includes(patch.tier)) sound.tier = patch.tier;
+  if ("tier" in patch) {
+    if (patch.tier === null) sound.tier = null; // explicit opt-out — Channel-Points-only
+    else if (VALID_TIERS.includes(patch.tier)) sound.tier = patch.tier;
+  }
   if ("enabled" in patch) sound.enabled = Boolean(patch.enabled);
   if ("volume" in patch) sound.volume = sanitizeNumber(patch.volume, sound.volume, 0, 100);
   if ("cooldownMs" in patch) sound.cooldownMs = sanitizeNumber(patch.cooldownMs, sound.cooldownMs, 0, 60000);
@@ -648,7 +654,12 @@ export function getPublicSoundList(uid) {
   const user = ensureUser(uid);
   if (!user.settings.enabled) return [];
   return Array.from(user.sounds.values())
-    .filter((s) => s.enabled)
+    // Backs the extension's viewer-facing Bits panel specifically — a
+    // Channel-Points-only sound (tier: null) has nothing to sell via Bits
+    // and must never reach that grid; excluding it here (the single place
+    // the extension frontend sources sounds from) means the extension
+    // itself never needs to know this concept exists.
+    .filter((s) => s.enabled && s.tier)
     .map((s) => ({
       id: s.id,
       name: s.name,

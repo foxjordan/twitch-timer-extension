@@ -216,41 +216,9 @@ export function renderSoundAlertOverlayPage() {
           var audio = new Audio('/api/sounds/file/' + encodeURIComponent(item.soundId) + '?key=' + encodeURIComponent(overlayKey));
           audio.volume = vol;
           currentAudio = audio;
-
-          // "large" mirrors the video/clip treatment — big and centered,
-          // using the same Video/Clip Size setting — instead of the small
-          // corner toast alone. Mainly useful once a sound has a real
-          // (often animated) thumbnail rather than the generic icon.
-          if (item.popupStyle === 'large' && item.hasImage) {
-            var bigContainer = document.createElement('div');
-            bigContainer.className = 'media-container';
-            currentMediaContainer = bigContainer;
-            var img = document.createElement('img');
-            img.src = '/api/sounds/file/' + encodeURIComponent(item.soundId) + '/image?key=' + encodeURIComponent(overlayKey);
-            img.alt = '';
-            applyVideoSize(img, bigContainer);
-            img.onerror = function() {
-              // Thumbnail failed to load — drop the big container rather than
-              // showing a broken image for the whole alert; the corner toast
-              // (with its own separate fallback) already covers this case.
-              if (bigContainer.parentNode) bigContainer.remove();
-              if (currentMediaContainer === bigContainer) currentMediaContainer = null;
-            };
-            bigContainer.appendChild(img);
-            document.body.appendChild(bigContainer);
-          }
-
-          function finish() {
-            if (currentMediaContainer && currentMediaContainer.parentNode) {
-              var c = currentMediaContainer;
-              c.classList.add('exit');
-              setTimeout(function() { c.remove(); }, 350);
-            }
-            advance();
-          }
-          audio.onended = finish;
-          audio.onerror = finish;
-          audio.play().catch(finish);
+          audio.onended = advance;
+          audio.onerror = advance;
+          audio.play().catch(advance);
         }
 
         function playClip(item) {

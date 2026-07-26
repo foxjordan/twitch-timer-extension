@@ -25,10 +25,6 @@ export function renderSoundConfigPage(options = {}) {
   const privacyUrl = `${base}/privacy`;
   const gdprUrl = `${base}/gdpr`;
 
-  const tierOptionsHtml = VALID_TIERS.map(
-    (sku) =>
-      `<option value="${sku}"${sku === DEFAULT_TIER ? " selected" : ""}>${TIER_LABELS[sku]}</option>`,
-  ).join("\n              ");
   const showAdminLink = Boolean(options.showAdminLink);
   const isSuperAdmin = Boolean(options.isSuperAdmin);
 
@@ -100,8 +96,6 @@ export function renderSoundConfigPage(options = {}) {
       .btn-click { animation: btnpulse .18s ease; }
       button.danger { background: #b91c1c; }
       .hint { font-size: 12px; color: var(--text-muted); }
-      .tab-btn { background: var(--secondary-button-bg); color: var(--secondary-button-text); border: 1px solid var(--secondary-button-border); }
-      .tab-btn.active { background: var(--accent-color); color: #fff; border-color: var(--accent-color); }
       .type-badge { display:inline-block; padding:1px 6px; border-radius:4px; font-size:10px; font-weight:600; text-transform:uppercase; letter-spacing:0.04em; margin-left:6px; }
       .type-badge.clip { background:rgba(145,70,255,0.15); color:#bf94ff; }
       .type-badge.video { background:rgba(0,180,120,0.15); color:#00c882; }
@@ -168,6 +162,27 @@ export function renderSoundConfigPage(options = {}) {
       .global-footer { margin-top: 24px; padding-top: 18px; border-top: 1px solid var(--surface-border); display: flex; flex-wrap: wrap; gap: 12px; justify-content: center; font-size: 13px; color: var(--text-muted); }
       .global-footer a { color: var(--text-muted); text-decoration: none; }
       .global-footer a:hover { color: var(--accent-color); }
+
+      /* Create Alert wizard modal */
+      .modal-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,0.6); display: flex; align-items: center; justify-content: center; z-index: 200; padding: 20px; box-sizing: border-box; }
+      .modal-box { background: var(--surface-color); border: 1px solid var(--surface-border); border-radius: 14px; width: 100%; max-width: 480px; max-height: 90vh; display: flex; flex-direction: column; overflow: hidden; }
+      .modal-header { display: flex; align-items: center; justify-content: space-between; padding: 16px 20px; border-bottom: 1px solid var(--surface-border); flex-shrink: 0; }
+      .modal-close { background: transparent; color: var(--text-muted); font-size: 20px; line-height: 1; padding: 4px 8px; border-radius: 6px; }
+      .modal-close:hover { background: var(--surface-muted, #1a1a1e); color: var(--text-color); }
+      .modal-body { padding: 20px; overflow-y: auto; flex: 1; }
+      .modal-footer { display: flex; align-items: center; gap: 8px; padding: 14px 20px; border-top: 1px solid var(--surface-border); flex-shrink: 0; }
+      .wizard-steps { display: flex; gap: 6px; }
+      .wizard-step-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--surface-border); }
+      .wizard-step-dot.active { background: var(--accent-color); width: 20px; border-radius: 4px; }
+      .wizard-step-dot.done { background: var(--accent-color); opacity: 0.5; }
+      .wizard-type-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 10px; }
+      .wizard-type-card { border: 1px solid var(--surface-border); border-radius: 10px; padding: 16px 10px; text-align: center; cursor: pointer; background: var(--surface-muted, #1a1a1e); font-size: 13px; font-weight: 600; }
+      .wizard-type-card:hover { background: var(--surface-color); }
+      .wizard-type-card.selected { border-color: var(--accent-color); background: rgba(145,70,255,0.12); }
+      .wizard-type-card .icon { font-size: 26px; display: block; margin-bottom: 6px; }
+      .wizard-thumb-grid { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; max-height: 160px; overflow-y: auto; }
+      .wizard-thumb-grid img { width: 44px; height: 44px; object-fit: cover; cursor: pointer; border-radius: 6px; border: 2px solid transparent; }
+      .wizard-thumb-grid img:hover { border-color: var(--accent-color); }
     </style>
   </head>
   <body>
@@ -297,101 +312,26 @@ export function renderSoundConfigPage(options = {}) {
       <!-- Create Alert -->
       <div class="card" id="createAlertCard">
         <h2>Create Alert</h2>
-        <div id="createAlertBody">
-        <div style="display:flex; gap:4px; margin-bottom:12px;">
-          <button id="tabSound" class="tab-btn active" data-tab="sound" style="font-size:12px; padding:5px 12px; border-radius:6px;">Sound</button>
-          <button id="tabClip" class="tab-btn" data-tab="clip" style="font-size:12px; padding:5px 12px; border-radius:6px; display:none;">Twitch Clip</button>
-          <button id="tabVideo" class="tab-btn" data-tab="video" style="font-size:12px; padding:5px 12px; border-radius:6px; display:none;">Video</button>
-        </div>
-        <div id="proFeatureHint" class="hint" style="margin-bottom:10px;">Video &amp; clip alerts are a Pro feature. Contact the admin to enable them.</div>
-
-        <!-- Sound upload tab -->
-        <form id="soundUploadForm" class="tab-panel" data-tab="sound">
-          <div class="hint" style="margin-bottom:8px;">Max 5 MB. Accepted formats: MP3, OGG, WAV, WebM, M4A.</div>
-          <div style="margin-bottom:8px;">
-            <input type="file" id="soundFile" accept="audio/mpeg,audio/ogg,audio/wav,audio/webm,audio/mp4" style="font-size:12px;">
-          </div>
-          <div style="margin-bottom:8px;">
-            <input type="text" id="soundName" placeholder="Sound name" maxlength="100" style="width:100%; max-width:300px;">
-          </div>
-          <div class="row2" style="margin-bottom:8px;">
-            <select id="soundTier">
-              ${tierOptionsHtml}
-            </select>
-            <label style="display:flex; align-items:center; gap:6px; font-size:13px;">
-              Vol
-              <input type="range" id="soundUploadVolume" min="0" max="100" value="80" style="width:80px">
-              <span id="soundUploadVolumeVal" style="font-size:12px; opacity:0.7;">80%</span>
-            </label>
-          </div>
-          <label style="display:flex; align-items:center; gap:6px; font-size:13px; margin-bottom:8px;">
-            <input type="checkbox" id="soundShareToLibrary" checked> Share to Community Library
-          </label>
-          <button type="submit" id="soundUploadBtn">Upload Sound</button>
-          <span id="soundUploadHint" class="hint" style="margin-left:8px;"></span>
-          <p class="hint" style="margin-top:10px; font-size:11px; line-height:1.5; opacity:0.7;">By clicking "Upload", you confirm that you own or have the rights to the uploaded media and that you grant permission for it to be publicly broadcast across Twitch. See our <a href="/terms" style="color:var(--accent-color);">Terms of Service</a> for details.</p>
-        </form>
-
-        <!-- Twitch Clip tab -->
-        <form id="clipUploadForm" class="tab-panel" data-tab="clip" style="display:none;">
-          <div class="hint" style="margin-bottom:8px;">Paste a Twitch Clip URL. The clip will play with audio through the browser source when redeemed.</div>
-          <div style="margin-bottom:8px;">
-            <input type="text" id="clipName" placeholder="Alert name" maxlength="100" style="width:100%; max-width:300px;">
-          </div>
-          <div style="margin-bottom:8px;">
-            <input type="text" id="clipUrl" placeholder="https://clips.twitch.tv/..." style="width:100%; max-width:400px;">
-          </div>
-          <div class="row2" style="margin-bottom:8px;">
-            <select id="clipTier">
-              ${tierOptionsHtml}
-            </select>
-            <label style="display:flex; align-items:center; gap:6px; font-size:13px;">
-              Vol
-              <input type="range" id="clipVolume" min="0" max="100" value="80" style="width:80px">
-              <span id="clipVolumeVal" style="font-size:12px; opacity:0.7;">80%</span>
-            </label>
-          </div>
-          <div style="margin-bottom:8px;">
-            <label style="display:flex; align-items:center; gap:6px; font-size:13px;">
-              <input type="checkbox" id="clipAudioOnly" /> Audio only (smaller file, no video)
-            </label>
-          </div>
-          <label style="display:flex; align-items:center; gap:6px; font-size:13px; margin-bottom:8px;">
-            <input type="checkbox" id="clipShareToLibrary" checked> Share to Community Library
-          </label>
-          <button type="submit" id="clipUploadBtn">Add Clip</button>
-          <span id="clipUploadHint" class="hint" style="margin-left:8px;"></span>
-          <p class="hint" style="margin-top:10px; font-size:11px; line-height:1.5; opacity:0.7;">By clicking "Add Clip", you confirm that you own or have the rights to the uploaded media and that you grant permission for it to be publicly broadcast across Twitch. See our <a href="/terms" style="color:var(--accent-color);">Terms of Service</a> for details.</p>
-        </form>
-
-        <!-- Video upload tab -->
-        <form id="videoUploadForm" class="tab-panel" data-tab="video" style="display:none;">
-          <div class="hint" style="margin-bottom:8px;">Max 25 MB. Accepted formats: MP4, WebM. The video will play through the browser source when redeemed.</div>
-          <div style="margin-bottom:8px;">
-            <input type="file" id="videoFile" accept="video/mp4,video/webm" style="font-size:12px;">
-          </div>
-          <div style="margin-bottom:8px;">
-            <input type="text" id="videoName" placeholder="Video name" maxlength="100" style="width:100%; max-width:300px;">
-          </div>
-          <div class="row2" style="margin-bottom:8px;">
-            <select id="videoTier">
-              ${tierOptionsHtml}
-            </select>
-            <label style="display:flex; align-items:center; gap:6px; font-size:13px;">
-              Vol
-              <input type="range" id="videoVolume" min="0" max="100" value="80" style="width:80px">
-              <span id="videoVolumeVal" style="font-size:12px; opacity:0.7;">80%</span>
-            </label>
-          </div>
-          <label style="display:flex; align-items:center; gap:6px; font-size:13px; margin-bottom:8px;">
-            <input type="checkbox" id="videoShareToLibrary" checked> Share to Community Library
-          </label>
-          <button type="submit" id="videoUploadBtn">Upload Video</button>
-          <span id="videoUploadHint" class="hint" style="margin-left:8px;"></span>
-          <p class="hint" style="margin-top:10px; font-size:11px; line-height:1.5; opacity:0.7;">By clicking "Upload", you confirm that you own or have the rights to the uploaded media and that you grant permission for it to be publicly broadcast across Twitch. See our <a href="/terms" style="color:var(--accent-color);">Terms of Service</a> for details.</p>
-        </form>
-        </div>
+        <p class="hint" style="margin-bottom:14px;">A guided setup — pick a source, add a thumbnail, and set your Bits cost.</p>
+        <button id="openCreateWizardBtn" style="padding:10px 22px; font-size:14px;">+ New Alert</button>
       </div>
+      </div>
+
+      <!-- Create Alert wizard -->
+      <div id="createWizardBackdrop" class="modal-backdrop" style="display:none;">
+        <div class="modal-box">
+          <div class="modal-header">
+            <div id="wizardStepIndicator" class="wizard-steps"></div>
+            <button id="wizardCloseBtn" class="modal-close" type="button" aria-label="Close">&times;</button>
+          </div>
+          <div id="wizardBody" class="modal-body"></div>
+          <div class="modal-footer">
+            <span id="wizardHint" class="hint"></span>
+            <div style="flex:1;"></div>
+            <button id="wizardBackBtn" class="secondary" type="button" style="display:none;">Back</button>
+            <button id="wizardNextBtn" type="button">Next</button>
+          </div>
+        </div>
       </div>
 
       <div class="section-page" data-section="library">
@@ -592,14 +532,6 @@ export function renderSoundConfigPage(options = {}) {
         var videoSizeEl = document.getElementById('videoSize');
         var saveSoundSettingsBtn = document.getElementById('saveSoundSettings');
         var soundSettingsHintEl = document.getElementById('soundSettingsHint');
-        var soundUploadForm = document.getElementById('soundUploadForm');
-        var soundFileEl = document.getElementById('soundFile');
-        var soundNameEl = document.getElementById('soundName');
-        var soundTierEl = document.getElementById('soundTier');
-        var soundUploadVolumeEl = document.getElementById('soundUploadVolume');
-        var soundUploadVolumeValEl = document.getElementById('soundUploadVolumeVal');
-        var soundUploadBtn = document.getElementById('soundUploadBtn');
-        var soundUploadHintEl = document.getElementById('soundUploadHint');
 
         // Set OBS overlay URL
         var soundUrlEl = document.getElementById('soundOverlayUrl');
@@ -614,33 +546,6 @@ export function renderSoundConfigPage(options = {}) {
 
         if (soundGlobalVolumeEl) soundGlobalVolumeEl.addEventListener('input', function() {
           if (soundGlobalVolumeValEl) soundGlobalVolumeValEl.textContent = this.value + '%';
-        });
-        if (soundUploadVolumeEl) soundUploadVolumeEl.addEventListener('input', function() {
-          if (soundUploadVolumeValEl) soundUploadVolumeValEl.textContent = this.value + '%';
-        });
-
-        // Clip/video volume sliders
-        var clipVolumeEl = document.getElementById('clipVolume');
-        var clipVolumeValEl = document.getElementById('clipVolumeVal');
-        var videoVolumeEl = document.getElementById('videoVolume');
-        var videoVolumeValEl = document.getElementById('videoVolumeVal');
-        if (clipVolumeEl) clipVolumeEl.addEventListener('input', function() {
-          if (clipVolumeValEl) clipVolumeValEl.textContent = this.value + '%';
-        });
-        if (videoVolumeEl) videoVolumeEl.addEventListener('input', function() {
-          if (videoVolumeValEl) videoVolumeValEl.textContent = this.value + '%';
-        });
-
-        // Tab switching
-        document.querySelectorAll('.tab-btn').forEach(function(btn) {
-          btn.addEventListener('click', function() {
-            document.querySelectorAll('.tab-btn').forEach(function(b) { b.classList.remove('active'); });
-            btn.classList.add('active');
-            var tab = btn.getAttribute('data-tab');
-            document.querySelectorAll('.tab-panel').forEach(function(panel) {
-              panel.style.display = panel.getAttribute('data-tab') === tab ? '' : 'none';
-            });
-          });
         });
 
         // Copy URL button
@@ -689,6 +594,9 @@ export function renderSoundConfigPage(options = {}) {
         })();
 
         var soundsCache = [];
+        // Read by the Create Alert wizard's Step 1 to decide whether to show
+        // the Clip/Video type cards at all (same gate the old tabs used).
+        var videoClipsEnabled = false;
 
         async function fetchSoundsAdmin() {
           try {
@@ -701,14 +609,7 @@ export function renderSoundConfigPage(options = {}) {
             if (soundGlobalCooldownEl) soundGlobalCooldownEl.value = Math.round((settings.globalCooldownMs || 3000) / 1000);
             if (soundMaxQueueEl) soundMaxQueueEl.value = settings.maxQueueSize ?? 5;
             if (videoSizeEl) videoSizeEl.value = settings.videoSize || 'medium';
-            // Gate clip/video tabs behind videoClipsEnabled
-            var vcEnabled = settings.videoClipsEnabled || false;
-            var tabClipEl = document.getElementById('tabClip');
-            var tabVideoEl = document.getElementById('tabVideo');
-            var proHintEl = document.getElementById('proFeatureHint');
-            if (tabClipEl) tabClipEl.style.display = vcEnabled ? '' : 'none';
-            if (tabVideoEl) tabVideoEl.style.display = vcEnabled ? '' : 'none';
-            if (proHintEl) proHintEl.style.display = vcEnabled ? 'none' : '';
+            videoClipsEnabled = settings.videoClipsEnabled || false;
             renderSoundList(soundsCache);
           } catch (err) {
             if (soundListEl) {
@@ -721,23 +622,19 @@ export function renderSoundConfigPage(options = {}) {
           }
         }
 
-        // After creating a sound/clip/video, drop the streamer straight into
-        // its editor — same emote/GIF thumbnail pickers as editing an
-        // existing alert, instead of leaving them to hunt for the new card
-        // and click Edit themselves.
-        async function openEditorForNewSound(soundId) {
+        // After the Create Alert wizard finishes, jump to the Alerts page and
+        // scroll the new card into view — the wizard itself already covers
+        // thumbnail + settings, so unlike the old inline forms this doesn't
+        // need to also pop the full edit form open.
+        async function revealNewSound(soundId) {
           await fetchSoundsAdmin();
-          // The sound list (and the editor we're about to inject into it)
-          // lives on the "Alerts" page, a separate section-page from
-          // "Create Alert" — without switching, the editor opens correctly
-          // but sits inside a display:none container the user never sees.
+          // The sound list lives on the "Alerts" page, a separate section-page
+          // from "Create Alert" — without switching, the new card exists but
+          // sits inside a display:none container the user never sees.
           switchSection('alerts');
           history.replaceState(null, '', '#alerts');
           var card = soundListEl ? soundListEl.querySelector('[data-sound-id="' + soundId + '"]') : null;
-          var sound = soundsCache.find(function(x) { return x.id === soundId; });
-          if (!card || !sound) return;
-          openSoundEditor(sound, card);
-          card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          if (card) card.scrollIntoView({ behavior: 'smooth', block: 'center' });
         }
 
         function renderSoundList(sounds) {
@@ -819,7 +716,8 @@ export function renderSoundConfigPage(options = {}) {
 
             var metaDiv = document.createElement('div');
             metaDiv.style.cssText = 'font-size:12px; opacity:0.6;';
-            var metaText = (TIER_LABELS[s.tier] || s.tier) + ' \\u00b7 Vol ' + s.volume + '%';
+            var tierText = s.tier ? (TIER_LABELS[s.tier] || s.tier) : 'No Bits';
+            var metaText = tierText + ' \\u00b7 Vol ' + s.volume + '%';
             if (s.channelPointsEnabled) metaText += ' \\u00b7 ' + s.channelPointsCost + ' Points';
             if (s.type === 'clip' && s.clipUrl) metaText += ' \\u00b7 ' + s.clipUrl.slice(0, 40);
             metaDiv.textContent = metaText;
@@ -1126,6 +1024,181 @@ export function renderSoundConfigPage(options = {}) {
           });
         }
 
+        // Pick a thumbnail from an emote source instead of uploading a file
+        // — automatically on-brand, zero design effort. Shared by both the
+        // Twitch and 7TV pickers, and by both the per-sound editor and the
+        // Create Alert wizard's thumbnail step (only the target soundId,
+        // hint element, and post-set callback differ between callers).
+        // panelGroup (optional) is an array shared across every picker in
+        // the same image-source row — pushing this panel onto it lets each
+        // picker close its siblings on open, so only one is ever visible at
+        // once instead of stacking Twitch + 7TV + GIF panels on top of
+        // each other.
+        function createEmotePicker(label, fetchUrl, soundId, hintEl, onSet, panelGroup) {
+          var btn = document.createElement('button');
+          btn.textContent = label;
+          btn.className = 'secondary';
+          btn.style.cssText = 'font-size:12px; padding:3px 8px;';
+
+          var panel = document.createElement('div');
+          panel.style.cssText = 'display:none; flex-direction:column; gap:6px; margin-top:6px; max-height:160px; overflow-y:auto; padding:6px; border:1px solid var(--border,#303038); border-radius:6px;';
+          if (panelGroup) panelGroup.push(panel);
+
+          var loaded = false;
+          btn.addEventListener('click', async function() {
+            var isOpen = panel.style.display !== 'none';
+            if (panelGroup) panelGroup.forEach(function(p) { if (p !== panel) p.style.display = 'none'; });
+            if (isOpen) { panel.style.display = 'none'; return; }
+            panel.style.display = 'flex';
+            if (loaded) return;
+            panel.textContent = 'Loading…';
+            try {
+              var r = await fetch(fetchUrl);
+              var body = await r.json().catch(function() { return {}; });
+              var emotes = body.emotes || [];
+              panel.textContent = '';
+              if (body.source === 'global') {
+                var note = document.createElement('div');
+                note.className = 'hint';
+                note.textContent = 'Showing 7TV\\'s global emotes — connect 7TV to your channel for your own set.';
+                panel.appendChild(note);
+              }
+              var grid = document.createElement('div');
+              grid.style.cssText = 'display:flex; flex-wrap:wrap; gap:6px;';
+              if (!emotes.length) {
+                grid.textContent = 'No emotes found.';
+              }
+              emotes.forEach(function(emote) {
+                var img = document.createElement('img');
+                img.src = emote.url;
+                img.alt = emote.name;
+                img.title = emote.name;
+                img.style.cssText = 'width:32px; height:32px; object-fit:contain; cursor:pointer; border-radius:4px;';
+                img.addEventListener('click', async function() {
+                  if (hintEl) hintEl.textContent = 'Setting thumbnail…';
+                  try {
+                    var setRes = await fetch(API_BASE + '/' + encodeURIComponent(soundId) + '/thumbnail-from-url', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ url: emote.url })
+                    });
+                    var setBody = await setRes.json().catch(function() { return {}; });
+                    if (!setRes.ok) throw new Error(setBody.error || 'Failed to set thumbnail');
+                    if (hintEl) {
+                      hintEl.textContent = 'Thumbnail set!';
+                      setTimeout(function() { hintEl.textContent = ''; }, 2500);
+                    }
+                    if (typeof onSet === 'function') onSet(setBody.sound);
+                  } catch (e) {
+                    if (hintEl) hintEl.textContent = e.message || 'Failed to set thumbnail';
+                  }
+                });
+                grid.appendChild(img);
+              });
+              panel.appendChild(grid);
+              loaded = true;
+            } catch (e) {
+              panel.textContent = 'Failed to load emotes';
+            }
+          });
+
+          return { btn: btn, panel: panel };
+        }
+
+        // GIF search is shaped differently from the emote pickers above —
+        // it needs a query box and re-fetches per keystroke. Unlike Giphy
+        // (which required Search to be called client-side per their
+        // terms), Klipy's search is proxied through our own backend at
+        // API_BASE + '/klipy-search' so the API key never reaches the
+        // browser. Only the final "use this one" step goes through our
+        // API either way, reusing the exact same thumbnail-from-url
+        // endpoint and SSRF allowlist as every other source.
+        function createGifSearchPicker(soundId, hintEl, onSet, panelGroup) {
+          var btn = document.createElement('button');
+          btn.textContent = 'GIF Search';
+          btn.className = 'secondary';
+          btn.style.cssText = 'font-size:12px; padding:3px 8px;';
+
+          var panel = document.createElement('div');
+          panel.style.cssText = 'display:none; flex-direction:column; gap:6px; margin-top:6px; padding:6px; border:1px solid var(--border,#303038); border-radius:6px;';
+          if (panelGroup) panelGroup.push(panel);
+
+          var searchInput = document.createElement('input');
+          searchInput.type = 'text';
+          searchInput.placeholder = 'Search KLIPY…';
+          searchInput.style.cssText = 'font-size:12px; padding:4px 6px;';
+
+          var grid = document.createElement('div');
+          grid.style.cssText = 'display:flex; flex-wrap:wrap; gap:6px; margin-top:6px; max-height:160px; overflow-y:auto;';
+
+          var attribution = document.createElement('div');
+          attribution.className = 'hint';
+          attribution.style.cssText = 'font-size:10px; opacity:0.7; margin-top:2px;';
+          attribution.textContent = 'Powered by KLIPY';
+
+          panel.appendChild(searchInput);
+          panel.appendChild(grid);
+          panel.appendChild(attribution);
+
+          var debounceTimer = null;
+          searchInput.addEventListener('input', function() {
+            if (debounceTimer) clearTimeout(debounceTimer);
+            var query = searchInput.value.trim();
+            if (!query) { grid.textContent = ''; return; }
+            debounceTimer = setTimeout(function() { runSearch(query); }, 400);
+          });
+
+          async function runSearch(query) {
+            grid.textContent = 'Searching…';
+            try {
+              var r = await fetch(API_BASE + '/klipy-search?q=' + encodeURIComponent(query));
+              var body = await r.json().catch(function() { return {}; });
+              var results = body.gifs || [];
+              grid.textContent = '';
+              if (!results.length) grid.textContent = 'No results.';
+              results.forEach(function(gif) {
+                if (!gif.thumbUrl || !gif.attachUrl) return;
+                var img = document.createElement('img');
+                img.src = gif.thumbUrl;
+                img.alt = gif.title || '';
+                img.title = gif.title || '';
+                img.style.cssText = 'width:48px; height:48px; object-fit:cover; cursor:pointer; border-radius:4px;';
+                img.addEventListener('click', async function() {
+                  if (hintEl) hintEl.textContent = 'Setting thumbnail…';
+                  try {
+                    var setRes = await fetch(API_BASE + '/' + encodeURIComponent(soundId) + '/thumbnail-from-url', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ url: gif.attachUrl })
+                    });
+                    var setBody = await setRes.json().catch(function() { return {}; });
+                    if (!setRes.ok) throw new Error(setBody.error || 'Failed to set thumbnail');
+                    if (hintEl) {
+                      hintEl.textContent = 'Thumbnail set!';
+                      setTimeout(function() { hintEl.textContent = ''; }, 2500);
+                    }
+                    if (typeof onSet === 'function') onSet(setBody.sound);
+                  } catch (e) {
+                    if (hintEl) hintEl.textContent = e.message || 'Failed to set thumbnail';
+                  }
+                });
+                grid.appendChild(img);
+              });
+            } catch (e) {
+              grid.textContent = 'Search failed';
+            }
+          }
+
+          btn.addEventListener('click', function() {
+            var isOpen = panel.style.display !== 'none';
+            if (panelGroup) panelGroup.forEach(function(p) { if (p !== panel) p.style.display = 'none'; });
+            panel.style.display = isOpen ? 'none' : 'flex';
+            if (!isOpen) searchInput.focus();
+          });
+
+          return { btn: btn, panel: panel };
+        }
+
         function openSoundEditor(s, card) {
           var info = card.querySelector('.sound-info');
           if (!info) return;
@@ -1145,6 +1218,18 @@ export function renderSoundConfigPage(options = {}) {
           var row = document.createElement('div');
           row.style.cssText = 'display:flex; align-items:center; gap:8px;';
 
+          // Bits can be turned off entirely for a Channel-Points-only alert
+          // (tier: null) — it just never shows up in the viewer's Bits panel,
+          // no extension changes involved, since that panel only ever sees
+          // sounds with a real tier in the first place.
+          var enableBitsLabel = document.createElement('label');
+          enableBitsLabel.style.cssText = 'display:flex; align-items:center; gap:4px; font-size:12px;';
+          var enableBitsCb = document.createElement('input');
+          enableBitsCb.type = 'checkbox';
+          enableBitsCb.checked = Boolean(s.tier);
+          enableBitsLabel.appendChild(enableBitsCb);
+          enableBitsLabel.appendChild(document.createTextNode('Bits'));
+
           var tierSelect = document.createElement('select');
           Object.keys(TIER_LABELS).forEach(function(t) {
             var opt = document.createElement('option');
@@ -1153,6 +1238,8 @@ export function renderSoundConfigPage(options = {}) {
             if (t === s.tier) opt.selected = true;
             tierSelect.appendChild(opt);
           });
+          tierSelect.disabled = !s.tier;
+          enableBitsCb.addEventListener('change', function() { tierSelect.disabled = !enableBitsCb.checked; });
 
           var volLabel = document.createElement('label');
           volLabel.style.cssText = 'display:flex; align-items:center; gap:4px; font-size:12px;';
@@ -1169,6 +1256,7 @@ export function renderSoundConfigPage(options = {}) {
           volLabel.appendChild(volRange);
           volLabel.appendChild(volSpan);
 
+          row.appendChild(enableBitsLabel);
           row.appendChild(tierSelect);
           row.appendChild(volLabel);
 
@@ -1291,176 +1379,17 @@ export function renderSoundConfigPage(options = {}) {
 
           imageRow.appendChild(imageInput);
 
-          // Pick a thumbnail from an emote source instead of uploading a file
-          // — automatically on-brand, zero design effort. Shared by both the
-          // Twitch and 7TV pickers below (only the endpoint differs).
-          function createEmotePicker(label, fetchUrl) {
-            var btn = document.createElement('button');
-            btn.textContent = label;
-            btn.className = 'secondary';
-            btn.style.cssText = 'font-size:12px; padding:3px 8px;';
-
-            var panel = document.createElement('div');
-            panel.style.cssText = 'display:none; flex-direction:column; gap:6px; margin-top:6px; max-height:160px; overflow-y:auto; padding:6px; border:1px solid var(--border,#303038); border-radius:6px;';
-
-            var loaded = false;
-            btn.addEventListener('click', async function() {
-              var isOpen = panel.style.display !== 'none';
-              if (isOpen) { panel.style.display = 'none'; return; }
-              panel.style.display = 'flex';
-              if (loaded) return;
-              panel.textContent = 'Loading…';
-              try {
-                var r = await fetch(fetchUrl);
-                var body = await r.json().catch(function() { return {}; });
-                var emotes = body.emotes || [];
-                panel.textContent = '';
-                if (body.source === 'global') {
-                  var note = document.createElement('div');
-                  note.className = 'hint';
-                  note.textContent = 'Showing 7TV\\'s global emotes \\u2014 connect 7TV to your channel for your own set.';
-                  panel.appendChild(note);
-                }
-                var grid = document.createElement('div');
-                grid.style.cssText = 'display:flex; flex-wrap:wrap; gap:6px;';
-                if (!emotes.length) {
-                  grid.textContent = 'No emotes found.';
-                }
-                emotes.forEach(function(emote) {
-                  var img = document.createElement('img');
-                  img.src = emote.url;
-                  img.alt = emote.name;
-                  img.title = emote.name;
-                  img.style.cssText = 'width:32px; height:32px; object-fit:contain; cursor:pointer; border-radius:4px;';
-                  img.addEventListener('click', async function() {
-                    imageHint.textContent = 'Setting thumbnail…';
-                    try {
-                      var setRes = await fetch(API_BASE + '/' + encodeURIComponent(s.id) + '/thumbnail-from-url', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ url: emote.url })
-                      });
-                      var setBody = await setRes.json().catch(function() { return {}; });
-                      if (!setRes.ok) throw new Error(setBody.error || 'Failed to set thumbnail');
-                      imageHint.textContent = 'Thumbnail set!';
-                      setTimeout(function() { imageHint.textContent = ''; }, 2500);
-                      await fetchSoundsAdmin();
-                    } catch (e) {
-                      imageHint.textContent = e.message || 'Failed to set thumbnail';
-                    }
-                  });
-                  grid.appendChild(img);
-                });
-                panel.appendChild(grid);
-                loaded = true;
-              } catch (e) {
-                panel.textContent = 'Failed to load emotes';
-              }
-            });
-
-            return { btn: btn, panel: panel };
-          }
-
-          // GIF search is shaped differently from the emote pickers above —
-          // it needs a query box and re-fetches per keystroke. Unlike Giphy
-          // (which required Search to be called client-side per their
-          // terms), Klipy's search is proxied through our own backend at
-          // API_BASE + '/klipy-search' so the API key never reaches the
-          // browser. Only the final "use this one" step goes through our
-          // API either way, reusing the exact same thumbnail-from-url
-          // endpoint and SSRF allowlist as every other source.
-          function createGifSearchPicker() {
-            var btn = document.createElement('button');
-            btn.textContent = 'GIF Search';
-            btn.className = 'secondary';
-            btn.style.cssText = 'font-size:12px; padding:3px 8px;';
-
-            var panel = document.createElement('div');
-            panel.style.cssText = 'display:none; flex-direction:column; gap:6px; margin-top:6px; padding:6px; border:1px solid var(--border,#303038); border-radius:6px;';
-
-            var searchInput = document.createElement('input');
-            searchInput.type = 'text';
-            searchInput.placeholder = 'Search KLIPY\\u2026';
-            searchInput.style.cssText = 'font-size:12px; padding:4px 6px;';
-
-            var grid = document.createElement('div');
-            grid.style.cssText = 'display:flex; flex-wrap:wrap; gap:6px; margin-top:6px; max-height:160px; overflow-y:auto;';
-
-            var attribution = document.createElement('div');
-            attribution.className = 'hint';
-            attribution.style.cssText = 'font-size:10px; opacity:0.7; margin-top:2px;';
-            attribution.textContent = 'Powered by KLIPY';
-
-            panel.appendChild(searchInput);
-            panel.appendChild(grid);
-            panel.appendChild(attribution);
-
-            var debounceTimer = null;
-            searchInput.addEventListener('input', function() {
-              if (debounceTimer) clearTimeout(debounceTimer);
-              var query = searchInput.value.trim();
-              if (!query) { grid.textContent = ''; return; }
-              debounceTimer = setTimeout(function() { runSearch(query); }, 400);
-            });
-
-            async function runSearch(query) {
-              grid.textContent = 'Searching\\u2026';
-              try {
-                var r = await fetch(API_BASE + '/klipy-search?q=' + encodeURIComponent(query));
-                var body = await r.json().catch(function() { return {}; });
-                var results = body.gifs || [];
-                grid.textContent = '';
-                if (!results.length) grid.textContent = 'No results.';
-                results.forEach(function(gif) {
-                  if (!gif.thumbUrl || !gif.attachUrl) return;
-                  var img = document.createElement('img');
-                  img.src = gif.thumbUrl;
-                  img.alt = gif.title || '';
-                  img.title = gif.title || '';
-                  img.style.cssText = 'width:48px; height:48px; object-fit:cover; cursor:pointer; border-radius:4px;';
-                  img.addEventListener('click', async function() {
-                    imageHint.textContent = 'Setting thumbnail…';
-                    try {
-                      var setRes = await fetch(API_BASE + '/' + encodeURIComponent(s.id) + '/thumbnail-from-url', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ url: gif.attachUrl })
-                      });
-                      var setBody = await setRes.json().catch(function() { return {}; });
-                      if (!setRes.ok) throw new Error(setBody.error || 'Failed to set thumbnail');
-                      imageHint.textContent = 'Thumbnail set!';
-                      setTimeout(function() { imageHint.textContent = ''; }, 2500);
-                      await fetchSoundsAdmin();
-                    } catch (e) {
-                      imageHint.textContent = e.message || 'Failed to set thumbnail';
-                    }
-                  });
-                  grid.appendChild(img);
-                });
-              } catch (e) {
-                grid.textContent = 'Search failed';
-              }
-            }
-
-            btn.addEventListener('click', function() {
-              var isOpen = panel.style.display !== 'none';
-              panel.style.display = isOpen ? 'none' : 'flex';
-              if (!isOpen) searchInput.focus();
-            });
-
-            return { btn: btn, panel: panel };
-          }
-
           // API_BASE already differs between the broadcaster's own view
           // (/api/sounds) and the admin-managing-another-channel view
           // (/api/admin/sounds/:userId) — must derive these the same way,
           // not hardcode /api/sounds/... which would silently resolve to
           // the wrong channel (or the admin's own) in the admin view.
-          var twitchEmotePicker = createEmotePicker('Twitch Emotes', API_BASE + '/twitch-emotes');
-          var sevenTvEmotePicker = createEmotePicker('7TV Emotes', API_BASE + '/seventv-emotes');
+          var imagePickerPanels = [];
+          var twitchEmotePicker = createEmotePicker('Twitch Emotes', API_BASE + '/twitch-emotes', s.id, imageHint, function() { fetchSoundsAdmin(); }, imagePickerPanels);
+          var sevenTvEmotePicker = createEmotePicker('7TV Emotes', API_BASE + '/seventv-emotes', s.id, imageHint, function() { fetchSoundsAdmin(); }, imagePickerPanels);
           // Only offer GIF search if a key is actually configured — no point
           // rendering a button that can only ever fail.
-          var gifSearchPicker = KLIPY_ENABLED ? createGifSearchPicker() : null;
+          var gifSearchPicker = KLIPY_ENABLED ? createGifSearchPicker(s.id, imageHint, function() { fetchSoundsAdmin(); }, imagePickerPanels) : null;
 
           if (s.imageFilename) {
             var removeImgBtn = document.createElement('button');
@@ -1488,33 +1417,6 @@ export function renderSoundConfigPage(options = {}) {
           imageSection.appendChild(twitchEmotePicker.panel);
           imageSection.appendChild(sevenTvEmotePicker.panel);
           if (gifSearchPicker) imageSection.appendChild(gifSearchPicker.panel);
-
-          // Where the alert renders on the overlay — small corner toast
-          // (default, same as every alert today) or big and centered like
-          // video/clip alerts already are. Only visibly does anything once
-          // the sound has a thumbnail image (a GIF especially), same as the
-          // fallback icon glyph was never meant to be shown that large.
-          var popupStyleRow = document.createElement('div');
-          popupStyleRow.style.cssText = 'display:flex; align-items:center; gap:8px; margin-top:8px; flex-wrap:wrap;';
-          var popupStyleLabel = document.createElement('label');
-          popupStyleLabel.textContent = 'Overlay Display:';
-          popupStyleLabel.style.cssText = 'font-size:12px; opacity:0.8;';
-          var popupStyleSelect = document.createElement('select');
-          popupStyleSelect.style.cssText = 'font-size:12px; padding:3px 6px;';
-          [['corner', 'Small (corner)'], ['large', 'Large & Centered']].forEach(function(opt) {
-            var o = document.createElement('option');
-            o.value = opt[0];
-            o.textContent = opt[1];
-            if ((s.popupStyle || 'corner') === opt[0]) o.selected = true;
-            popupStyleSelect.appendChild(o);
-          });
-          var popupStyleHint = document.createElement('span');
-          popupStyleHint.className = 'hint';
-          popupStyleHint.textContent = 'Large only takes effect once this alert has a thumbnail image.';
-          popupStyleRow.appendChild(popupStyleLabel);
-          popupStyleRow.appendChild(popupStyleSelect);
-          popupStyleRow.appendChild(popupStyleHint);
-          imageSection.appendChild(popupStyleRow);
 
           // Trim section
           var trimSection = document.createElement('div');
@@ -1686,11 +1588,10 @@ export function renderSoundConfigPage(options = {}) {
             setBusy(saveBtn, true);
             var patch = {
               name: nameInput.value,
-              tier: tierSelect.value,
+              tier: enableBitsCb.checked ? tierSelect.value : null,
               volume: Number(volRange.value),
               cooldownMs: Number(cdInput.value) * 1000,
-              shared: sharedCb.checked,
-              popupStyle: popupStyleSelect.value
+              shared: sharedCb.checked
             };
             if (!s.type || s.type === 'sound') {
               patch.tags = tagsInput.value.split(',').map(function(t) { return t.trim(); }).filter(Boolean).slice(0, 5);
@@ -1829,129 +1730,547 @@ export function renderSoundConfigPage(options = {}) {
           });
         }
 
-        if (soundUploadForm) {
-          soundUploadForm.addEventListener('submit', async function(e) {
-            e.preventDefault();
-            var file = soundFileEl ? soundFileEl.files[0] : null;
-            if (!file) { if (soundUploadHintEl) soundUploadHintEl.textContent = 'Select an audio file'; return; }
-            if (file.size > 5 * 1024 * 1024) { if (soundUploadHintEl) soundUploadHintEl.textContent = 'File must be under 5 MB'; return; }
-            flashButton(soundUploadBtn);
-            setBusy(soundUploadBtn, true);
-            if (soundUploadHintEl) soundUploadHintEl.textContent = 'Uploading…';
-            try {
-              var fd = new FormData();
-              fd.append('file', file);
-              fd.append('name', (soundNameEl ? soundNameEl.value : '') || file.name.replace(/\\.[^.]+$/, ''));
-              fd.append('tier', soundTierEl ? soundTierEl.value : '${DEFAULT_TIER}');
-              fd.append('volume', soundUploadVolumeEl ? soundUploadVolumeEl.value : '80');
-              var shareEl = document.getElementById('soundShareToLibrary');
-              fd.append('shared', shareEl && shareEl.checked ? 'true' : 'false');
-              var r = await fetch(API_BASE, { method: 'POST', body: fd });
-              var body = await r.json().catch(function() { return {}; });
-              if (!r.ok) throw new Error(body.error || 'Upload failed');
-              if (soundFileEl) soundFileEl.value = '';
-              if (soundNameEl) soundNameEl.value = '';
-              if (soundUploadHintEl) {
-                soundUploadHintEl.textContent = 'Sound uploaded! Add a thumbnail below \\u2014';
-                setTimeout(function() { soundUploadHintEl.textContent = ''; }, 4000);
-              }
-              if (body.sound) await openEditorForNewSound(body.sound.id);
-              else await fetchSoundsAdmin();
-            } catch (err) {
-              if (soundUploadHintEl) soundUploadHintEl.textContent = err.message || 'Upload failed';
-            }
-            setBusy(soundUploadBtn, false);
-          });
+        // ===== Create Alert Wizard =====
+        // Steps: 1) type, 2) source + name (creates the real sound on
+        // advance), 3) thumbnail (against the now-real sound, reusing the
+        // exact same picker components as the per-sound editor), 4) Bits
+        // tier / volume / cooldown / sharing (PUT patch) + finish. Advanced
+        // settings (Channel Points, Overlay Display) stay edit-only, same
+        // as before this wizard existed.
+        var wizardBackdropEl = document.getElementById('createWizardBackdrop');
+        var wizardBodyEl = document.getElementById('wizardBody');
+        var wizardStepIndicatorEl = document.getElementById('wizardStepIndicator');
+        var wizardHintEl = document.getElementById('wizardHint');
+        var wizardBackBtn = document.getElementById('wizardBackBtn');
+        var wizardNextBtn = document.getElementById('wizardNextBtn');
+        var wizardCloseBtn = document.getElementById('wizardCloseBtn');
+        var openCreateWizardBtn = document.getElementById('openCreateWizardBtn');
+        var TOTAL_WIZARD_STEPS = 4;
+        var wizard = null;
+
+        function resetWizard() {
+          wizard = { step: 1, type: 'sound', name: '', clipUrl: '', audioOnly: false, file: null, createdSound: null };
         }
 
-        // Clip form handler
-        var clipUploadForm = document.getElementById('clipUploadForm');
-        if (clipUploadForm) {
-          clipUploadForm.addEventListener('submit', async function(e) {
-            e.preventDefault();
-            var clipUrlEl = document.getElementById('clipUrl');
-            var clipNameEl = document.getElementById('clipName');
-            var clipTierEl = document.getElementById('clipTier');
-            var clipVolumeEl = document.getElementById('clipVolume');
-            var clipUploadBtn = document.getElementById('clipUploadBtn');
-            var clipUploadHintEl = document.getElementById('clipUploadHint');
-            var clipAudioOnlyEl = document.getElementById('clipAudioOnly');
-            var url = clipUrlEl ? clipUrlEl.value.trim() : '';
-            if (!url) { if (clipUploadHintEl) clipUploadHintEl.textContent = 'Enter a Twitch Clip URL'; return; }
-            flashButton(clipUploadBtn);
-            setBusy(clipUploadBtn, true);
-            if (clipUploadHintEl) clipUploadHintEl.textContent = clipAudioOnlyEl && clipAudioOnlyEl.checked ? 'Extracting audio…' : 'Creating…';
+        function openWizard() {
+          resetWizard();
+          if (wizardBackdropEl) wizardBackdropEl.style.display = 'flex';
+          renderWizardStep();
+        }
+
+        function closeWizard() {
+          if (wizardBackdropEl) wizardBackdropEl.style.display = 'none';
+          // A partially-configured sound may already exist (created on the
+          // step 2-to-3 transition) even if the wizard is abandoned before
+          // finishing — silently resync the list so it is not stale next
+          // time the streamer looks, without forcing navigation anywhere.
+          if (wizard && wizard.createdSound) fetchSoundsAdmin();
+          wizard = null;
+        }
+
+        if (openCreateWizardBtn) openCreateWizardBtn.addEventListener('click', openWizard);
+        if (wizardCloseBtn) wizardCloseBtn.addEventListener('click', closeWizard);
+        if (wizardBackdropEl) {
+          wizardBackdropEl.addEventListener('click', function(e) {
+            if (e.target === wizardBackdropEl) closeWizard();
+          });
+        }
+        document.addEventListener('keydown', function(e) {
+          if (e.key === 'Escape' && wizard && wizardBackdropEl && wizardBackdropEl.style.display !== 'none') {
+            closeWizard();
+          }
+        });
+        if (wizardBackBtn) {
+          wizardBackBtn.addEventListener('click', function() {
+            if (wizard && wizard.step > 1) { wizard.step--; renderWizardStep(); }
+          });
+        }
+        if (wizardNextBtn) wizardNextBtn.addEventListener('click', function() { handleWizardNext(); });
+
+        function updateWizardChrome() {
+          if (wizardStepIndicatorEl) {
+            wizardStepIndicatorEl.textContent = '';
+            for (var i = 1; i <= TOTAL_WIZARD_STEPS; i++) {
+              var dot = document.createElement('div');
+              dot.className = 'wizard-step-dot' + (i === wizard.step ? ' active' : (i < wizard.step ? ' done' : ''));
+              wizardStepIndicatorEl.appendChild(dot);
+            }
+          }
+          // Back only makes sense pre-creation (step 1->2) — once the sound
+          // is real (step 3+), changing the type/source would orphan it.
+          if (wizardBackBtn) wizardBackBtn.style.display = (wizard.step === 2 && !wizard.createdSound) ? '' : 'none';
+          if (wizardNextBtn) {
+            wizardNextBtn.textContent = wizard.step === 2 ? 'Create & Continue' : (wizard.step === TOTAL_WIZARD_STEPS ? 'Finish' : 'Next');
+          }
+          if (wizardHintEl) wizardHintEl.textContent = '';
+        }
+
+        function renderWizardStep() {
+          updateWizardChrome();
+          if (!wizardBodyEl) return;
+          if (wizard.step === 1) renderWizardStep1();
+          else if (wizard.step === 2) renderWizardStep2();
+          else if (wizard.step === 3) renderWizardStep3();
+          else if (wizard.step === 4) renderWizardStep4();
+        }
+
+        function renderWizardStep1() {
+          wizardBodyEl.textContent = '';
+          var grid = document.createElement('div');
+          grid.className = 'wizard-type-grid';
+          var types = [{ id: 'sound', icon: '\\u{1F50A}', label: 'Sound' }];
+          if (videoClipsEnabled) {
+            types.push({ id: 'clip', icon: '\\u{1F3AC}', label: 'Clip / Video URL' });
+            types.push({ id: 'video', icon: '\\u{1F4F9}', label: 'Video' });
+          }
+          types.forEach(function(t) {
+            var card = document.createElement('div');
+            card.className = 'wizard-type-card' + (wizard.type === t.id ? ' selected' : '');
+            var icon = document.createElement('span');
+            icon.className = 'icon';
+            icon.textContent = t.icon;
+            card.appendChild(icon);
+            card.appendChild(document.createTextNode(t.label));
+            card.addEventListener('click', function() {
+              wizard.type = t.id;
+              renderWizardStep1();
+            });
+            grid.appendChild(card);
+          });
+          wizardBodyEl.appendChild(grid);
+          if (!videoClipsEnabled) {
+            var proHint = document.createElement('p');
+            proHint.className = 'hint';
+            proHint.style.marginTop = '10px';
+            proHint.textContent = 'Video & Clip alerts are a Pro feature. Contact the admin to enable them.';
+            wizardBodyEl.appendChild(proHint);
+          }
+        }
+
+        function renderWizardStep2() {
+          wizardBodyEl.textContent = '';
+
+          var nameLabel = document.createElement('div');
+          nameLabel.className = 'hint';
+          nameLabel.style.marginBottom = '4px';
+          nameLabel.textContent = 'Name';
+          var nameInput = document.createElement('input');
+          nameInput.type = 'text';
+          nameInput.id = 'wizardName';
+          nameInput.maxLength = 100;
+          nameInput.style.cssText = 'width:100%; box-sizing:border-box; margin-bottom:14px;';
+          nameInput.value = wizard.name || '';
+          nameInput.addEventListener('input', function() { wizard.name = nameInput.value; });
+          wizardBodyEl.appendChild(nameLabel);
+          wizardBodyEl.appendChild(nameInput);
+
+          if (wizard.type === 'sound' || wizard.type === 'video') {
+            var isVideo = wizard.type === 'video';
+            var srcHint = document.createElement('div');
+            srcHint.className = 'hint';
+            srcHint.style.marginBottom = '8px';
+            srcHint.textContent = isVideo
+              ? 'Max 25 MB. Accepted formats: MP4, WebM.'
+              : 'Max 5 MB. Accepted formats: MP3, OGG, WAV, WebM, M4A.';
+            var fileInput = document.createElement('input');
+            fileInput.type = 'file';
+            fileInput.id = 'wizardFile';
+            fileInput.accept = isVideo ? 'video/mp4,video/webm' : 'audio/mpeg,audio/ogg,audio/wav,audio/webm,audio/mp4';
+            fileInput.addEventListener('change', function() { wizard.file = fileInput.files[0] || null; });
+            // Restore a file chosen before an intervening Back/Next (native
+            // <input type=file> cannot have .value set programmatically,
+            // but a stored File can be re-attached via DataTransfer).
+            if (wizard.file) {
+              try {
+                var dt = new DataTransfer();
+                dt.items.add(wizard.file);
+                fileInput.files = dt.files;
+              } catch (e) {}
+            }
+            wizardBodyEl.appendChild(srcHint);
+            wizardBodyEl.appendChild(fileInput);
+          } else if (wizard.type === 'clip') {
+            var clipHint = document.createElement('div');
+            clipHint.className = 'hint';
+            clipHint.style.marginBottom = '8px';
+            clipHint.textContent = 'Paste a Twitch Clip or YouTube video URL. YouTube videos are limited to 3 minutes \\u2014 this is for short clips, not full videos.';
+            var urlInput = document.createElement('input');
+            urlInput.type = 'text';
+            urlInput.id = 'wizardClipUrl';
+            urlInput.placeholder = 'https://clips.twitch.tv/... or https://youtube.com/watch?v=...';
+            urlInput.style.cssText = 'width:100%; box-sizing:border-box; margin-bottom:8px;';
+            urlInput.value = wizard.clipUrl || '';
+            urlInput.addEventListener('input', function() { wizard.clipUrl = urlInput.value; });
+            var audioOnlyLabel = document.createElement('label');
+            audioOnlyLabel.style.cssText = 'display:flex; align-items:center; gap:6px; font-size:13px;';
+            var audioOnlyCb = document.createElement('input');
+            audioOnlyCb.type = 'checkbox';
+            audioOnlyCb.id = 'wizardClipAudioOnly';
+            audioOnlyCb.checked = Boolean(wizard.audioOnly);
+            audioOnlyCb.addEventListener('change', function() { wizard.audioOnly = audioOnlyCb.checked; });
+            audioOnlyLabel.appendChild(audioOnlyCb);
+            audioOnlyLabel.appendChild(document.createTextNode('Audio only (smaller file, no video)'));
+            wizardBodyEl.appendChild(clipHint);
+            wizardBodyEl.appendChild(urlInput);
+            wizardBodyEl.appendChild(audioOnlyLabel);
+          }
+          wizardBodyEl.appendChild(renderWizardRightsDisclaimer(wizard.type));
+        }
+
+        // Subtle rights/takedown notice — was on every upload form before the
+        // wizard replaced them; restored here (all types), with an extra
+        // sentence on the clip/YouTube step since sourcing from someone
+        // else's clip or video is a materially different situation than
+        // uploading your own file.
+        function renderWizardRightsDisclaimer(type) {
+          var p = document.createElement('p');
+          p.className = 'hint';
+          p.style.cssText = 'margin-top:10px; font-size:11px; line-height:1.5; opacity:0.7;';
+          var text = 'By providing this content, you confirm you own it or have the rights to use it, and grant permission for it to be publicly broadcast across Twitch.';
+          if (type === 'clip') {
+            text += ' This applies to both Twitch Clips and YouTube videos \\u2014 you\\'re responsible for making sure you have the rights to share it, and we will remove content in response to valid rights holder requests.';
+          }
+          p.textContent = text + ' ';
+          var link = document.createElement('a');
+          link.href = '/terms';
+          link.style.color = 'var(--accent-color)';
+          link.textContent = 'See our Terms of Service for details.';
+          p.appendChild(link);
+          return p;
+        }
+
+        function renderWizardThumbPreview(container) {
+          container = container || document.getElementById('wizardThumbPreview');
+          if (!container) return;
+          container.textContent = '';
+          if (wizard.createdSound && wizard.createdSound.imageFilename) {
+            var img = document.createElement('img');
+            img.src = API_BASE + '/' + encodeURIComponent(wizard.createdSound.id) + '/image?_=' + Date.now();
+            img.style.cssText = 'width:100%; height:100%; object-fit:cover;';
+            container.appendChild(img);
+          } else {
+            container.textContent = '\\u2014';
+          }
+        }
+
+        function renderWizardStep3() {
+          wizardBodyEl.textContent = '';
+          var label = document.createElement('div');
+          label.className = 'hint';
+          label.style.marginBottom = '8px';
+          label.textContent = 'Add a thumbnail (optional) \\u2014 shown on the overlay and in your alert list.';
+          wizardBodyEl.appendChild(label);
+
+          var thumbPreview = document.createElement('div');
+          thumbPreview.id = 'wizardThumbPreview';
+          thumbPreview.style.cssText = 'width:64px; height:64px; border-radius:8px; overflow:hidden; background:var(--surface-muted,#1a1a1e); margin-bottom:10px; display:flex; align-items:center; justify-content:center; font-size:20px; opacity:0.5;';
+          wizardBodyEl.appendChild(thumbPreview);
+          renderWizardThumbPreview(thumbPreview);
+
+          var pickerRow = document.createElement('div');
+          pickerRow.style.cssText = 'display:flex; gap:6px; flex-wrap:wrap;';
+
+          var uploadBtn = document.createElement('button');
+          uploadBtn.textContent = 'Upload Image';
+          uploadBtn.className = 'secondary';
+          uploadBtn.type = 'button';
+          uploadBtn.style.cssText = 'font-size:12px; padding:3px 8px;';
+          var uploadInput = document.createElement('input');
+          uploadInput.type = 'file';
+          uploadInput.accept = 'image/png,image/jpeg,image/gif,image/webp';
+          uploadInput.style.display = 'none';
+          uploadBtn.addEventListener('click', function() { uploadInput.click(); });
+          uploadInput.addEventListener('change', async function() {
+            var file = uploadInput.files[0];
+            if (!file) return;
+            if (file.size > 1024 * 1024) { wizardHintEl.textContent = 'Image must be under 1 MB'; return; }
+            wizardHintEl.textContent = 'Uploading\\u2026';
             try {
-              var r = await fetch(API_BASE + '/clip', {
+              var fd = new FormData();
+              fd.append('image', file);
+              var r = await fetch(API_BASE + '/' + encodeURIComponent(wizard.createdSound.id) + '/image', { method: 'POST', body: fd });
+              var body = await r.json().catch(function() { return {}; });
+              if (!r.ok) throw new Error(body.error || 'Upload failed');
+              wizard.createdSound = body.sound;
+              wizardHintEl.textContent = '';
+              renderWizardThumbPreview(thumbPreview);
+            } catch (e) {
+              wizardHintEl.textContent = e.message || 'Upload failed';
+            }
+          });
+
+          function onThumbSet(sound) {
+            wizard.createdSound = sound;
+            renderWizardThumbPreview(thumbPreview);
+          }
+          var wizardPickerPanels = [];
+          var twitchPicker = createEmotePicker('Twitch Emotes', API_BASE + '/twitch-emotes', wizard.createdSound.id, wizardHintEl, onThumbSet, wizardPickerPanels);
+          var sevenTvPicker = createEmotePicker('7TV Emotes', API_BASE + '/seventv-emotes', wizard.createdSound.id, wizardHintEl, onThumbSet, wizardPickerPanels);
+          var gifPicker = KLIPY_ENABLED ? createGifSearchPicker(wizard.createdSound.id, wizardHintEl, onThumbSet, wizardPickerPanels) : null;
+
+          pickerRow.appendChild(uploadBtn);
+          pickerRow.appendChild(twitchPicker.btn);
+          pickerRow.appendChild(sevenTvPicker.btn);
+          if (gifPicker) pickerRow.appendChild(gifPicker.btn);
+
+          wizardBodyEl.appendChild(pickerRow);
+          wizardBodyEl.appendChild(uploadInput);
+          wizardBodyEl.appendChild(twitchPicker.panel);
+          wizardBodyEl.appendChild(sevenTvPicker.panel);
+          if (gifPicker) wizardBodyEl.appendChild(gifPicker.panel);
+        }
+
+        function renderWizardStep4() {
+          wizardBodyEl.textContent = '';
+          var s = wizard.createdSound;
+
+          var tierRow = document.createElement('div');
+          tierRow.style.cssText = 'margin-bottom:10px; display:flex; align-items:center; gap:8px; flex-wrap:wrap;';
+          // Bits can be turned off for a Channel-Points-only alert — see the
+          // matching checkbox in the per-sound editor for why this is safe
+          // (never touches the extension, tier-less sounds are filtered out
+          // of the viewer's Bits panel server-side).
+          var enableBitsLabel = document.createElement('label');
+          enableBitsLabel.style.cssText = 'display:flex; align-items:center; gap:4px; font-size:13px;';
+          var enableBitsCb = document.createElement('input');
+          enableBitsCb.type = 'checkbox';
+          enableBitsCb.id = 'wizardEnableBits';
+          enableBitsCb.checked = true;
+          enableBitsLabel.appendChild(enableBitsCb);
+          enableBitsLabel.appendChild(document.createTextNode('Bits'));
+          var tierSelect = document.createElement('select');
+          tierSelect.id = 'wizardTier';
+          Object.keys(TIER_LABELS).forEach(function(t) {
+            var opt = document.createElement('option');
+            opt.value = t;
+            opt.textContent = TIER_LABELS[t];
+            if (t === s.tier) opt.selected = true;
+            tierSelect.appendChild(opt);
+          });
+          enableBitsCb.addEventListener('change', function() { tierSelect.disabled = !enableBitsCb.checked; });
+          tierRow.appendChild(enableBitsLabel);
+          tierRow.appendChild(tierSelect);
+
+          var volRow = document.createElement('div');
+          volRow.style.cssText = 'margin-bottom:10px; display:flex; align-items:center; gap:8px;';
+          var volLabel = document.createElement('span');
+          volLabel.className = 'hint';
+          volLabel.textContent = 'Volume';
+          var volRange = document.createElement('input');
+          volRange.type = 'range';
+          volRange.min = '0'; volRange.max = '100'; volRange.value = String(s.volume || 80);
+          volRange.id = 'wizardVolume';
+          var volVal = document.createElement('span');
+          volVal.className = 'hint';
+          volVal.textContent = (s.volume || 80) + '%';
+          volRange.addEventListener('input', function() { volVal.textContent = this.value + '%'; });
+          volRow.appendChild(volLabel);
+          volRow.appendChild(volRange);
+          volRow.appendChild(volVal);
+
+          var cdRow = document.createElement('div');
+          cdRow.style.cssText = 'margin-bottom:10px; display:flex; align-items:center; gap:8px;';
+          var cdLabel = document.createElement('span');
+          cdLabel.className = 'hint';
+          cdLabel.textContent = 'Cooldown (sec)';
+          var cdInput = document.createElement('input');
+          cdInput.type = 'number';
+          cdInput.min = '0'; cdInput.max = '60';
+          cdInput.value = String(Math.round((s.cooldownMs || 5000) / 1000));
+          cdInput.id = 'wizardCooldown';
+          cdInput.style.width = '60px';
+          cdRow.appendChild(cdLabel);
+          cdRow.appendChild(cdInput);
+
+          // Channel Points here is just the desired end-state (checked +
+          // cost) — unlike the per-sound editor, there is no separate
+          // immediate action; finishWizard() creates the real Twitch Custom
+          // Reward as part of Finish, alongside the rest of the settings.
+          var cpRow = document.createElement('div');
+          cpRow.style.cssText = 'display:flex; align-items:center; gap:8px; margin-bottom:10px; flex-wrap:wrap;';
+          var cpLabel = document.createElement('label');
+          cpLabel.style.cssText = 'display:flex; align-items:center; gap:6px; font-size:13px;';
+          var cpCb = document.createElement('input');
+          cpCb.type = 'checkbox';
+          cpCb.id = 'wizardChannelPoints';
+          cpLabel.appendChild(cpCb);
+          cpLabel.appendChild(document.createTextNode('Channel Points'));
+          var cpCostInput = document.createElement('input');
+          cpCostInput.type = 'number';
+          cpCostInput.min = '1';
+          cpCostInput.step = '1';
+          cpCostInput.id = 'wizardChannelPointsCost';
+          cpCostInput.value = '500';
+          cpCostInput.disabled = true;
+          cpCostInput.style.cssText = 'width:80px; font-size:12px;';
+          cpCb.addEventListener('change', function() { cpCostInput.disabled = !cpCb.checked; });
+          cpRow.appendChild(cpLabel);
+          cpRow.appendChild(cpCostInput);
+
+          var shareLabel = document.createElement('label');
+          shareLabel.style.cssText = 'display:flex; align-items:center; gap:6px; font-size:13px; margin-bottom:10px;';
+          var shareCb = document.createElement('input');
+          shareCb.type = 'checkbox';
+          shareCb.id = 'wizardShare';
+          shareCb.checked = true;
+          shareLabel.appendChild(shareCb);
+          shareLabel.appendChild(document.createTextNode('Share to Community Library'));
+
+          wizardBodyEl.appendChild(tierRow);
+          wizardBodyEl.appendChild(volRow);
+          wizardBodyEl.appendChild(cdRow);
+          wizardBodyEl.appendChild(cpRow);
+          wizardBodyEl.appendChild(shareLabel);
+
+          if (!s.type || s.type === 'sound') {
+            var tagsLabel = document.createElement('div');
+            tagsLabel.className = 'hint';
+            tagsLabel.style.marginBottom = '4px';
+            tagsLabel.textContent = 'Tags (comma-separated, up to 5)';
+            var tagsInput = document.createElement('input');
+            tagsInput.type = 'text';
+            tagsInput.id = 'wizardTags';
+            tagsInput.placeholder = 'e.g. anime, meme, horror';
+            tagsInput.style.cssText = 'width:100%; box-sizing:border-box;';
+            wizardBodyEl.appendChild(tagsLabel);
+            wizardBodyEl.appendChild(tagsInput);
+          }
+        }
+
+        // Performs the actual creation call once the streamer has picked a
+        // type and provided a source — everything after this point (steps 3
+        // and 4) is a real edit against wizard.createdSound, not a draft.
+        async function createFromWizard() {
+          var nameInput = document.getElementById('wizardName');
+          var name = nameInput ? nameInput.value.trim() : (wizard.name || '').trim();
+          wizardNextBtn.disabled = true;
+          wizardHintEl.textContent = 'Creating\\u2026';
+          try {
+            var r, body;
+            if (wizard.type === 'sound') {
+              var file = wizard.file;
+              if (!file) { wizardHintEl.textContent = 'Select an audio file'; return false; }
+              if (file.size > 5 * 1024 * 1024) { wizardHintEl.textContent = 'File must be under 5 MB'; return false; }
+              var fd = new FormData();
+              fd.append('file', file);
+              fd.append('name', name || file.name.replace(/\\.[^.]+$/, ''));
+              fd.append('tier', '${DEFAULT_TIER}');
+              fd.append('volume', '80');
+              fd.append('shared', 'false');
+              r = await fetch(API_BASE, { method: 'POST', body: fd });
+            } else if (wizard.type === 'video') {
+              var fileV = wizard.file;
+              if (!fileV) { wizardHintEl.textContent = 'Select a video file'; return false; }
+              if (fileV.size > 25 * 1024 * 1024) { wizardHintEl.textContent = 'File must be under 25 MB'; return false; }
+              var fdV = new FormData();
+              fdV.append('file', fileV);
+              fdV.append('name', name || fileV.name.replace(/\\.[^.]+$/, ''));
+              fdV.append('tier', '${DEFAULT_TIER}');
+              fdV.append('volume', '80');
+              fdV.append('shared', 'false');
+              r = await fetch(API_BASE + '/video', { method: 'POST', body: fdV });
+            } else if (wizard.type === 'clip') {
+              var url = (wizard.clipUrl || '').trim();
+              if (!url) { wizardHintEl.textContent = 'Enter a Twitch Clip URL'; return false; }
+              r = await fetch(API_BASE + '/clip', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                  name: (clipNameEl ? clipNameEl.value : '') || 'Clip',
+                  name: name || 'Clip',
                   clipUrl: url,
-                  tier: clipTierEl ? clipTierEl.value : '${DEFAULT_TIER}',
-                  volume: clipVolumeEl ? Number(clipVolumeEl.value) : 80,
-                  audioOnly: Boolean(clipAudioOnlyEl && clipAudioOnlyEl.checked),
-                  shared: Boolean(document.getElementById('clipShareToLibrary') && document.getElementById('clipShareToLibrary').checked),
+                  tier: '${DEFAULT_TIER}',
+                  volume: 80,
+                  audioOnly: Boolean(wizard.audioOnly),
+                  shared: false,
                 })
               });
-              var body = await r.json().catch(function() { return {}; });
-              if (!r.ok) throw new Error(body.error || 'Failed to create clip');
-              if (clipUrlEl) clipUrlEl.value = '';
-              if (clipNameEl) clipNameEl.value = '';
-              if (clipUploadHintEl) {
-                clipUploadHintEl.textContent = 'Clip added! Add a thumbnail below \\u2014';
-                setTimeout(function() { clipUploadHintEl.textContent = ''; }, 4000);
-              }
-              if (body.sound) await openEditorForNewSound(body.sound.id);
-              else await fetchSoundsAdmin();
-            } catch (err) {
-              if (clipUploadHintEl) clipUploadHintEl.textContent = err.message || 'Failed';
             }
-            setBusy(clipUploadBtn, false);
-          });
+            body = await r.json().catch(function() { return {}; });
+            if (!r.ok) throw new Error(body.error || 'Failed to create alert');
+            wizard.createdSound = body.sound;
+            wizardHintEl.textContent = '';
+            return true;
+          } catch (e) {
+            wizardHintEl.textContent = e.message || 'Failed to create alert';
+            return false;
+          } finally {
+            wizardNextBtn.disabled = false;
+          }
         }
 
-        // Video form handler
-        var videoUploadForm = document.getElementById('videoUploadForm');
-        if (videoUploadForm) {
-          videoUploadForm.addEventListener('submit', async function(e) {
-            e.preventDefault();
-            var videoFileEl = document.getElementById('videoFile');
-            var videoNameEl = document.getElementById('videoName');
-            var videoTierEl = document.getElementById('videoTier');
-            var videoVolumeEl = document.getElementById('videoVolume');
-            var videoUploadBtn = document.getElementById('videoUploadBtn');
-            var videoUploadHintEl = document.getElementById('videoUploadHint');
-            var file = videoFileEl ? videoFileEl.files[0] : null;
-            if (!file) { if (videoUploadHintEl) videoUploadHintEl.textContent = 'Select a video file'; return; }
-            if (file.size > 25 * 1024 * 1024) { if (videoUploadHintEl) videoUploadHintEl.textContent = 'File must be under 25 MB'; return; }
-            flashButton(videoUploadBtn);
-            setBusy(videoUploadBtn, true);
-            if (videoUploadHintEl) videoUploadHintEl.textContent = 'Uploading…';
-            try {
-              var fd = new FormData();
-              fd.append('file', file);
-              fd.append('name', (videoNameEl ? videoNameEl.value : '') || file.name.replace(/\\.[^.]+$/, ''));
-              fd.append('tier', videoTierEl ? videoTierEl.value : '${DEFAULT_TIER}');
-              fd.append('volume', videoVolumeEl ? videoVolumeEl.value : '80');
-              var shareEl = document.getElementById('videoShareToLibrary');
-              fd.append('shared', shareEl && shareEl.checked ? 'true' : 'false');
-              var r = await fetch(API_BASE + '/video', { method: 'POST', body: fd });
-              var body = await r.json().catch(function() { return {}; });
-              if (!r.ok) throw new Error(body.error || 'Upload failed');
-              if (videoFileEl) videoFileEl.value = '';
-              if (videoNameEl) videoNameEl.value = '';
-              if (videoUploadHintEl) {
-                videoUploadHintEl.textContent = 'Video uploaded! Add a thumbnail below \\u2014';
-                setTimeout(function() { videoUploadHintEl.textContent = ''; }, 4000);
-              }
-              if (body.sound) await openEditorForNewSound(body.sound.id);
-              else await fetchSoundsAdmin();
-            } catch (err) {
-              if (videoUploadHintEl) videoUploadHintEl.textContent = err.message || 'Upload failed';
+        async function finishWizard() {
+          var enableBitsCb = document.getElementById('wizardEnableBits');
+          var tierSelect = document.getElementById('wizardTier');
+          var volRange = document.getElementById('wizardVolume');
+          var cdInput = document.getElementById('wizardCooldown');
+          var shareCb = document.getElementById('wizardShare');
+          var tagsInput = document.getElementById('wizardTags');
+          var patch = {
+            tier: (enableBitsCb && !enableBitsCb.checked) ? null : (tierSelect ? tierSelect.value : wizard.createdSound.tier),
+            volume: volRange ? Number(volRange.value) : wizard.createdSound.volume,
+            cooldownMs: cdInput ? Number(cdInput.value) * 1000 : wizard.createdSound.cooldownMs,
+            shared: shareCb ? shareCb.checked : false,
+          };
+          if (!wizard.createdSound.type || wizard.createdSound.type === 'sound') {
+            patch.tags = tagsInput
+              ? tagsInput.value.split(',').map(function(t) { return t.trim(); }).filter(Boolean).slice(0, 5)
+              : [];
+          }
+          var cpCb = document.getElementById('wizardChannelPoints');
+          var cpCostInput = document.getElementById('wizardChannelPointsCost');
+          var wantsChannelPoints = Boolean(cpCb && cpCb.checked);
+
+          wizardNextBtn.disabled = true;
+          wizardHintEl.textContent = 'Saving\\u2026';
+          try {
+            var r = await fetch(API_BASE + '/' + encodeURIComponent(wizard.createdSound.id), {
+              method: 'PUT',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(patch)
+            });
+            var body = await r.json().catch(function() { return {}; });
+            if (!r.ok) throw new Error(body.error || 'Failed to save');
+
+            // Channel Points is a separate call (like the per-sound editor) —
+            // it creates a real Twitch Custom Reward, so it can't just be
+            // part of the generic patch above.
+            if (wantsChannelPoints) {
+              wizardHintEl.textContent = 'Setting up Channel Points\\u2026';
+              var cpRes = await fetch(API_BASE + '/' + encodeURIComponent(wizard.createdSound.id) + '/channel-points', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ enabled: true, cost: Number(cpCostInput.value) || undefined })
+              });
+              var cpBody = await cpRes.json().catch(function() { return {}; });
+              if (!cpRes.ok) throw new Error(cpBody.error || 'Failed to enable Channel Points');
             }
-            setBusy(videoUploadBtn, false);
-          });
+
+            var soundId = wizard.createdSound.id;
+            closeWizard();
+            await revealNewSound(soundId);
+          } catch (e) {
+            wizardHintEl.textContent = e.message || 'Failed to save';
+            wizardNextBtn.disabled = false;
+          }
+        }
+
+        async function handleWizardNext() {
+          if (!wizard) return;
+          wizardHintEl.textContent = '';
+          if (wizard.step === 1) {
+            wizard.step = 2;
+            renderWizardStep();
+          } else if (wizard.step === 2) {
+            var ok = await createFromWizard();
+            if (!ok) return;
+            wizard.step = 3;
+            renderWizardStep();
+          } else if (wizard.step === 3) {
+            wizard.step = 4;
+            renderWizardStep();
+          } else if (wizard.step === 4) {
+            await finishWizard();
+          }
         }
 
         // ===== TTS Settings =====

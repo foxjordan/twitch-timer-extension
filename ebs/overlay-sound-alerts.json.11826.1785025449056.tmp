@@ -1,0 +1,45 @@
+{
+  "test_youtube_clip_user_1785025449055": {
+    "settings": {
+      "enabled": true,
+      "globalVolume": 100,
+      "globalCooldownMs": 3000,
+      "maxQueueSize": 150,
+      "overlayDurationMs": 5000,
+      "videoClipsEnabled": true,
+      "videoSize": "medium"
+    },
+    "sounds": {
+      "snd_ytest1": {
+        "id": "snd_ytest1",
+        "type": "clip",
+        "name": "Me at the zoo",
+        "filename": "snd_ytest1.mp4",
+        "originalFilename": "",
+        "mimeType": "video/mp4",
+        "sizeBytes": 533932,
+        "imageFilename": "",
+        "popupStyle": "corner",
+        "clipUrl": "https://www.youtube.com/watch?v=jNQXAC9IVRw",
+        "clipSlug": "",
+        "tier": "sound_100",
+        "channelPointsEnabled": false,
+        "channelPointsCost": 500,
+        "channelPointsRewardId": "",
+        "enabled": true,
+        "volume": 80,
+        "cooldownMs": 5000,
+        "shared": false,
+        "sourceUserId": "",
+        "sourceSoundId": "",
+        "tags": [],
+        "moderationStatus": "approved",
+        "isOfficial": false,
+        "sourceUrl": "",
+        "sourceLicense": "",
+        "createdAt": "2026-07-26T00:24:09.055Z",
+        "updatedAt": "2026-07-26T00:24:09.055Z"
+      }
+    }
+  }
+}

@@ -5,8 +5,10 @@ FROM node:20-alpine
 # Paths below are relative to that context.
 WORKDIR /app
 
-# Install ffmpeg for video/audio compression and trimming
-RUN apk add --no-cache ffmpeg
+# Install ffmpeg for video/audio compression and trimming, and yt-dlp for
+# YouTube clip conversion (pulls in ffmpeg/python3 itself, but the explicit
+# ffmpeg entry stays since it's also used directly elsewhere in this app)
+RUN apk add --no-cache ffmpeg yt-dlp
 
 # Install prod deps first for better layer caching
 COPY ebs/package*.json ./

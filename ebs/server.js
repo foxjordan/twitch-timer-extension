@@ -3,6 +3,7 @@ import express from "express";
 import session from "express-session";
 import connectPgSimple from "connect-pg-simple";
 import { db, sessionDb } from "./db.js";
+import { wrapStoreWithReadCache } from "./session_read_cache.js";
 import { v4 as uuidv4 } from "uuid";
 import { RULES } from "./rules.js";
 import { connectEventSubWS } from "./eventsub-ws.js";
@@ -126,7 +127,13 @@ app.use(
     // Persists sessions in Postgres instead of express-session's default
     // MemoryStore, which never expires entries and leaks memory until the
     // process is restarted.
-    store: new PgSessionStore({ pool: sessionDb, tableName: "session", createTableIfMissing: true }),
+    // Wrapped in a short-lived read cache: a single page load fires a dozen
+    // or so concurrent requests, each independently asking for this exact
+    // session — without the cache that's a dozen near-simultaneous DB reads
+    // competing for the same pool. See session_read_cache.js.
+    store: wrapStoreWithReadCache(
+      new PgSessionStore({ pool: sessionDb, tableName: "session", createTableIfMissing: true }),
+    ),
     secret:
       process.env.SESSION_SECRET || process.env.TWITCH_CLIENT_SECRET || crypto.randomBytes(16).toString("hex"),
     resave: false,
@@ -377,11 +384,24 @@ function setUserSettings(uid, patch) {
 // Load settings at startup
 loadUserSettings().catch(() => {});
 
-// cleanup loop for dedupe map (every 10 minutes)
-setInterval(() => {
+// cleanup loop for dedupe map (every 10 minutes) — yielded in batches.
+// channel.chat.message (subscribed for chat-command support) fires for
+// literally every chat message across every connected channel, dwarfing
+// every other EventSub type in volume; with a 24h TTL and enough active
+// channels this Map can hold well over 100k entries by the time a sweep
+// runs. A single unbroken synchronous pass over that many blocks the whole
+// event loop — every other request, including trivial in-memory reads like
+// /api/timer/state, queues behind it for the full sweep duration.
+const SEEN_CLEANUP_YIELD_BATCH_SIZE = 2000;
+setInterval(async () => {
   const now = Date.now();
+  let i = 0;
   for (const [k, exp] of state.seen.entries()) {
     if (exp <= now) state.seen.delete(k);
+    i++;
+    if (i % SEEN_CLEANUP_YIELD_BATCH_SIZE === 0) {
+      await new Promise((resolve) => setImmediate(resolve));
+    }
   }
 }, 10 * 60 * 1000);
 
@@ -917,6 +937,11 @@ async function startEventSubForUser(userId) {
       (notification) => handleEventSub(notification, userId)
     );
     connection.ws = ws;
+    // Anchor for the idle-disconnect sweep below when a connection has never
+    // received any event yet — without this, a freshly (re)connected,
+    // still-quiet broadcaster (lastEventAt still null) would look exactly
+    // like one that's been silent since a connection from days ago.
+    connection.connectedAt = Date.now();
     logger.info("eventsub_started", { userId, broadcasterId: connection.broadcasterId });
   } catch (e) {
     logger.error("eventsub_start_failed", { userId, message: e?.message });
@@ -926,6 +951,26 @@ async function startEventSubForUser(userId) {
       startEventSubForUser(userId);
     }, 30000);
   }
+}
+
+// Called after a rules save — channel.chat.message is only subscribed when
+// chatCommand.enabled was true at connect time (see startEventSubWS), so
+// toggling that setting on an already-open connection needs a reconnect to
+// actually pick up (or drop) the subscription. No-op if the connection is
+// already in the right state, so this is safe to call on every rules save.
+function reconnectForChatCommandsIfNeeded(broadcasterId) {
+  let ownerUserId = null;
+  let connection = null;
+  for (const [uid, conn] of broadcasterConnections) {
+    if (conn.broadcasterId === String(broadcasterId)) { ownerUserId = uid; connection = conn; break; }
+  }
+  if (!ownerUserId || !connection) return;
+
+  const wantsChatMessage = Boolean(getRules(broadcasterId)?.chatCommand?.enabled);
+  if (Boolean(connection.chatMessageSubscribed) === wantsChatMessage) return; // already correct
+
+  logger.info("eventsub_reconnect_for_chat_command_toggle", { broadcasterId, wantsChatMessage });
+  startEventSubForUser(ownerUserId);
 }
 
 // Close EventSub connection for specific user
@@ -966,6 +1011,7 @@ mountOverlayApiRoutes(app, {
   setRules,
   setMaxTotalSeconds,
   resolveTimerUserId: resolveTimerUserIdFromRequest,
+  onRulesSaved: reconnectForChatCommandsIfNeeded,
 });
 
 mountGoalRoutes(app, {
@@ -1888,6 +1934,14 @@ function startEventSubWS(broadcasterId, accessToken, onNotification, urlOverride
   // Track last message time on the connection object for the keepalive watchdog
   const ownerConn = ownerUserId ? broadcasterConnections.get(ownerUserId) : null;
 
+  // channel.chat.message fires for every chat message in the channel — only
+  // worth subscribing to on channels that actually have chat commands
+  // enabled. Recorded on the connection so a later rules change can tell
+  // whether this connection needs a reconnect to pick up a newly-enabled
+  // command (see reconnectForChatCommandsIfNeeded below).
+  const wantsChatMessage = Boolean(getRules(broadcasterId)?.chatCommand?.enabled);
+  if (ownerConn) ownerConn.chatMessageSubscribed = wantsChatMessage;
+
   // Capture ws identity so the 'closed' handler can tell whether this
   // particular socket has already been replaced by a newer startEventSubForUser
   // call. Checking readyState===1 (OPEN) was racy: the new WS could still be
@@ -1898,6 +1952,7 @@ function startEventSubWS(broadcasterId, accessToken, onNotification, urlOverride
     userAccessToken: accessToken,
     clientId,
     broadcasterId,
+    wantsChatMessage,
     url: urlOverride || undefined,
     onEvent: (msg) => {
       if (ownerConn) ownerConn.lastWsMessageAt = Date.now();
@@ -2030,6 +2085,32 @@ setInterval(() => {
     }
   }
 }, EVENTSUB_WATCHDOG_INTERVAL_MS);
+
+// Idle-disconnect sweep: a broadcaster who hasn't gone live (or triggered
+// any EventSub activity at all) in IDLE_DISCONNECT_THRESHOLD_MS gets their
+// WebSocket + subscriptions torn down entirely, rather than staying open
+// indefinitely for a channel that isn't streaming. closeEventSubForUser
+// already removes the connection record before the WS's own async 'close'
+// fires, so the AUTO-RECONNECT handler sees no connection and correctly
+// does not schedule a reconnect. It comes back automatically and cheaply
+// next time this broadcaster logs into the dashboard (onAdminLogin always
+// calls startEventSubForUser unconditionally) — there's no separate "wake
+// up" path to maintain.
+const IDLE_DISCONNECT_SWEEP_INTERVAL_MS = 30 * 60 * 1000; // every 30 min
+const IDLE_DISCONNECT_THRESHOLD_MS = 48 * 60 * 60 * 1000; // 48h of silence
+setInterval(() => {
+  const now = Date.now();
+  for (const [userId, conn] of broadcasterConnections) {
+    if (userId === ENV_BROADCASTER_ID) continue; // always-on, not tied to a real login
+    const lastActivity = conn.lastEventAt ? new Date(conn.lastEventAt).getTime() : conn.connectedAt;
+    if (!lastActivity) continue; // still connecting, hasn't had a chance yet
+    const idleMs = now - lastActivity;
+    if (idleMs > IDLE_DISCONNECT_THRESHOLD_MS) {
+      logger.info("eventsub_idle_disconnect", { userId, idleMs });
+      closeEventSubForUser(userId);
+    }
+  }
+}, IDLE_DISCONNECT_SWEEP_INTERVAL_MS);
 
 // Server tick → broadcast remaining once per second per user/key
 setInterval(async () => {

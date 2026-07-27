@@ -11,6 +11,7 @@ export async function connectEventSubWS({
   onEvent,
   onStatus,
   url = WS_URL,
+  wantsChatMessage = false,
 }) {
   const ws = new WebSocket(url);
   let sessionId = null;
@@ -63,8 +64,13 @@ export async function connectEventSubWS({
         { type: 'channel.hype_train.end', version: '2' },
         { type: 'channel.channel_points_custom_reward_redemption.add', version: '1' },
         { type: 'channel.follow', version: '2' },
-        { type: 'channel.chat.message', version: '1' },
       ];
+      // By far the highest-volume subscription of the bunch (fires for every
+      // chat message, not just meaningful events) — only worth paying for on
+      // channels that actually have chat commands enabled.
+      if (wantsChatMessage) {
+        wants.push({ type: 'channel.chat.message', version: '1' });
+      }
 
       for (const { type, version } of wants) {
         try {

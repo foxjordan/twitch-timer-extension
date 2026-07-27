@@ -1,7 +1,7 @@
 import { logger } from './logger.js';
 
 export function mountOverlayApiRoutes(app, ctx) {
-  const { requireOverlayAuth, normKey, getSavedStyle, setSavedStyle, getOrCreateUserKey, rotateUserKey, getUserSettings, setUserSettings, sseClients, getRules, setRules, setMaxTotalSeconds, resolveTimerUserId } = ctx;
+  const { requireOverlayAuth, normKey, getSavedStyle, setSavedStyle, getOrCreateUserKey, rotateUserKey, getUserSettings, setUserSettings, sseClients, getRules, setRules, setMaxTotalSeconds, resolveTimerUserId, onRulesSaved } = ctx;
 
   // Resolve the broadcaster ID that this user is managing
   // This ensures rules are saved/loaded for the correct broadcaster
@@ -118,6 +118,9 @@ export function mountOverlayApiRoutes(app, ctx) {
         visitorUserId: req.session?.twitchUser?.id,
         broadcasterId: uid,
       });
+      if (typeof onRulesSaved === 'function') {
+        try { onRulesSaved(uid); } catch (e) {}
+      }
       res.json(saved);
     } catch (e) {
       res.status(400).json({ error: 'Invalid rules payload' });

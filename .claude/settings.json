@@ -21,7 +21,17 @@
       "WebFetch(domain:docs.klipy.com)",
       "WebFetch(domain:dev.to)",
       "Bash(curl -sI \"https://docs.klipy.com\" -A \"Mozilla/5.0\")",
-      "Bash(curl -s \"https://docs.klipy.com\" -A \"Mozilla/5.0\")"
+      "Bash(curl -s \"https://docs.klipy.com\" -A \"Mozilla/5.0\")",
+      "Bash(fly releases *)",
+      "Bash(curl -sv \"https://livestreamerhub.com/api/timer/state\" -H \"Origin: https://livestreamerhub.com\")",
+      "Bash(fly scale *)",
+      "Read(//tmp/**)",
+      "Bash(fly logs -a twitch-timer-extension --no-tail 2>&1 > /tmp/fly_logs_now.txt *)",
+      "mcp__claude_ai_Supabase__get_project",
+      "mcp__claude_ai_Supabase__execute_sql"
+    ],
+    "additionalDirectories": [
+      "/tmp"
     ]
   }
 }

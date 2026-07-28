@@ -1,0 +1,36 @@
+- generic [active] [ref=f1e1]:
+  - banner [ref=f1e2]:
+    - generic [ref=f1e3]:
+      - link [ref=f1e4] [cursor=pointer]:
+        - /url: /
+        - img "Livestreamer Hub" [ref=f1e5]
+      - button "Toggle menu" [ref=f1e6] [cursor=pointer]
+  - main [ref=f1e8]:
+    - navigation [ref=f1e9]:
+      - generic [ref=f1e10]:
+        - button "Overview" [ref=f1e11] [cursor=pointer]
+        - button "Server Health" [ref=f1e12] [cursor=pointer]
+        - button "Banner" [ref=f1e13] [cursor=pointer]
+        - button "TTS Config" [ref=f1e14] [cursor=pointer]
+        - button "Test Alerts" [ref=f1e15] [cursor=pointer]
+        - button "Library Moderation" [ref=f1e16] [cursor=pointer]
+        - button "Official Library" [ref=f1e17] [cursor=pointer]
+        - button "Event Logs" [ref=f1e18] [cursor=pointer]
+        - button "Broadcasters" [ref=f1e19] [cursor=pointer]
+        - button "Analytics" [ref=f1e20] [cursor=pointer]
+    - generic [ref=f1e21]:
+      - heading "Admin Dashboard" [level=1] [ref=f1e22]
+      - paragraph [ref=f1e23]: Service usage overview. Auto-refreshes every 10 seconds.
+      - generic [ref=f1e25]:
+        - generic [ref=f1e26]:
+          - generic [ref=f1e27]: "--"
+          - generic [ref=f1e28]: Registered Broadcasters
+        - generic [ref=f1e29]:
+          - generic [ref=f1e30]: "--"
+          - generic [ref=f1e31]: EventSub Connected
+        - generic [ref=f1e32]:
+          - generic [ref=f1e33]: "--"
+          - generic [ref=f1e34]: Active Overlays (SSE)
+        - generic [ref=f1e35]:
+          - generic [ref=f1e36]: "--"
+          - generic [ref=f1e37]: Total SSE Served

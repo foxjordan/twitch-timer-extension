@@ -1,0 +1,15 @@
+- table [ref=e3]:
+  - rowgroup [ref=e4]:
+    - row [ref=e5]:
+      - columnheader "Broadcaster" [ref=e6]
+      - columnheader "Actions" [ref=e7]
+  - rowgroup [ref=e8]:
+    - row [ref=e9]:
+      - cell "FoKa" [ref=e10]
+      - cell [ref=e11]:
+        - link "Manage" [ref=e12] [cursor=pointer]:
+          - /url: "#"
+        - button "Ban" [ref=e13]
+        - button "Disable V/C" [ref=e14]
+        - button "Disable TTS" [ref=e15]
+        - button "Delete" [ref=e16]

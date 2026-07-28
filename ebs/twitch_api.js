@@ -207,6 +207,37 @@ export async function fetchLiveStreamStatus(userIds = []) {
   return live;
 }
 
+// Get Channels: broadcaster_language is the language the streamer declares
+// for their channel (same field Twitch uses in its own directory browsing) —
+// unlike the extension's onContext().language, which is the viewer's Twitch
+// UI locale and says nothing about what language the channel streams in.
+// No user scope needed, same as fetchChannelEmotes below.
+export async function fetchChannelInfo(broadcasterId) {
+  const id = broadcasterId ? String(broadcasterId) : null;
+  if (!id) return null;
+  const clientId = process.env.TWITCH_CLIENT_ID;
+  const token = await getAppAccessToken();
+  if (!clientId || !token) return null;
+
+  try {
+    const res = await fetch(
+      `https://api.twitch.tv/helix/channels?broadcaster_id=${encodeURIComponent(id)}`,
+      { headers: { "Client-Id": clientId, Authorization: `Bearer ${token}` } },
+    );
+    if (!res.ok) {
+      logger.warn("twitch_channel_info_fetch_failed", { status: res.status, broadcasterId: id });
+      return null;
+    }
+    const json = await res.json();
+    const data = json.data?.[0];
+    if (!data) return null;
+    return { broadcasterLanguage: data.broadcaster_language || null };
+  } catch (err) {
+    logger.error("twitch_channel_info_fetch_error", { message: err?.message, broadcasterId: id });
+    return null;
+  }
+}
+
 // Get Channel Emotes doesn't require any user scope — an app access token is
 // enough, so this works for every broadcaster regardless of what their own
 // stored token can do.

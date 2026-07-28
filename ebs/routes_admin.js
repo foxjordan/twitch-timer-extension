@@ -9,7 +9,7 @@ import { getSubscription, isPro } from "./subscription_store.js";
 import { getTtsSettings, setTtsSettings, getGlobalTtsConfig, setGlobalTtsConfig } from "./tts_store.js";
 import { getBannerConfig, setBannerConfig } from "./banner_store.js";
 import { fetchLiveStreamStatus } from "./twitch_api.js";
-import { backfillUserProfile } from "./user_profiles.js";
+import { backfillUserProfile, ensureBroadcasterLanguage } from "./user_profiles.js";
 import { deleteAllUserData } from "./user_data_deletion.js";
 import { getVoices, isValidVoice } from "./tts_voices.js";
 import { synthesizeSpeech } from "./tts_provider.js";
@@ -541,6 +541,16 @@ export function mountAdminRoutes(app, ctx) {
   // Setup funnel (config panel opened -> first alert created), broken down by
   // language — helps answer "are non-English broadcasters dropping off during
   // setup more than English ones", using the first-party client_events table.
+  //
+  // Language comes from Twitch's broadcaster_language (each channel's
+  // declared stream language, fetched via ensureBroadcasterLanguage), NOT
+  // client_events.language — that column holds the Twitch UI locale of
+  // whoever had the panel open (Twitch Extensions' onContext().language),
+  // which reflects the viewer's own interface setting, not what language the
+  // channel actually streams in. Most broadcasters keep their Twitch UI in
+  // English regardless of stream language, which was skewing this funnel
+  // entirely English. Grouping happens in JS since the language lookup lives
+  // in user_profiles' JSON store, not Postgres.
   app.get("/api/admin/analytics/funnel", async (req, res) => {
     if (!req.session?.isAdmin || !isSuperAdmin(req)) {
       return res.status(403).json({ error: "Access denied" });
@@ -548,7 +558,7 @@ export function mountAdminRoutes(app, ctx) {
     try {
       const result = await db.query(`
         WITH loaded AS (
-          SELECT DISTINCT channel_id, COALESCE(language, 'unknown') AS language
+          SELECT DISTINCT channel_id
           FROM client_events
           WHERE event_name = 'config_loaded'
         ),
@@ -557,15 +567,22 @@ export function mountAdminRoutes(app, ctx) {
           FROM client_events
           WHERE event_name IN ('sound_uploaded', 'clip_created', 'video_uploaded')
         )
-        SELECT loaded.language,
-               COUNT(DISTINCT loaded.channel_id)::int AS opened,
-               COUNT(DISTINCT completed.channel_id)::int AS completed_setup
+        SELECT loaded.channel_id,
+               (completed.channel_id IS NOT NULL) AS did_complete
           FROM loaded
           LEFT JOIN completed ON completed.channel_id = loaded.channel_id
-         GROUP BY loaded.language
-         ORDER BY opened DESC
       `);
-      res.json({ rows: result.rows });
+
+      const byLanguage = new Map();
+      for (const row of result.rows) {
+        const language = (await ensureBroadcasterLanguage(row.channel_id)) || "unknown";
+        const bucket = byLanguage.get(language) || { language, opened: 0, completed_setup: 0 };
+        bucket.opened += 1;
+        if (row.did_complete) bucket.completed_setup += 1;
+        byLanguage.set(language, bucket);
+      }
+      const rows = Array.from(byLanguage.values()).sort((a, b) => b.opened - a.opened);
+      res.json({ rows });
     } catch (err) {
       res.status(500).json({ error: err?.message || "Query failed" });
     }

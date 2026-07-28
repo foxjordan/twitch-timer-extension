@@ -2113,32 +2113,53 @@ setInterval(() => {
 }, IDLE_DISCONNECT_SWEEP_INTERVAL_MS);
 
 // Server tick → broadcast remaining once per second per user/key
+//
+// tickInProgress guards against overlapping runs: this callback awaits a real
+// network call (broadcastToChannel, Twitch's PubSub API) once per active
+// broadcaster. setInterval fires on a fixed wall-clock schedule regardless of
+// whether the previous invocation's promise has resolved — with enough
+// broadcasters, a single pass can take longer than 1s, and without this guard
+// each new tick starts on top of the last, piling up concurrent in-flight
+// requests without bound as the broadcaster count grows. That pileup was
+// found live in production: 29 registered broadcasters keep an always-on
+// EventSub connection (idle-disconnect only fires after 48h of total
+// inactivity, not stream-offline), each sequential broadcastToChannel call
+// costs a real Twitch round-trip, and the resulting CPU/event-loop pressure
+// was severe enough to fail Fly's own health check and drop traffic at the
+// edge — surfacing to users as CORS-looking "access control checks" errors.
+let tickInProgress = false;
 setInterval(async () => {
+  if (tickInProgress) return;
+  tickInProgress = true;
+  try {
   // Check bonus time schedules for all users
   for (const uid of state.users.keys()) {
     checkBonusSchedule(uid);
   }
 
-  // Broadcast to Twitch Extension PubSub for ALL active broadcasters
-  for (const [userId, connection] of broadcasterConnections) {
-    try {
-      const remaining = getRemainingSeconds(userId);
-      const hype = state.users.get(String(userId))?.hypeActive;
+  // Broadcast to Twitch Extension PubSub for ALL active broadcasters, in
+  // parallel — sequential awaits here don't scale with broadcaster count.
+  await Promise.allSettled(
+    Array.from(broadcasterConnections.keys()).map(async (userId) => {
+      try {
+        const remaining = getRemainingSeconds(userId);
+        const hype = state.users.get(String(userId))?.hypeActive;
 
-      await broadcastToChannel({
-        broadcasterId: userId,
-        type: "timer_tick",
-        payload: { userId, remaining, hype, capReached: capReached(userId) },
-      });
-    } catch (err) {
-      observability.lastBroadcastErrorAt = new Date().toISOString();
-      logger.error("broadcast_failed", {
-        broadcasterId: userId,
-        reason: err?.message,
-        type: "timer_tick",
-      });
-    }
-  }
+        await broadcastToChannel({
+          broadcasterId: userId,
+          type: "timer_tick",
+          payload: { userId, remaining, hype, capReached: capReached(userId) },
+        });
+      } catch (err) {
+        observability.lastBroadcastErrorAt = new Date().toISOString();
+        logger.error("broadcast_failed", {
+          broadcasterId: userId,
+          reason: err?.message,
+          type: "timer_tick",
+        });
+      }
+    }),
+  );
 
   // Fan-out to SSE clients (already handles per-user correctly!)
   for (const client of Array.from(sseClients)) {
@@ -2178,6 +2199,9 @@ setInterval(async () => {
     } catch (e) {
       sseClients.delete(client);
     }
+  }
+  } finally {
+    tickInProgress = false;
   }
 }, 1000);
 

@@ -28,7 +28,20 @@
       "Read(//tmp/**)",
       "Bash(fly logs -a twitch-timer-extension --no-tail 2>&1 > /tmp/fly_logs_now.txt *)",
       "mcp__claude_ai_Supabase__get_project",
-      "mcp__claude_ai_Supabase__execute_sql"
+      "mcp__claude_ai_Supabase__execute_sql",
+      "Bash(curl -s https://livestreamerhub.com/healthz)",
+      "Bash(grep -n \"formatLanguage\\\\|LANGUAGE_NAMES\" /tmp/admin_block_3.js *)",
+      "Bash(node --input-type=module -e ' *)",
+      "Bash(pkill -f \"python3 -m http.server 8934\")",
+      "mcp__plugin_playwright_playwright__browser_close",
+      "Bash(git -C /Users/jordanfox/Documents/twitch-timer-extension status --short ebs/views/theme.js ebs/views/overlayConfigPage.js ebs/views/soundConfigPage.js ebs/views/adminDashboardPage.js)",
+      "Bash(curl -s https://livestreamerhub.com/admin)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code} %{size_download}\\\\n\" https://livestreamerhub.com/admin)",
+      "Bash(curl -s http://localhost:8934/api/sounds)",
+      "Bash(kill -9 63648)",
+      "Bash(node /tmp/mock_server.mjs)",
+      "Bash(pkill -f \"node /tmp/mock_server.mjs\")",
+      "Bash(pkill -f \"node /tmp/mock_admin.mjs\")"
     ],
     "additionalDirectories": [
       "/tmp"

@@ -51,6 +51,19 @@ export function renderAdminDashboardPage(options = {}) {
       thead th { text-align: left; padding: 8px 10px; border-bottom: 2px solid var(--surface-border); color: var(--text-muted); font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: 0.04em; white-space: nowrap; }
       tbody td { padding: 10px; border-bottom: 1px solid var(--surface-border); vertical-align: middle; }
       tbody tr:last-child td { border-bottom: none; }
+      /* Below 700px, .responsive-table stacks each row into a card instead
+         of relying on horizontal scroll — the classic "hide thead, promote
+         td[data-label] to a heading via ::before" technique. Scoped to this
+         class specifically so other (simpler) admin tables are unaffected. */
+      @media (max-width: 700px) {
+        .responsive-table thead { display: none; }
+        .responsive-table, .responsive-table tbody, .responsive-table tr, .responsive-table td { display: block; width: 100%; }
+        .responsive-table tr { margin-bottom: 12px; border: 1px solid var(--surface-border); border-radius: 10px; padding: 8px 12px; background: var(--surface-muted, #1a1a1e); }
+        .responsive-table tbody tr:last-child { margin-bottom: 0; }
+        .responsive-table td { border-bottom: 1px solid var(--surface-border); padding: 8px 0; }
+        .responsive-table td:last-child { border-bottom: none; }
+        .responsive-table td[data-label]::before { content: attr(data-label); display: block; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.03em; color: var(--text-muted); margin-bottom: 4px; }
+      }
       .badge { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 600; }
       .badge-live { background: #eb0400; color: #fff; }
       .badge-online { background: #10b98133; color: #10b981; }
@@ -71,6 +84,14 @@ export function renderAdminDashboardPage(options = {}) {
       .btn-unban:hover { background: #15803d; }
       .btn-delete { background: #7f1d1d; color: #fff; border: none; padding: 4px 10px; border-radius: 6px; font-size: 12px; cursor: pointer; font-weight: 600; }
       .btn-delete:hover { background: #991b1b; }
+      /* Solid button (not a bare text link) so Manage has a real, distinct
+         tap target instead of blending into the destructive buttons next to
+         it — paired with .action-danger-group's margin-top below, which
+         puts real vertical distance between them instead of just a few px
+         of horizontal gap. */
+      .btn-manage { display: inline-block; background: #9146ff; color: #fff; border: none; padding: 4px 10px; border-radius: 6px; font-size: 12px; font-weight: 600; text-decoration: none; }
+      .btn-manage:hover { background: #7c3aed; }
+      .action-danger-group { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
       .btn-save { background: #9146ff; color: #fff; border: none; padding: 8px 18px; border-radius: 8px; font-size: 13px; cursor: pointer; font-weight: 600; }
       .btn-save:hover { background: #7c3aed; }
       .btn-save:disabled { opacity: 0.5; cursor: not-allowed; }
@@ -230,7 +251,7 @@ export function renderAdminDashboardPage(options = {}) {
         <div style="margin-top: 16px;">
           <label style="display:block; font-size:13px; font-weight:600; margin-bottom:6px;">Moderation Settings</label>
           <div style="font-size:12px; color:var(--text-muted); margin-bottom:8px;">These settings apply globally to all streamers (in addition to each streamer's own banned words and moderation toggle).</div>
-          <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px 18px;">
+          <div class="grid-2col" style="gap:10px 18px;">
             <label style="display:flex; align-items:center; gap:6px; font-size:13px; font-weight:normal;">
               <input type="checkbox" id="modOffensive"> Offensive content filter (slurs, hate speech, threats)
             </label>
@@ -264,7 +285,7 @@ export function renderAdminDashboardPage(options = {}) {
       <div class="table-card">
         <h2>Test Alerts</h2>
         <div style="font-size:12px; color:var(--text-muted); margin-bottom:12px;">Trigger sound or TTS alerts without Bits. Useful for testing overlay playback. The alert will be sent to the broadcaster's OBS overlay via SSE.</div>
-        <div style="display:grid; grid-template-columns:1fr 1fr; gap:18px;">
+        <div class="grid-2col" style="gap:18px;">
           <div>
             <label style="display:block; font-size:13px; font-weight:600; margin-bottom:6px;">Broadcaster</label>
             <select id="testBroadcaster" style="width:100%; padding:8px 10px; border-radius:8px; border:1px solid var(--surface-border); background:var(--surface-muted); color:var(--text-color); font-size:13px;">
@@ -273,7 +294,7 @@ export function renderAdminDashboardPage(options = {}) {
           </div>
           <div></div>
         </div>
-        <div style="display:grid; grid-template-columns:1fr 1fr; gap:18px; margin-top:14px;">
+        <div class="grid-2col" style="gap:18px; margin-top:14px;">
           <div style="padding:14px; background:var(--surface-muted); border-radius:10px;">
             <label style="display:block; font-size:13px; font-weight:600; margin-bottom:8px;">Sound Alert Test</label>
             <select id="testSoundSelect" style="width:100%; padding:8px 10px; border-radius:8px; border:1px solid var(--surface-border); background:var(--page-bg); color:var(--text-color); font-size:13px; margin-bottom:8px;" disabled>
@@ -307,7 +328,7 @@ export function renderAdminDashboardPage(options = {}) {
       <div class="table-card" style="margin-bottom:20px;">
         <h2>Add to Official Library</h2>
         <div style="font-size:12px; color:var(--text-muted); margin-bottom:12px;">Upload a properly-licensed sound (CC0 / public domain only). It's added directly to the community library for every broadcaster — no moderation queue, since this <em>is</em> the review. Record the source URL and license for our own paper trail.</div>
-        <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; max-width:700px; margin-bottom:10px;">
+        <div class="grid-2col" style="gap:10px; max-width:700px; margin-bottom:10px;">
           <input type="file" id="officialFile" accept="audio/mpeg,audio/ogg,audio/wav,audio/webm,audio/mp4,audio/flac,.flac" style="grid-column:1 / -1; font-size:12px; color:var(--text-color);">
           <input type="text" id="officialName" placeholder="Sound name" style="padding:8px 10px; border-radius:8px; border:1px solid var(--surface-border); background:var(--surface-muted); color:var(--text-color); font-size:12px;">
           <input type="text" id="officialTags" placeholder="Tags (comma-separated, up to 5)" style="padding:8px 10px; border-radius:8px; border:1px solid var(--surface-border); background:var(--surface-muted); color:var(--text-color); font-size:12px;">
@@ -381,7 +402,7 @@ export function renderAdminDashboardPage(options = {}) {
         <div class="stat-card"><div class="stat-value" id="anFailedCount">--</div><div class="stat-label">Failed Redemptions</div></div>
         <div class="stat-card"><div class="stat-value" id="anRejectedCount">--</div><div class="stat-label">TTS Rejections</div></div>
       </div>
-      <div style="display:grid; grid-template-columns:1fr 1fr; gap:20px; margin-bottom:20px;">
+      <div class="grid-2col" style="gap:20px; margin-bottom:20px;">
         <div class="table-card">
           <h2>Top SKUs</h2>
           <div id="analyticsSkuContainer"><div class="empty-state">Loading...</div></div>
@@ -393,7 +414,7 @@ export function renderAdminDashboardPage(options = {}) {
       </div>
       <div class="table-card" style="margin-bottom:20px;">
         <h2>Setup Funnel by Language</h2>
-        <div style="font-size:12px; color:var(--text-muted); margin-bottom:10px;">Distinct broadcasters who opened the config panel vs. who went on to create at least one alert, grouped by Twitch's reported language for that session.</div>
+        <div style="font-size:12px; color:var(--text-muted); margin-bottom:10px;">Distinct broadcasters who opened the config panel vs. who went on to create at least one alert, grouped by each channel's declared stream language on Twitch.</div>
         <div id="analyticsFunnelContainer"><div class="empty-state">Loading...</div></div>
       </div>
       <div class="table-card">
@@ -593,6 +614,7 @@ export function renderAdminDashboardPage(options = {}) {
         function renderBroadcasterTable(users) {
           // Build table with DOM methods to avoid innerHTML with dynamic content
           var table = document.createElement('table');
+          table.className = 'responsive-table';
           var thead = document.createElement('thead');
           var headerRow = document.createElement('tr');
           ['Broadcaster', 'Status', 'Timer', 'Time Added', 'Features', 'Last Event', 'Actions'].forEach(function(label) {
@@ -609,6 +631,7 @@ export function renderAdminDashboardPage(options = {}) {
 
             // Broadcaster
             var tdBroadcaster = document.createElement('td');
+            tdBroadcaster.setAttribute('data-label', 'Broadcaster');
             var nameDiv = document.createElement('div');
             nameDiv.style.fontWeight = '600';
             var nameText = u.displayName || u.login || 'Unknown';
@@ -634,6 +657,7 @@ export function renderAdminDashboardPage(options = {}) {
 
             // Status
             var tdStatus = document.createElement('td');
+            tdStatus.setAttribute('data-label', 'Status');
             function addBadge(text, cls) {
               var span = document.createElement('span');
               span.className = 'badge ' + cls;
@@ -651,6 +675,7 @@ export function renderAdminDashboardPage(options = {}) {
 
             // Timer
             var tdTimer = document.createElement('td');
+            tdTimer.setAttribute('data-label', 'Timer');
             var timerMain = document.createElement('div');
             timerMain.textContent = u.remaining != null ? formatSeconds(u.remaining) : '--';
             tdTimer.appendChild(timerMain);
@@ -667,11 +692,13 @@ export function renderAdminDashboardPage(options = {}) {
 
             // Time Added
             var tdAdded = document.createElement('td');
+            tdAdded.setAttribute('data-label', 'Time Added');
             tdAdded.textContent = formatSeconds(u.additionsTotal || 0);
             tr.appendChild(tdAdded);
 
             // Features
             var tdFeatures = document.createElement('td');
+            tdFeatures.setAttribute('data-label', 'Features');
             var pillsDiv = document.createElement('div');
             pillsDiv.className = 'feature-pills';
             function addPill(text, active) {
@@ -691,64 +718,73 @@ export function renderAdminDashboardPage(options = {}) {
 
             // Last Event
             var tdEvent = document.createElement('td');
+            tdEvent.setAttribute('data-label', 'Last Event');
             tdEvent.textContent = timeAgo(u.lastEventAt);
             tr.appendChild(tdEvent);
 
             // Actions
             var tdActions = document.createElement('td');
+            tdActions.setAttribute('data-label', 'Actions');
+            // Manage is a plain navigation link that sat directly beside Ban/
+            // Delete with only a few px of gap — an easy misclick/mistap on
+            // a row whose other buttons are destructive. Styled as its own
+            // solid button and placed on a separate line (via
+            // .action-danger-group below) so there's real distance, not just
+            // a small gap, between it and anything destructive.
             var manageLink = document.createElement('a');
             manageLink.href = '/admin/broadcaster/' + encodeURIComponent(u.userId);
             manageLink.textContent = 'Manage';
-            manageLink.style.cssText = 'font-size:12px; color:#9146ff; font-weight:600; margin-right:6px; text-decoration:none;';
+            manageLink.className = 'btn-manage';
             tdActions.appendChild(manageLink);
+
+            var dangerGroup = document.createElement('div');
+            dangerGroup.className = 'action-danger-group';
             if (u.banned) {
               var unbanBtn = document.createElement('button');
               unbanBtn.className = 'btn-unban';
               unbanBtn.textContent = 'Unban';
               unbanBtn.addEventListener('click', function() { doUnban(u.userId); });
-              tdActions.appendChild(unbanBtn);
+              dangerGroup.appendChild(unbanBtn);
               if (u.banReason) {
                 var reasonDiv = document.createElement('div');
                 reasonDiv.className = 'ban-reason';
                 reasonDiv.textContent = u.banReason;
-                tdActions.appendChild(reasonDiv);
+                dangerGroup.appendChild(reasonDiv);
               }
             } else {
               var banBtn = document.createElement('button');
               banBtn.className = 'btn-ban';
               banBtn.textContent = 'Ban';
               banBtn.addEventListener('click', function() { doBan(u.userId, u.displayName || u.login); });
-              tdActions.appendChild(banBtn);
+              dangerGroup.appendChild(banBtn);
             }
             // Video/Clips toggle
             var vcBtn = document.createElement('button');
             vcBtn.className = u.videoClipsEnabled ? 'btn-ban' : 'btn-unban';
             vcBtn.textContent = u.videoClipsEnabled ? 'Disable V/C' : 'Enable V/C';
-            vcBtn.style.marginLeft = '4px';
             vcBtn.addEventListener('click', function() { toggleVideoClips(u.userId, !u.videoClipsEnabled); });
-            tdActions.appendChild(vcBtn);
+            dangerGroup.appendChild(vcBtn);
             // TTS toggle
             var ttsBtn = document.createElement('button');
             ttsBtn.className = u.ttsEnabled ? 'btn-ban' : 'btn-unban';
             ttsBtn.textContent = u.ttsEnabled ? 'Disable TTS' : 'Enable TTS';
-            ttsBtn.style.marginLeft = '4px';
             ttsBtn.addEventListener('click', function() { toggleTts(u.userId, !u.ttsEnabled); });
-            tdActions.appendChild(ttsBtn);
+            dangerGroup.appendChild(ttsBtn);
             if (u.stripeCustomerId) {
               var stripeLink = document.createElement('a');
               stripeLink.href = 'https://dashboard.stripe.com/customers/' + u.stripeCustomerId;
               stripeLink.target = '_blank';
               stripeLink.textContent = 'Stripe';
-              stripeLink.style.cssText = 'font-size:11px; color:#9146ff; margin-left:6px;';
-              tdActions.appendChild(stripeLink);
+              stripeLink.style.cssText = 'font-size:11px; color:#9146ff; align-self:center;';
+              dangerGroup.appendChild(stripeLink);
             }
             // Delete user data
             var delBtn = document.createElement('button');
             delBtn.className = 'btn-delete';
             delBtn.textContent = 'Delete';
-            delBtn.style.marginLeft = '4px';
             delBtn.addEventListener('click', function() { doDeleteUser(u.userId, u.displayName || u.login || u.userId); });
-            tdActions.appendChild(delBtn);
+            dangerGroup.appendChild(delBtn);
+            tdActions.appendChild(dangerGroup);
             tr.appendChild(tdActions);
 
             tbody.appendChild(tr);
@@ -1944,6 +1980,7 @@ export function renderAdminDashboardPage(options = {}) {
           }
           var maxCount = topSkus.reduce(function(m, r) { return Math.max(m, r.count); }, 0);
           var table = document.createElement('table');
+          table.className = 'responsive-table';
           var thead = document.createElement('thead');
           var hr = document.createElement('tr');
           ['Type', 'Bits', 'Count', ''].forEach(function(h) {
@@ -1954,16 +1991,20 @@ export function renderAdminDashboardPage(options = {}) {
           topSkus.forEach(function(row) {
             var tr = document.createElement('tr');
             var tdType = document.createElement('td');
+            tdType.setAttribute('data-label', 'Type');
             var badge = document.createElement('span');
             badge.className = 'analytics-sku-badge analytics-sku-' + row.src;
             badge.textContent = row.src === 'tts' ? 'TTS' : 'Sound';
             tdType.appendChild(badge);
             var tdBits = document.createElement('td');
+            tdBits.setAttribute('data-label', 'Bits');
             tdBits.style.fontWeight = '600';
             tdBits.textContent = row.bitsAmount + ' Bits';
             var tdCount = document.createElement('td');
+            tdCount.setAttribute('data-label', 'Count');
             tdCount.textContent = row.count.toLocaleString();
             var tdBar = document.createElement('td');
+            tdBar.setAttribute('data-label', 'Share');
             var bar = document.createElement('span');
             bar.className = 'analytics-bar';
             bar.style.width = Math.max(4, Math.round((row.count / maxCount) * 100)) + 'px';
@@ -1983,9 +2024,11 @@ export function renderAdminDashboardPage(options = {}) {
             return;
           }
           var table = document.createElement('table');
+          table.className = 'responsive-table';
           var thead = document.createElement('thead');
           var hr = document.createElement('tr');
-          ['Streamer', 'Sound Bits', 'TTS Bits', 'Total Bits', 'Sound Plays', 'TTS Plays'].forEach(function(h) {
+          var streamerColumnLabels = ['Streamer', 'Sound Bits', 'TTS Bits', 'Total Bits', 'Sound Plays', 'TTS Plays'];
+          streamerColumnLabels.forEach(function(h) {
             var th = document.createElement('th'); th.textContent = h; hr.appendChild(th);
           });
           thead.appendChild(hr); table.appendChild(thead);
@@ -1995,6 +2038,7 @@ export function renderAdminDashboardPage(options = {}) {
             tr.className = 'analytics-streamer-row';
             if (selectedStreamer === row.channelId) tr.classList.add('selected');
             var tdName = document.createElement('td');
+            tdName.setAttribute('data-label', streamerColumnLabels[0]);
             var nameDiv = document.createElement('div');
             nameDiv.style.fontWeight = '600';
             nameDiv.textContent = row.displayName || row.channelId;
@@ -2005,6 +2049,7 @@ export function renderAdminDashboardPage(options = {}) {
             tr.appendChild(tdName);
             [row.soundBits, row.ttsBits, row.totalBits, row.soundCount, row.ttsCount].forEach(function(v, i) {
               var td = document.createElement('td');
+              td.setAttribute('data-label', streamerColumnLabels[i + 1]);
               td.textContent = i < 3 ? fmtBits(v) : (v || 0).toLocaleString();
               if (i === 2) td.style.fontWeight = '700';
               tr.appendChild(td);
@@ -2022,6 +2067,7 @@ export function renderAdminDashboardPage(options = {}) {
 
         function makeDetailTable(headers, rows, cellFn) {
           var tbl = document.createElement('table');
+          tbl.className = 'responsive-table';
           var thead = document.createElement('thead');
           var hr = document.createElement('tr');
           headers.forEach(function(h) { var th = document.createElement('th'); th.textContent = h; hr.appendChild(th); });
@@ -2029,7 +2075,10 @@ export function renderAdminDashboardPage(options = {}) {
           var tbody = document.createElement('tbody');
           rows.forEach(function(row) {
             var tr = document.createElement('tr');
-            cellFn(row).forEach(function(cell) { tr.appendChild(cell); });
+            cellFn(row).forEach(function(cell, i) {
+              if (headers[i]) cell.setAttribute('data-label', headers[i]);
+              tr.appendChild(cell);
+            });
             tbody.appendChild(tr);
           });
           tbl.appendChild(tbody);
@@ -2100,6 +2149,29 @@ export function renderAdminDashboardPage(options = {}) {
             });
         }
 
+        // Twitch's broadcaster_language values — the fixed set of stream
+        // languages streamers pick from in their Twitch settings (ISO 639-1
+        // codes, plus Twitch's own "asl" and "other"). Unmapped codes just
+        // fall back to showing the raw code, so this doesn't need to be
+        // exhaustive to be safe.
+        var LANGUAGE_NAMES = {
+          en: 'English', ja: 'Japanese', ko: 'Korean', zh: 'Chinese', fr: 'French',
+          de: 'German', es: 'Spanish', pt: 'Portuguese', ru: 'Russian', it: 'Italian',
+          pl: 'Polish', nl: 'Dutch', sv: 'Swedish', no: 'Norwegian', da: 'Danish',
+          fi: 'Finnish', tr: 'Turkish', ar: 'Arabic', th: 'Thai', vi: 'Vietnamese',
+          id: 'Bahasa Indonesia', ms: 'Bahasa Melayu', hi: 'Hindi', bn: 'Bangla',
+          cs: 'Czech', sk: 'Slovak', hu: 'Hungarian', ro: 'Romanian', bg: 'Bulgarian',
+          uk: 'Ukrainian', el: 'Greek', he: 'Hebrew', ca: 'Catalan', hr: 'Croatian',
+          et: 'Estonian', lv: 'Latvian', lt: 'Lithuanian', sl: 'Slovenian',
+          sr: 'Serbian', tl: 'Filipino', asl: 'American Sign Language', other: 'Other',
+          unknown: 'Unknown',
+        };
+        function formatLanguage(code) {
+          if (!code) return 'Unknown';
+          var name = LANGUAGE_NAMES[String(code).toLowerCase()];
+          return name ? name + ' (' + code + ')' : code;
+        }
+
         function renderFunnelTable(rows) {
           var container = document.getElementById('analyticsFunnelContainer');
           if (!container) return;
@@ -2109,9 +2181,11 @@ export function renderAdminDashboardPage(options = {}) {
             return;
           }
           var table = document.createElement('table');
+          table.className = 'responsive-table';
           var thead = document.createElement('thead');
           var headerRow = document.createElement('tr');
-          ['Language', 'Opened Config', 'Created an Alert', 'Completion Rate'].forEach(function(label) {
+          var funnelColumnLabels = ['Language', 'Opened Config', 'Created an Alert', 'Completion Rate'];
+          funnelColumnLabels.forEach(function(label) {
             var th = document.createElement('th');
             th.textContent = label;
             headerRow.appendChild(th);
@@ -2122,12 +2196,13 @@ export function renderAdminDashboardPage(options = {}) {
           rows.forEach(function(r) {
             var tr = document.createElement('tr');
             [
-              r.language || 'unknown',
+              formatLanguage(r.language),
               String(r.opened),
               String(r.completed_setup),
               r.opened ? Math.round((r.completed_setup / r.opened) * 100) + '%' : '--',
-            ].forEach(function(text) {
+            ].forEach(function(text, i) {
               var td = document.createElement('td');
+              td.setAttribute('data-label', funnelColumnLabels[i]);
               td.textContent = text;
               tr.appendChild(td);
             });

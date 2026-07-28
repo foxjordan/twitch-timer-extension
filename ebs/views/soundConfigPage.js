@@ -56,6 +56,10 @@ export function renderSoundConfigPage(options = {}) {
         .sidebar { width: 100%; position: static; }
         .sidebar-nav { flex-direction: row; overflow-x: auto; gap: 4px; padding-bottom: 4px; }
         .sidebar-nav-item { white-space: nowrap; padding: 8px 12px; font-size: 13px; }
+        /* Floating "Take A Tour" FAB has no room to float clear of content
+           on short mobile viewports — see overlayConfigPage.js for the
+           matching fix and full reasoning. */
+        .tour-btn { bottom: 12px; right: 12px; padding: 6px 10px; font-size: 12px; }
       }
       h1 { margin: 0 0 4px; font-size: 26px; }
       .subtitle { margin: 0 0 24px; color: var(--text-muted); font-size: 14px; }
@@ -272,7 +276,7 @@ export function renderSoundConfigPage(options = {}) {
       <div class="card" id="settingsCard">
         <h2>Settings</h2>
         <div id="settingsBody">
-          <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px 20px;">
+          <div class="grid-2col" style="gap:8px 20px;">
             <label style="display:flex; align-items:center; gap:8px; font-size:13px;">
               <input type="checkbox" id="soundEnabled" checked>
               Enabled
@@ -372,7 +376,7 @@ export function renderSoundConfigPage(options = {}) {
         <div id="ttsBody">
           <div id="ttsAccessHint" class="hint" style="margin-bottom:10px; display:none;">TTS requires a Pro plan or admin grant.</div>
           <div id="ttsSettings">
-            <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px 20px;">
+            <div class="grid-2col" style="gap:8px 20px;">
               <label style="display:flex; align-items:center; gap:8px; font-size:13px;">
                 <input type="checkbox" id="ttsEnabled">
                 Enabled
@@ -462,7 +466,7 @@ export function renderSoundConfigPage(options = {}) {
 
       <div class="section-page" data-section="activity">
       <!-- Activity: top sounds & top viewers, last 30 days -->
-      <div style="display:grid; grid-template-columns:1fr 1fr; gap:20px;">
+      <div class="grid-2col" style="gap:20px;">
         <div class="card">
           <h2>Top Sounds <span class="hint" style="font-size:11px;">(last 30 days)</span></h2>
           <div id="activityTopSounds"><div class="hint">Loading...</div></div>
@@ -509,6 +513,23 @@ export function renderSoundConfigPage(options = {}) {
 
         function setBusy(btn, busy) { if (!btn) return; btn.disabled = !!busy; }
         function flashButton(btn) { if (!btn) return; btn.classList.add('btn-click'); setTimeout(function() { btn.classList.remove('btn-click'); }, 160); }
+
+        // First-party analytics for this surface (see ebs/routes_analytics.js
+        // and extension/src/firebase.js for the extension-panel equivalent).
+        // Skipped in admin mode so a super-admin browsing someone else's
+        // sounds for support doesn't get counted as that broadcaster's own
+        // setup funnel activity.
+        function logDashboardEvent(event, params) {
+          if (IS_ADMIN_MODE) return;
+          try {
+            fetch('/api/analytics/dashboard-event', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ event: event, surface: 'dashboard', params: params || {} }),
+              keepalive: true,
+            }).catch(function() {});
+          } catch (e) {}
+        }
 
         var TIER_LABELS = ${JSON.stringify(TIER_LABELS)};
 
@@ -650,7 +671,7 @@ export function renderSoundConfigPage(options = {}) {
           }
           sounds.forEach(function(s) {
             var card = document.createElement('div');
-            card.style.cssText = 'display:flex; align-items:center; gap:10px; padding:8px 10px; background:var(--surface-muted,#1a1a1e); border-radius:8px; border:1px solid var(--border,#303038);';
+            card.style.cssText = 'display:flex; align-items:center; gap:10px; padding:8px 10px; background:var(--surface-muted,#1a1a1e); border-radius:8px; border:1px solid var(--border,#303038); flex-wrap:wrap;';
             card.setAttribute('data-sound-id', s.id);
 
             // Image thumbnail
@@ -679,7 +700,13 @@ export function renderSoundConfigPage(options = {}) {
 
             var info = document.createElement('div');
             info.className = 'sound-info';
-            info.style.cssText = 'flex:1; min-width:0;';
+            // min-width:0 (not a fixed floor) would let this shrink to a
+            // sliver instead of ever triggering the card's flex-wrap below —
+            // the controls group (checkbox + 4 buttons) has flex-shrink:0 and
+            // won't shrink itself, so without a real floor here the name/meta
+            // text was the only thing giving, wrapping mid-phrase into an
+            // unreadably narrow column on mobile.
+            info.style.cssText = 'flex:1; min-width:140px;';
 
             var nameDiv = document.createElement('div');
             nameDiv.style.cssText = 'font-weight:600; font-size:14px;';
@@ -1216,7 +1243,7 @@ export function renderSoundConfigPage(options = {}) {
           nameInput.style.cssText = 'max-width:280px;';
 
           var row = document.createElement('div');
-          row.style.cssText = 'display:flex; align-items:center; gap:8px;';
+          row.style.cssText = 'display:flex; align-items:center; gap:8px; flex-wrap:wrap;';
 
           // Bits can be turned off entirely for a Channel-Points-only alert
           // (tier: null) — it just never shows up in the viewer's Bits panel,
@@ -1345,12 +1372,12 @@ export function renderSoundConfigPage(options = {}) {
           imageLabel.textContent = 'Card Image (max 1 MB, PNG/JPG/GIF/WebP)';
 
           var imageRow = document.createElement('div');
-          imageRow.style.cssText = 'display:flex; gap:6px; align-items:center; margin-top:4px;';
+          imageRow.style.cssText = 'display:flex; gap:6px; align-items:center; flex-wrap:wrap; margin-top:4px;';
 
           var imageInput = document.createElement('input');
           imageInput.type = 'file';
           imageInput.accept = 'image/png,image/jpeg,image/gif,image/webp';
-          imageInput.style.cssText = 'font-size:12px; flex:1;';
+          imageInput.style.cssText = 'font-size:12px; flex:1; min-width:160px;';
 
           var imageHint = document.createElement('span');
           imageHint.className = 'hint';
@@ -1507,7 +1534,7 @@ export function renderSoundConfigPage(options = {}) {
             });
 
             var trimBtnRow = document.createElement('div');
-            trimBtnRow.style.cssText = 'display:flex; gap:6px; align-items:center;';
+            trimBtnRow.style.cssText = 'display:flex; gap:6px; align-items:center; flex-wrap:wrap;';
 
             var previewBtn = document.createElement('button');
             previewBtn.textContent = '\\u25B6 Preview';
@@ -1749,11 +1776,16 @@ export function renderSoundConfigPage(options = {}) {
         var wizard = null;
 
         function resetWizard() {
-          wizard = { step: 1, type: 'sound', name: '', clipUrl: '', audioOnly: false, file: null, createdSound: null };
+          wizard = { step: 1, type: 'sound', name: '', clipUrl: '', audioOnly: false, file: null, createdSound: null, thumbnailSource: null };
+        }
+
+        function isYoutubeClipUrl(url) {
+          return /youtube\\.com|youtu\\.be/i.test(url || '');
         }
 
         function openWizard() {
           resetWizard();
+          logDashboardEvent('wizard_started');
           if (wizardBackdropEl) wizardBackdropEl.style.display = 'flex';
           renderWizardStep();
         }
@@ -1990,8 +2022,9 @@ export function renderSoundConfigPage(options = {}) {
               fd.append('image', file);
               var r = await fetch(API_BASE + '/' + encodeURIComponent(wizard.createdSound.id) + '/image', { method: 'POST', body: fd });
               var body = await r.json().catch(function() { return {}; });
-              if (!r.ok) throw new Error(body.error || 'Upload failed');
+  if (!r.ok) throw new Error(body.error || 'Upload failed');
               wizard.createdSound = body.sound;
+              wizard.thumbnailSource = 'upload';
               wizardHintEl.textContent = '';
               renderWizardThumbPreview(thumbPreview);
             } catch (e) {
@@ -1999,14 +2032,17 @@ export function renderSoundConfigPage(options = {}) {
             }
           });
 
-          function onThumbSet(sound) {
-            wizard.createdSound = sound;
-            renderWizardThumbPreview(thumbPreview);
+          function onThumbSet(source) {
+            return function(sound) {
+              wizard.createdSound = sound;
+              wizard.thumbnailSource = source;
+              renderWizardThumbPreview(thumbPreview);
+            };
           }
           var wizardPickerPanels = [];
-          var twitchPicker = createEmotePicker('Twitch Emotes', API_BASE + '/twitch-emotes', wizard.createdSound.id, wizardHintEl, onThumbSet, wizardPickerPanels);
-          var sevenTvPicker = createEmotePicker('7TV Emotes', API_BASE + '/seventv-emotes', wizard.createdSound.id, wizardHintEl, onThumbSet, wizardPickerPanels);
-          var gifPicker = KLIPY_ENABLED ? createGifSearchPicker(wizard.createdSound.id, wizardHintEl, onThumbSet, wizardPickerPanels) : null;
+          var twitchPicker = createEmotePicker('Twitch Emotes', API_BASE + '/twitch-emotes', wizard.createdSound.id, wizardHintEl, onThumbSet('twitch_emote'), wizardPickerPanels);
+          var sevenTvPicker = createEmotePicker('7TV Emotes', API_BASE + '/seventv-emotes', wizard.createdSound.id, wizardHintEl, onThumbSet('seventv_emote'), wizardPickerPanels);
+          var gifPicker = KLIPY_ENABLED ? createGifSearchPicker(wizard.createdSound.id, wizardHintEl, onThumbSet('gif_search'), wizardPickerPanels) : null;
 
           pickerRow.appendChild(uploadBtn);
           pickerRow.appendChild(twitchPicker.btn);
@@ -2192,6 +2228,12 @@ export function renderSoundConfigPage(options = {}) {
             return true;
           } catch (e) {
             wizardHintEl.textContent = e.message || 'Failed to create alert';
+            if (wizard.type === 'clip') {
+              logDashboardEvent('clip_conversion_failed', {
+                reason: (e.message || 'Unknown error').slice(0, 200),
+                isYoutube: isYoutubeClipUrl(wizard.clipUrl),
+              });
+            }
             return false;
           } finally {
             wizardNextBtn.disabled = false;
@@ -2245,6 +2287,18 @@ export function renderSoundConfigPage(options = {}) {
               if (!cpRes.ok) throw new Error(cpBody.error || 'Failed to enable Channel Points');
             }
 
+            // Matches the event names the extension panel's upload UI already
+            // logs (see ebs/routes_admin.js's funnel query) — the dashboard
+            // wizard previously fired none of these, so completions here were
+            // invisible to the funnel entirely regardless of language.
+            var completionEventByType = { sound: 'sound_uploaded', clip: 'clip_created', video: 'video_uploaded' };
+            logDashboardEvent(completionEventByType[wizard.type] || 'sound_uploaded', {
+              tier: patch.tier,
+              channelPoints: wantsChannelPoints,
+              thumbnailSource: wizard.thumbnailSource || 'none',
+              isYoutube: wizard.type === 'clip' ? isYoutubeClipUrl(wizard.clipUrl) : undefined,
+            });
+
             var soundId = wizard.createdSound.id;
             closeWizard();
             await revealNewSound(soundId);
@@ -2258,14 +2312,21 @@ export function renderSoundConfigPage(options = {}) {
           if (!wizard) return;
           wizardHintEl.textContent = '';
           if (wizard.step === 1) {
+            logDashboardEvent('wizard_step_completed', { step: 1, type: wizard.type });
             wizard.step = 2;
             renderWizardStep();
           } else if (wizard.step === 2) {
             var ok = await createFromWizard();
             if (!ok) return;
+            logDashboardEvent('wizard_step_completed', {
+              step: 2,
+              source: wizard.type,
+              isYoutube: wizard.type === 'clip' ? isYoutubeClipUrl(wizard.clipUrl) : undefined,
+            });
             wizard.step = 3;
             renderWizardStep();
           } else if (wizard.step === 3) {
+            logDashboardEvent('wizard_step_completed', { step: 3, thumbnailSource: wizard.thumbnailSource || 'none' });
             wizard.step = 4;
             renderWizardStep();
           } else if (wizard.step === 4) {
@@ -2820,6 +2881,7 @@ export function renderSoundConfigPage(options = {}) {
         }
 
         // Initial load
+        logDashboardEvent('config_loaded');
         fetchSoundsAdmin();
         fetchLibrary();
         fetchTtsSettings();

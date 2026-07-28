@@ -96,6 +96,20 @@ export function renderOverlayConfigPage(options = {}) {
         .sidebar { width: 100%; position: static; }
         .sidebar-nav { flex-direction: row; overflow-x: auto; gap: 4px; padding-bottom: 4px; }
         .sidebar-nav-item { white-space: nowrap; padding: 8px 12px; font-size: 13px; }
+        /* The desktop edit-style-btn offset assumes the 720px-capped iframe
+           is centered in a wider container; below that width the iframe
+           fills 100% of its container instead, so the calc() resolves
+           negative and pushes the button off-screen to the right — the
+           actual cause of pages needing a pinch-zoom to reach content that
+           the sticky header doesn't share, since the header stays put while
+           the rest of the page silently grows wider than the viewport. */
+        .hero-preview .edit-style-btn { right: 8px; }
+        /* Floating "Take A Tour" FAB has no room to float clear of content
+           on short mobile viewports — it visually lands on top of whatever
+           control happens to be in that corner. Shrinking it reduces how
+           much it can obscure, since removing it entirely would drop tour
+           access on mobile altogether. */
+        .tour-btn { bottom: 12px; right: 12px; padding: 6px 10px; font-size: 12px; }
       }
       .page-header { margin-bottom: 20px; }
       .page-header h1 { margin: 0 0 4px; font-size: 26px; }

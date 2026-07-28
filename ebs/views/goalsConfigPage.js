@@ -134,6 +134,10 @@ export function renderGoalsConfigPage(options = {}) {
       .goal-card-section.collapsed .goal-section-toggle span:last-child { transform: rotate(-90deg); }
       .goal-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; }
       .goal-field { display: flex; flex-direction: column; gap: 4px; font-size: 13px; }
+      .goal-follow-options { grid-template-columns: 1fr 1fr; }
+      @media (max-width: 600px) {
+        .goal-follow-options { grid-template-columns: 1fr; }
+      }
       .goal-field label { font-size: 11px; letter-spacing: 0.05em; text-transform: uppercase; color: var(--text-muted); }
       .goal-url code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; display: block; margin-top: 4px; background: var(--code-bg); border: 1px solid var(--code-border); padding: 6px 8px; border-radius: 6px; color: var(--text-color); }
       .goal-empty { padding: 14px; border: 1px dashed var(--empty-border); border-radius: 10px; text-align: center; color: var(--text-muted); }
@@ -514,7 +518,7 @@ export function renderGoalsConfigPage(options = {}) {
                    '<div class="goal-field"><label><input type="checkbox" data-field="rules.autoTrackTips" ' + boolAttr(rules.autoTrackTips) + ' /> Auto-count tips</label></div>' +
                    '<div class="goal-field"><label><input type="checkbox" data-field="rules.autoTrackCharity" ' + boolAttr(rules.autoTrackCharity) + ' /> Auto-count charity</label></div>' +
                    '<div class="goal-field"><label><input type="checkbox" data-field="rules.autoTrackFollows" ' + boolAttr(rules.autoTrackFollows) + ' /> Auto-count follows</label></div>' +
-                   '<div class="goal-follow-options" style="grid-column:1/-1;display:' + (rules.autoTrackFollows ? 'grid' : 'none') + ';grid-template-columns:1fr 1fr;gap:12px;">' +
+                   '<div class="goal-follow-options" style="grid-column:1/-1;display:' + (rules.autoTrackFollows ? 'grid' : 'none') + ';gap:12px;">' +
                      '<div class="goal-field">' +
                        '<label>Follow mode</label>' +
                        '<select data-field="rules.followMode">' +

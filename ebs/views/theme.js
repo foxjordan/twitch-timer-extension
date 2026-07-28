@@ -150,6 +150,37 @@ const themeBootstrapSource = `(function () {
 })();`;
 
 export const THEME_CSS_VARS = `
+      /* Confirmed via direct measurement (Playwright, 390px viewport): main
+         and several other top-level containers across these pages combine
+         an explicit width (often width: min(Npx, 100%)) with horizontal
+         padding but never set box-sizing, so the browser's default
+         content-box model adds that padding ON TOP of the 100% width —
+         main measured 430px wide inside a 390px body purely from its own
+         "padding: 0 20px". That's what was forcing pages wider than the
+         viewport (previously reachable by pinch-zoom, which is what left
+         dead space next to the sticky header; after adding overflow-x:hidden
+         below, the same excess width instead silently clipped real content
+         off the right edge). box-sizing: border-box is the standard fix and
+         matches what several individual selectors in these pages already
+         assumed (e.g. .library-search, input[type="text"]) — this just makes
+         it universal instead of opt-in per element. */
+      *, *::before, *::after { box-sizing: border-box; }
+      /* Safety net on top of the box-sizing fix: prevents any future single
+         wide element (a flex row that doesn't wrap, a table, a long
+         unbreakable string) from forcing the whole page wider than the
+         viewport again. */
+      html, body { max-width: 100%; overflow-x: hidden; }
+      /* Shared 2-column form-grid utility — several pages repeat
+         "display:grid; grid-template-columns:1fr 1fr" inline for label/input
+         pairs. Two rigid 1fr columns don't leave enough room for both on a
+         narrow phone, so the second column's content (Tags, License, etc.)
+         was getting clipped by the overflow-x:hidden safety net above.
+         Collapses to one column below 600px; gap/margin stay inline per
+         call site since those don't need to change on mobile. */
+      .grid-2col { display: grid; grid-template-columns: 1fr 1fr; }
+      @media (max-width: 600px) {
+        .grid-2col { grid-template-columns: 1fr; }
+      }
       :root {
         color-scheme: light;
         --page-bg: #f5f5f7;

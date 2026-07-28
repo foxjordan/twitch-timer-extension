@@ -1,6 +1,6 @@
 import { readFile } from 'fs/promises';
 import path from 'path';
-import { fetchUserProfile } from './twitch_api.js';
+import { fetchUserProfile, fetchChannelInfo } from './twitch_api.js';
 import { atomicWriteFile } from './atomic_write.js';
 
 const DATA_DIR = process.env.DATA_DIR || process.cwd();
@@ -66,6 +66,27 @@ export async function backfillUserProfile(userId, channelId = null) {
     }
   } catch {}
   return getUserProfile(uid);
+}
+
+// Broadcaster's declared stream language (Twitch's broadcaster_language
+// field), separate from backfillUserProfile's login/displayName — refetched
+// periodically since a streamer's declared language can change, unlike their
+// login. Lazy: only called where the value is actually needed (currently
+// just the admin funnel query), not on every login, to avoid spending Twitch
+// API calls on data nothing is reading yet.
+const LANGUAGE_REFRESH_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
+export async function ensureBroadcasterLanguage(userId) {
+  const uid = String(userId);
+  const existing = profiles.get(uid) || {};
+  const fetchedAt = existing.languageFetchedAt ? new Date(existing.languageFetchedAt).getTime() : 0;
+  if (existing.broadcasterLanguage && Date.now() - fetchedAt < LANGUAGE_REFRESH_MS) {
+    return existing.broadcasterLanguage;
+  }
+  const info = await fetchChannelInfo(uid).catch(() => null);
+  const language = info?.broadcasterLanguage || existing.broadcasterLanguage || null;
+  profiles.set(uid, { ...existing, broadcasterLanguage: language, languageFetchedAt: new Date().toISOString() });
+  persistUserProfiles().catch(() => {});
+  return language;
 }
 
 export function deleteUserProfile(userId) {

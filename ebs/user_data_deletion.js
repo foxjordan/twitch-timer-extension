@@ -1,4 +1,6 @@
-import { deleteUserProfile } from "./user_profiles.js";
+import { deleteUserProfile, getEventSubWebhookSubIds } from "./user_profiles.js";
+import { removeStreamStatusWebhookSubs } from "./eventsub_webhook.js";
+import { getAppAccessToken } from "./twitch_api.js";
 import { removeSubscription } from "./subscription_store.js";
 import { unbanUser } from "./bans.js";
 import { deleteAllSounds } from "./sounds_store.js";
@@ -29,49 +31,63 @@ export async function deleteAllUserData(userId, ctx = {}) {
   const uid = String(userId);
   const deleted = [];
 
-  // 1. User profile
+  // 1. EventSub webhook subscriptions (stream.online/offline) — must read
+  // these off the profile before deleteUserProfile below removes it. Avoids
+  // accumulating dead subscriptions against the app's subscription-count
+  // limits on Twitch's side; best-effort, doesn't block the rest of deletion.
+  const webhookSubIds = getEventSubWebhookSubIds(uid);
+  if (webhookSubIds.length > 0) {
+    try {
+      await removeStreamStatusWebhookSubs(webhookSubIds, { getAppAccessToken });
+      deleted.push("eventSubWebhookSubs");
+    } catch (err) {
+      logger.error("delete_eventsub_webhook_subs_failed", { userId: uid, message: err?.message });
+    }
+  }
+
+  // 2. User profile
   if (deleteUserProfile(uid)) deleted.push("profile");
 
-  // 2. Subscription record
+  // 3. Subscription record
   if (removeSubscription(uid)) deleted.push("subscription");
 
-  // 3. Ban record
+  // 4. Ban record
   if (unbanUser(uid)) deleted.push("ban");
 
-  // 4. Sound alerts + uploaded files on disk
+  // 5. Sound alerts + uploaded files on disk
   try {
     if (await deleteAllSounds(uid)) deleted.push("sounds");
   } catch (err) {
     logger.error("delete_sounds_failed", { userId: uid, error: err.message });
   }
 
-  // 5. TTS settings
+  // 6. TTS settings
   if (deleteTtsSettings(uid)) deleted.push("ttsSettings");
 
-  // 6. Goals
+  // 7. Goals
   if (deleteAllGoals(uid)) deleted.push("goals");
 
-  // 7. Timer rules
+  // 8. Timer rules
   if (deleteRules(uid)) deleted.push("rules");
 
-  // 8. Overlay styles
+  // 9. Overlay styles
   if (deleteStyle(uid)) deleted.push("styles");
 
-  // 9. Overlay keys
+  // 10. Overlay keys
   if (deleteUserKey(uid)) deleted.push("overlayKey");
 
-  // 10. Timer state
+  // 11. Timer state
   if (deleteTimerState(uid)) deleted.push("timerState");
 
-  // 11. Access tokens (in-memory only)
+  // 12. Access tokens (in-memory only)
   deleteUserAccessToken(uid);
   deleted.push("accessToken");
 
-  // 12. Event log entries (in-memory only)
+  // 13. Event log entries (in-memory only)
   clearLogEntries(uid);
   deleted.push("eventLog");
 
-  // 13. User settings (owned by server.js, passed via ctx)
+  // 14. User settings (owned by server.js, passed via ctx)
   if (ctx.userSettings) {
     const existed = ctx.userSettings.has(uid);
     ctx.userSettings.delete(uid);
@@ -81,7 +97,7 @@ export async function deleteAllUserData(userId, ctx = {}) {
     }
   }
 
-  // 14. Close active connections
+  // 15. Close active connections
   if (ctx.closeEventSubForUser) {
     try { ctx.closeEventSubForUser(uid); } catch {}
   }

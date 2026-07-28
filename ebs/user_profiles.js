@@ -31,6 +31,11 @@ export function setUserProfile(userId, login, displayName) {
   const uid = String(userId);
   const existing = profiles.get(uid);
   profiles.set(uid, {
+    // Preserve any other fields already stored on this profile (e.g.
+    // broadcasterLanguage, eventSubWebhookSubIds) — this used to only keep
+    // login/displayName/firstSeenAt, silently dropping everything else on
+    // the next login.
+    ...existing,
     login: login || existing?.login || null,
     displayName: displayName || login || existing?.displayName || null,
     // Set once, the first time we ever learn about this broadcaster — not a
@@ -87,6 +92,25 @@ export async function ensureBroadcasterLanguage(userId) {
   profiles.set(uid, { ...existing, broadcasterLanguage: language, languageFetchedAt: new Date().toISOString() });
   persistUserProfiles().catch(() => {});
   return language;
+}
+
+// Tracks EventSub webhook subscription ids (stream.online/stream.offline)
+// created for this broadcaster, so GDPR account deletion can explicitly
+// remove them from Twitch's side instead of leaving them to accumulate
+// against the app's subscription-count limits. ensureStreamStatusWebhookSubs
+// only returns ids for subscriptions it actually just created (empty on a
+// 409-already-exists), so this merges rather than replaces.
+export function addEventSubWebhookSubIds(userId, ids) {
+  if (!ids || ids.length === 0) return;
+  const uid = String(userId);
+  const existing = profiles.get(uid) || {};
+  const merged = Array.from(new Set([...(existing.eventSubWebhookSubIds || []), ...ids]));
+  profiles.set(uid, { ...existing, eventSubWebhookSubIds: merged });
+  persistUserProfiles().catch(() => {});
+}
+
+export function getEventSubWebhookSubIds(userId) {
+  return profiles.get(String(userId))?.eventSubWebhookSubIds || [];
 }
 
 export function deleteUserProfile(userId) {

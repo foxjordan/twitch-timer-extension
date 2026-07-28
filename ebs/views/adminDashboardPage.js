@@ -68,6 +68,7 @@ export function renderAdminDashboardPage(options = {}) {
       .badge-live { background: #eb0400; color: #fff; }
       .badge-online { background: #10b98133; color: #10b981; }
       .badge-offline { background: #94a3b833; color: #94a3b8; }
+      .badge-warning { background: #f59e0b33; color: #f59e0b; }
       .badge-paused { background: #f59e0b33; color: #f59e0b; }
       .badge-capped { background: #ef444433; color: #ef4444; }
       .badge-banned { background: #dc262633; color: #dc2626; }
@@ -666,8 +667,22 @@ export function renderAdminDashboardPage(options = {}) {
               tdStatus.appendChild(document.createTextNode(' '));
             }
             if (u.live) addBadge('LIVE' + (u.viewerCount != null ? ' \\u00b7 ' + u.viewerCount : ''), 'badge-live');
-            if (u.connected) addBadge('Connected', 'badge-online');
-            else addBadge('Not Connected', 'badge-offline');
+            // Go-live-triggered EventSub: most broadcasters being "not
+            // connected" while offline is the expected, common state now,
+            // not an error. Live-but-disconnected splits into two genuinely
+            // different cases: "Reconnecting" (has a token, should self-heal
+            // shortly — missed webhook, retry in flight) vs. "Bits Only, No
+            // Login" (no stored token at all — extension-JWT-only user who's
+            // never done a full dashboard login, so EventSub can never open
+            // no matter how long they stay live; Bits-triggered sound/TTS
+            // alerts still work fine either way, since those fire from the
+            // extension's own client-side transaction callback, not EventSub
+            // — only channel points/chat-command/follow/hype-train/sub
+            // alerts need the connection this badge is about).
+            if (u.live && u.connected) addBadge('Alerts Active', 'badge-online');
+            else if (u.live && !u.connected && u.hasToken) addBadge('Alerts Reconnecting', 'badge-warning');
+            else if (u.live && !u.connected && !u.hasToken) addBadge('Bits Only, No Login', 'badge-offline');
+            else addBadge('Offline', 'badge-offline');
             if (u.timerPaused) addBadge('Paused', 'badge-paused');
             if (u.capReached) addBadge('Capped', 'badge-capped');
             if (u.banned) addBadge('Banned', 'badge-banned');

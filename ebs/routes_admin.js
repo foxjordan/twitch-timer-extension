@@ -10,6 +10,7 @@ import { getTtsSettings, setTtsSettings, getGlobalTtsConfig, setGlobalTtsConfig 
 import { getBannerConfig, setBannerConfig } from "./banner_store.js";
 import { fetchLiveStreamStatus } from "./twitch_api.js";
 import { backfillUserProfile, ensureBroadcasterLanguage } from "./user_profiles.js";
+import { getUserAccessToken } from "./twitch_tokens.js";
 import { deleteAllUserData } from "./user_data_deletion.js";
 import { getVoices, isValidVoice } from "./tts_voices.js";
 import { synthesizeSpeech } from "./tts_provider.js";
@@ -198,6 +199,17 @@ export function mountAdminRoutes(app, ctx) {
         displayName: profile?.displayName || conn?.broadcasterLogin || profile?.login || null,
         firstSeenAt: profile?.firstSeenAt || null,
         connected: conn?.ws?.readyState === 1,
+        // Distinguishes "should reconnect shortly" from "structurally can't
+        // connect at all" — go-live-triggered EventSub needs a stored OAuth
+        // token (only obtained via a full dashboard login) to open the WS.
+        // A broadcaster who only ever used the Twitch extension's own config
+        // panel (extension-JWT-only, no dashboard login) has no such token —
+        // that's not a transient failure, it never resolves without a real
+        // login, regardless of how long they stay live. This gap predates
+        // go-live-triggered EventSub (startEventSubForUser was always gated
+        // on a dashboard login); it's just newly visible now that the admin
+        // badge distinguishes "offline" from "live but not connected".
+        hasToken: Boolean(getUserAccessToken(uid)),
         live: Boolean(live),
         viewerCount: live?.viewerCount ?? null,
         lastEventAt: conn?.lastEventAt || null,

@@ -1,7 +1,7 @@
 import { logger } from './logger.js';
 
 export function mountOverlayApiRoutes(app, ctx) {
-  const { requireOverlayAuth, normKey, getSavedStyle, setSavedStyle, getOrCreateUserKey, rotateUserKey, getUserSettings, setUserSettings, sseClients, getRules, setRules, setMaxTotalSeconds, resolveTimerUserId, onRulesSaved } = ctx;
+  const { requireOverlayAuth, normKey, getSavedStyle, setSavedStyle, getOrCreateUserKey, rotateUserKey, getUserSettings, setUserSettings, sseClients, getRules, setRules, setMaxTotalSeconds, resolveTimerUserId, onRulesSaved, broadcasterConnections, startEventSubForUser, pauseEventSubForUser } = ctx;
 
   // Resolve the broadcaster ID that this user is managing
   // This ensures rules are saved/loaded for the correct broadcaster
@@ -124,6 +124,44 @@ export function mountOverlayApiRoutes(app, ctx) {
       res.json(saved);
     } catch (e) {
       res.status(400).json({ error: 'Invalid rules payload' });
+    }
+  });
+
+  // Pre-stream check: confirms (and opens, if needed) the broadcaster's own
+  // EventSub connection without requiring them to actually be live — go-live
+  // -triggered EventSub normally only opens this on a real stream.online
+  // webhook, so offline testing needs an explicit opt-in path. Auto-pauses
+  // after 10 minutes if a real stream never starts, via the same
+  // pauseEventSubForUser used for the stream.offline webhook. Does not touch
+  // timer state at all — purely connection lifecycle.
+  app.post('/api/eventsub/verify-connection', async (req, res) => {
+    const userId = req.session?.twitchUser?.id;
+    if (!userId) return res.status(401).json({ error: 'Login required' });
+    const uid = String(userId);
+    try {
+      let connection = broadcasterConnections.get(uid);
+      const alreadyOpen = connection?.ws?.readyState === 1;
+      if (!alreadyOpen) {
+        await startEventSubForUser(uid);
+        connection = broadcasterConnections.get(uid);
+        if (connection) {
+          if (connection.manualTestTimer) clearTimeout(connection.manualTestTimer);
+          connection.manualTestTimer = setTimeout(() => {
+            // Only pause if this is still just the manual test — a real
+            // stream.online arriving in the meantime already cleared this
+            // timer (see handleBroadcasterWentLive).
+            if (broadcasterConnections.has(uid)) pauseEventSubForUser(uid);
+          }, 10 * 60 * 1000);
+        }
+      }
+      res.json({
+        ok: true,
+        eventSubConnected: broadcasterConnections.get(uid)?.ws?.readyState === 1,
+        wasAlreadyOpen: alreadyOpen,
+      });
+    } catch (e) {
+      logger.error('eventsub_verify_connection_failed', { userId: uid, message: e?.message });
+      res.status(500).json({ error: 'Failed to verify connection' });
     }
   });
 }

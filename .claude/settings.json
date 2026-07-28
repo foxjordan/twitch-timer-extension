@@ -41,7 +41,11 @@
       "Bash(kill -9 63648)",
       "Bash(node /tmp/mock_server.mjs)",
       "Bash(pkill -f \"node /tmp/mock_server.mjs\")",
-      "Bash(pkill -f \"node /tmp/mock_admin.mjs\")"
+      "Bash(pkill -f \"node /tmp/mock_admin.mjs\")",
+      "Bash(node --check /tmp/verify_overlay.js)",
+      "Bash(node --check /tmp/verify_admin.js)",
+      "Bash(cd /Users/jordanfox/Documents/twitch-timer-extension/ebs && grep -n \"onTransactionComplete\\\\|useBits\\\\|onAuthorized\" ../extension/src/App.jsx | head -20)",
+      "Read(//Users/jordanfox/Documents/extension/src/**)"
     ],
     "additionalDirectories": [
       "/tmp"

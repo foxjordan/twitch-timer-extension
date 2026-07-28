@@ -12,7 +12,7 @@ const DISPLAY_NAME_TTL = 5 * 60 * 1000;
 let appToken = null;
 let appTokenExpiresAt = 0;
 
-async function getAppAccessToken() {
+export async function getAppAccessToken() {
   const clientId = process.env.TWITCH_CLIENT_ID;
   const clientSecret = process.env.TWITCH_CLIENT_SECRET;
   if (!clientId || !clientSecret) return null;

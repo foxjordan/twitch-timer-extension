@@ -276,6 +276,10 @@ export function renderOverlayConfigPage(options = {}) {
               <button class="secondary" id="restartTimer">Restart Timer</button>
               <button class="secondary" id="saveDefault">Save Starting Time</button>
             </div>
+            <div class="control" style="margin-top:12px;">
+              <button class="secondary" id="verifyConnectionBtn" title="Confirm your Twitch connection and overlay are both active — doesn't affect the timer">Verify Connection</button>
+              <span id="verifyConnectionStatus" class="hint" style="margin-left:8px;"></span>
+            </div>
             <div class="timer-addons">
               <button class="secondary" data-add="300">+5 min</button>
               <button class="secondary" data-add="600">+10 min</button>
@@ -958,6 +962,31 @@ export function renderOverlayConfigPage(options = {}) {
         // Timer controls
         document.getElementById('startTimer').addEventListener('click', async function(e){ e.preventDefault(); const btn=e.currentTarget; flashButton(btn); setBusy(btn,true); await startTimer({ source: 'panel_start_button', label: 'Start Timer' }); await updateCapStatus(); setBusy(btn,false); });
         document.getElementById('saveDefault').addEventListener('click', async function(e){ e.preventDefault(); const btn=e.currentTarget; flashButton(btn); setBusy(btn,true); await saveDefaultInitial(); await updateCapStatus(); setBusy(btn,false); });
+        var verifyConnectionBtn = document.getElementById('verifyConnectionBtn');
+        var verifyConnectionStatusEl = document.getElementById('verifyConnectionStatus');
+        if (verifyConnectionBtn) {
+          verifyConnectionBtn.addEventListener('click', async function(e) {
+            e.preventDefault();
+            flashButton(verifyConnectionBtn);
+            setBusy(verifyConnectionBtn, true);
+            if (verifyConnectionStatusEl) verifyConnectionStatusEl.textContent = 'Checking…';
+            try {
+              var results = await Promise.all([
+                fetch('/api/eventsub/verify-connection', { method: 'POST' }).then(function(r){ return r.json(); }).catch(function(){ return { ok: false }; }),
+                fetch('/api/overlay/status').then(function(r){ return r.json(); }).catch(function(){ return { connected: false }; }),
+              ]);
+              var eventSubResult = results[0], overlayResult = results[1];
+              var twitchText = eventSubResult && eventSubResult.eventSubConnected ? '✅ Twitch connected' : '⚠️ Twitch not connected';
+              var overlayText = overlayResult && overlayResult.connected
+                ? '✅ Overlay connected (' + overlayResult.clients + ')'
+                : '⚠️ Overlay not detected — check your Browser Source URL in OBS';
+              if (verifyConnectionStatusEl) verifyConnectionStatusEl.textContent = twitchText + ' · ' + overlayText;
+            } catch (err) {
+              if (verifyConnectionStatusEl) verifyConnectionStatusEl.textContent = 'Check failed — try again';
+            }
+            setBusy(verifyConnectionBtn, false);
+          });
+        }
         const clearMaxBtn = document.getElementById('clearMax');
         if (clearMaxBtn) {
           clearMaxBtn.addEventListener('click', async function(e){

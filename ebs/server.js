@@ -8,7 +8,7 @@ import { v4 as uuidv4 } from "uuid";
 import { RULES } from "./rules.js";
 import { connectEventSubWS } from "./eventsub-ws.js";
 import { broadcastToChannel, sendExtensionChatMessage, sendBroadcasterChatMessage } from "./broadcast.js";
-import { fetchUserDisplayName } from "./twitch_api.js";
+import { fetchUserDisplayName, fetchLiveStreamStatus, getAppAccessToken } from "./twitch_api.js";
 import fetch from "node-fetch";
 import crypto from "crypto";
 import path from "path";
@@ -47,7 +47,7 @@ import {
   getUserIdForKey,
   getAllUserIds,
 } from "./keys.js";
-import { loadUserProfiles, getUserProfile, setUserProfile } from "./user_profiles.js";
+import { loadUserProfiles, getUserProfile, setUserProfile, addEventSubWebhookSubIds } from "./user_profiles.js";
 import { loadBannerConfig } from "./banner_store.js";
 import { mountTimerRoutes } from "./routes_timer.js";
 import { mountAuthRoutes } from "./routes_auth.js";
@@ -83,6 +83,7 @@ import { loadSoundAlerts, listSounds, getSoundSettings, setSoundSettings, getSou
 import { loadBans, isBanned } from "./bans.js";
 import { loadSubscriptions } from "./subscription_store.js";
 import { mountStripeWebhookRoute, mountStripeRoutes } from "./routes_stripe.js";
+import { mountEventSubWebhookRoute, ensureStreamStatusWebhookSubs, removeStreamStatusWebhookSubs } from "./eventsub_webhook.js";
 import { mountTtsRoutes, registerAudioFile } from "./routes_tts.js";
 import { synthesizeSpeech } from "./tts_provider.js";
 import { loadTtsSettings, getTtsSettings } from "./tts_store.js";
@@ -101,8 +102,13 @@ import {
 const app = express();
 // honor X-Forwarded-* so req.protocol resolves to https behind Fly
 app.set("trust proxy", 1);
-// Stripe webhook needs raw body — must be before express.json()
+// Stripe and EventSub webhooks both need the raw body — must be before express.json()
 mountStripeWebhookRoute(app);
+mountEventSubWebhookRoute(app, {
+  onStreamOnline: (broadcasterId) => handleBroadcasterWentLive(broadcasterId),
+  onStreamOffline: (broadcasterId) => handleBroadcasterWentOffline(broadcasterId),
+  seen: state.seen,
+});
 app.use(express.json());
 app.use(
   requestLogger({
@@ -419,12 +425,33 @@ setInterval(() => {
 }, 60 * 1000);
 
 // Basic health endpoint
-app.get("/healthz", (_req, res) => {
+// Go-live-triggered EventSub means eventSubActiveConnections is now normally
+// LOW (only live broadcasters), not an implicit health signal on its own —
+// pairing it with how many broadcasters Twitch says are actually live turns
+// "5 active connections" from ambiguous into "5 active, 5 live: healthy" vs.
+// "0 active, 3 live: broken". Cached with a short TTL rather than a fresh
+// Helix call on every hit, since Fly's own health-check polling interval is
+// tighter than this would ever meaningfully change.
+let healthzLiveCache = { count: null, expiresAt: 0 };
+async function getCachedLiveBroadcasterCount() {
+  if (Date.now() < healthzLiveCache.expiresAt) return healthzLiveCache.count;
+  try {
+    const liveMap = await fetchLiveStreamStatus(Array.from(broadcasterConnections.keys()));
+    healthzLiveCache = { count: liveMap.size, expiresAt: Date.now() + 15_000 };
+  } catch {
+    // Keep serving the last known value on a transient Helix failure rather
+    // than flipping to a misleading "0 live" reading.
+  }
+  return healthzLiveCache.count;
+}
+
+app.get("/healthz", async (_req, res) => {
   // Check if ANY EventSub connections are active
   const activeConnections = Array.from(broadcasterConnections.entries()).filter(
     ([_, conn]) => conn.ws && typeof conn.ws.readyState === "number" && conn.ws.readyState === 1
   );
   const eventSubReady = activeConnections.length > 0;
+  const liveBroadcasterCount = await getCachedLiveBroadcasterCount();
 
   res.json({
     ok: true,
@@ -433,6 +460,9 @@ app.get("/healthz", (_req, res) => {
     sseClients: sseClients.size,
     eventSubConnected: eventSubReady,
     eventSubActiveConnections: activeConnections.length,
+    // null (not 0) on a fetch failure — avoids a false "everyone's offline" alarm
+    liveBroadcasterCount,
+    eventSubHealthy: liveBroadcasterCount == null ? null : activeConnections.length >= liveBroadcasterCount,
     observability,
   });
 });
@@ -869,9 +899,23 @@ mountAuthRoutes(app, {
         connection.broadcasterToken = accessToken;
       }
 
-      // Start EventSub connection for THIS user only (doesn't affect others)
+      // Go-live-triggered: don't open the expensive per-broadcaster WS just
+      // because someone logged into the dashboard — most logged-in
+      // broadcasters aren't live at any given moment, so that WS would be
+      // pure standing cost. Instead, register cheap webhook subscriptions
+      // (app-token-authenticated, no connection needed) for stream.online/
+      // stream.offline, and only open the WS now if they're already live.
+      // handleBroadcasterWentLive (via the webhook) opens it later for free
+      // whenever they actually go live.
       if (accessToken && process.env.TWITCH_CLIENT_ID) {
-        startEventSubForUser(userId);
+        ensureStreamStatusWebhookSubs(userId, { getAppAccessToken })
+          .then((ids) => addEventSubWebhookSubIds(userId, ids))
+          .catch((e) => logger.error("eventsub_webhook_sub_setup_failed", { userId, message: e?.message }));
+        fetchLiveStreamStatus([userId])
+          .then((liveMap) => {
+            if (liveMap.has(String(userId))) startEventSubForUser(userId);
+          })
+          .catch((e) => logger.error("eventsub_login_live_check_failed", { userId, message: e?.message }));
       }
 
       // Auto-reconnect StreamElements if user has a stored JWT token
@@ -965,6 +1009,10 @@ function reconnectForChatCommandsIfNeeded(broadcasterId) {
     if (conn.broadcasterId === String(broadcasterId)) { ownerUserId = uid; connection = conn; break; }
   }
   if (!ownerUserId || !connection) return;
+  // Offline (no open WS) — nothing to reconcile now. The next real
+  // stream.online reads rules fresh at connect time (eventsub-ws.js), so a
+  // rules save while offline doesn't need to spuriously wake the connection.
+  if (!connection.ws || connection.ws.readyState !== 1) return;
 
   const wantsChatMessage = Boolean(getRules(broadcasterId)?.chatCommand?.enabled);
   if (Boolean(connection.chatMessageSubscribed) === wantsChatMessage) return; // already correct
@@ -996,6 +1044,76 @@ function closeEventSubForUser(userId) {
   logger.info("eventsub_closed", { userId });
 }
 
+// Closes the WS for a broadcaster who just went offline, but — unlike
+// closeEventSubForUser — keeps the broadcasterConnections record (and its
+// stored token reference) so the next stream.online webhook can reopen it
+// cheaply, without a fresh dashboard login. Also clears any in-flight manual
+// "Verify Connection" auto-pause timer, since we're pausing right now anyway.
+function pauseEventSubForUser(userId) {
+  const connection = broadcasterConnections.get(String(userId));
+  if (!connection) return;
+
+  if (connection.ws && typeof connection.ws.close === "function") {
+    try {
+      connection.ws.close();
+    } catch {}
+  }
+  connection.ws = null;
+
+  if (connection.reconnectTimer) {
+    clearTimeout(connection.reconnectTimer);
+    connection.reconnectTimer = null;
+  }
+  if (connection.manualTestTimer) {
+    clearTimeout(connection.manualTestTimer);
+    connection.manualTestTimer = null;
+  }
+  connection.reconnectAttempts = 0;
+
+  logger.info("eventsub_paused_stream_offline", { userId });
+}
+
+// Webhook stream.online handler — opens the real per-broadcaster WS on
+// demand. May fire for a broadcaster with no in-memory connection record yet
+// (e.g. process restarted since they last logged in, but their webhook
+// subscription — which lives on Twitch's side — survived) by rebuilding a
+// minimal record from their stored token.
+function handleBroadcasterWentLive(broadcasterId) {
+  const userId = String(broadcasterId);
+  if (!broadcasterConnections.has(userId)) {
+    const token = getUserAccessToken(userId);
+    if (!token) {
+      logger.warn("eventsub_webhook_stream_online_no_token", { userId });
+      return;
+    }
+    const profile = getUserProfile(userId);
+    broadcasterConnections.set(userId, {
+      broadcasterId: userId,
+      broadcasterLogin: profile?.login || "unknown",
+      broadcasterToken: token,
+      ws: null,
+      reconnectTimer: null,
+      lastEventAt: null,
+      lastWsMessageAt: null,
+    });
+  }
+  const connection = broadcasterConnections.get(userId);
+  // A real stream starting supersedes any manual "Verify Connection" test —
+  // don't let its 10-minute auto-pause timer close a genuinely live stream.
+  if (connection.manualTestTimer) {
+    clearTimeout(connection.manualTestTimer);
+    connection.manualTestTimer = null;
+  }
+  logger.info("eventsub_webhook_stream_online", { userId });
+  startEventSubForUser(userId);
+}
+
+function handleBroadcasterWentOffline(broadcasterId) {
+  const userId = String(broadcasterId);
+  logger.info("eventsub_webhook_stream_offline", { userId });
+  pauseEventSubForUser(userId);
+}
+
 // Mount overlay API routes (style, keys, user settings)
 mountOverlayApiRoutes(app, {
   requireOverlayAuth,
@@ -1012,6 +1130,9 @@ mountOverlayApiRoutes(app, {
   setMaxTotalSeconds,
   resolveTimerUserId: resolveTimerUserIdFromRequest,
   onRulesSaved: reconnectForChatCommandsIfNeeded,
+  broadcasterConnections,
+  startEventSubForUser,
+  pauseEventSubForUser,
 });
 
 mountGoalRoutes(app, {
@@ -2086,28 +2207,32 @@ setInterval(() => {
   }
 }, EVENTSUB_WATCHDOG_INTERVAL_MS);
 
-// Idle-disconnect sweep: a broadcaster who hasn't gone live (or triggered
-// any EventSub activity at all) in IDLE_DISCONNECT_THRESHOLD_MS gets their
-// WebSocket + subscriptions torn down entirely, rather than staying open
-// indefinitely for a channel that isn't streaming. closeEventSubForUser
-// already removes the connection record before the WS's own async 'close'
-// fires, so the AUTO-RECONNECT handler sees no connection and correctly
-// does not schedule a reconnect. It comes back automatically and cheaply
-// next time this broadcaster logs into the dashboard (onAdminLogin always
-// calls startEventSubForUser unconditionally) — there's no separate "wake
-// up" path to maintain.
+// Idle-disconnect sweep: now a BACKSTOP, not the primary offline-cleanup
+// path — under go-live-triggered EventSub, a broadcaster's WS is expected to
+// close within seconds of the real stream.offline webhook firing
+// (handleBroadcasterWentOffline). This sweep only matters when that webhook
+// gets missed or fails delivery (network blip, Twitch-side issue) and a
+// connection is left open with no activity. Uses pauseEventSubForUser (not
+// closeEventSubForUser) — the connection record and stored token reference
+// are kept so a future stream.online webhook (or the next login) can reopen
+// it cheaply, rather than fully tearing down as if they'd logged out.
+// 12h (not a much shorter window) specifically to tolerate long
+// boosted/subathon streams that can run overnight with little to no bits/
+// subs/points/follow/chat activity — a genuinely live-but-quiet broadcaster
+// must not get force-paused mid-stream.
 const IDLE_DISCONNECT_SWEEP_INTERVAL_MS = 30 * 60 * 1000; // every 30 min
-const IDLE_DISCONNECT_THRESHOLD_MS = 48 * 60 * 60 * 1000; // 48h of silence
+const IDLE_DISCONNECT_THRESHOLD_MS = 12 * 60 * 60 * 1000; // 12h of silence
 setInterval(() => {
   const now = Date.now();
   for (const [userId, conn] of broadcasterConnections) {
     if (userId === ENV_BROADCASTER_ID) continue; // always-on, not tied to a real login
+    if (!conn.ws || conn.ws.readyState !== 1) continue; // already offline — nothing to sweep
     const lastActivity = conn.lastEventAt ? new Date(conn.lastEventAt).getTime() : conn.connectedAt;
     if (!lastActivity) continue; // still connecting, hasn't had a chance yet
     const idleMs = now - lastActivity;
     if (idleMs > IDLE_DISCONNECT_THRESHOLD_MS) {
-      logger.info("eventsub_idle_disconnect", { userId, idleMs });
-      closeEventSubForUser(userId);
+      logger.warn("eventsub_idle_disconnect_backstop", { userId, idleMs });
+      pauseEventSubForUser(userId);
     }
   }
 }, IDLE_DISCONNECT_SWEEP_INTERVAL_MS);
@@ -2236,14 +2361,28 @@ if (ENV_BROADCASTER_ID && ENV_BROADCASTER_TOKEN) {
 
 // Restore EventSub connections for users whose tokens survived the restart.
 // Runs after a short delay to let loadTokens() and loadUserProfiles() finish.
+// Go-live-triggered: batch-check who's actually live BEFORE opening any WS,
+// rather than unconditionally reopening one per token holder — on a restart
+// with dozens of registered broadcasters, most aren't live at that moment,
+// so this is where a full restart used to pay for every connection at once.
+// Everyone still gets their webhook subs re-registered (idempotent — 409s if
+// still active from before the restart, since those live on Twitch's side
+// and outlive our process) so they're ready to receive the go-live webhook
+// regardless of whether we open their WS immediately.
 setTimeout(async () => {
-  const tokenUserIds = getAllTokenUserIds();
-  for (const uid of tokenUserIds) {
-    // Skip env broadcaster (already handled above) and banned users
-    if (uid === ENV_BROADCASTER_ID) continue;
-    if (isBanned(uid)) continue;
-    if (broadcasterConnections.has(uid)) continue;
+  const tokenUserIds = getAllTokenUserIds().filter(
+    (uid) => uid !== ENV_BROADCASTER_ID && !isBanned(uid) && !broadcasterConnections.has(uid)
+  );
+  if (tokenUserIds.length === 0) return;
 
+  let liveMap = new Map();
+  try {
+    liveMap = await fetchLiveStreamStatus(tokenUserIds);
+  } catch (e) {
+    logger.error("boot_live_check_failed", { message: e?.message });
+  }
+
+  for (const uid of tokenUserIds) {
     let token = getUserAccessToken(uid);
     // If token is expired, try to refresh it
     if (!token) {
@@ -2265,8 +2404,17 @@ setTimeout(async () => {
       lastEventAt: null,
       lastWsMessageAt: null,
     });
-    startEventSubForUser(uid);
-    logger.info("eventsub_restored_from_token", { userId: uid, login: profile?.login });
+
+    ensureStreamStatusWebhookSubs(uid, { getAppAccessToken })
+      .then((ids) => addEventSubWebhookSubIds(uid, ids))
+      .catch((e) => logger.error("eventsub_webhook_sub_setup_failed", { userId: uid, message: e?.message }));
+
+    if (liveMap.has(String(uid))) {
+      startEventSubForUser(uid);
+      logger.info("eventsub_restored_live_on_boot", { userId: uid, login: profile?.login });
+    } else {
+      logger.info("eventsub_webhook_registered_offline_on_boot", { userId: uid, login: profile?.login });
+    }
 
     // Also restore StreamElements connection if user has a stored token
     try {

@@ -577,7 +577,7 @@ export function mountAdminRoutes(app, ctx) {
         completed AS (
           SELECT DISTINCT channel_id
           FROM client_events
-          WHERE event_name IN ('sound_uploaded', 'clip_created', 'video_uploaded')
+          WHERE event_name IN ('sound_uploaded', 'clip_created', 'video_uploaded', 'sound_added_from_library')
         )
         SELECT loaded.channel_id,
                (completed.channel_id IS NOT NULL) AS did_complete

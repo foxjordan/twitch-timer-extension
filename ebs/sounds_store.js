@@ -1,11 +1,10 @@
 import { readFile, mkdir, unlink, stat, copyFile, rm } from "fs/promises";
-import { existsSync } from "fs";
 import path from "path";
-import { fileURLToPath } from "url";
 import crypto from "crypto";
 import { VALID_TIERS, DEFAULT_TIER } from "./tiers.js";
 import { getUserProfile } from "./user_profiles.js";
 import { atomicWriteFile } from "./atomic_write.js";
+import { r2Enabled, copyR2Object, r2SoundKey } from "./r2.js";
 
 const DATA_DIR = process.env.DATA_DIR || process.cwd();
 export const SOUNDS_PATH = path.resolve(DATA_DIR, "overlay-sound-alerts.json");
@@ -440,50 +439,61 @@ export async function ensureSoundDir(uid) {
 
 // ===== Default Sound Seeding =====
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const DEFAULT_SOUNDS_DIR = path.resolve(__dirname, "default-sounds");
+const SEED_COUNT = 4;
 
-const DEFAULT_SOUNDS = [
-  { file: "applause.mp3", name: "Applause" },
-  { file: "booo.mp3", name: "Booo" },
-  { file: "monsterRoar.mp3", name: "Monster Roar" },
-  { file: "scream.mp3", name: "Scream" },
-];
+// Guards seedDefaultSounds against concurrent callers for the same uid.
+// It's hit unconditionally on every /api/sounds, /api/admin/sounds/:userId,
+// and /api/sounds/public (extension viewer panel) request — for a brand new
+// broadcaster with zero sounds, two of those landing close together (e.g.
+// several viewers' extension panels loading at once right after a streamer
+// installs it) would both pass the `size > 0` check before either finished
+// writing, each seeding a full duplicate set. Keyed by uid so unrelated
+// users never wait on each other.
+const seedingInProgress = new Map();
 
 /**
- * Seed default sounds for a new broadcaster.
- * Only runs when the user has zero sounds — idempotent after first call.
+ * Seed default sounds for a new broadcaster by copying a random selection
+ * from the curated Official Library (via copySoundToUser, so it's R2-aware
+ * and gets moderation/provenance for free) — only runs when the user has
+ * zero sounds — idempotent after first call, and safe under concurrent
+ * calls for the same uid (see seedingInProgress).
  */
 export async function seedDefaultSounds(uid) {
   if (uid === OFFICIAL_LIBRARY_UID) return; // curated separately, never auto-seeded
+  const key = String(uid);
+  const inFlight = seedingInProgress.get(key);
+  if (inFlight) return inFlight;
+
+  const promise = seedDefaultSoundsInternal(key).finally(() => {
+    seedingInProgress.delete(key);
+  });
+  seedingInProgress.set(key, promise);
+  return promise;
+}
+
+async function seedDefaultSoundsInternal(uid) {
   const user = ensureUser(uid);
   if (user.sounds.size > 0) return; // already has sounds, skip
 
-  const dir = await ensureSoundDir(uid);
-  for (const def of DEFAULT_SOUNDS) {
-    const src = path.join(DEFAULT_SOUNDS_DIR, def.file);
-    if (!existsSync(src)) continue;
+  const officialSounds = listSounds(OFFICIAL_LIBRARY_UID).filter((s) => s.type === "sound");
+  if (officialSounds.length === 0) return; // nothing curated to seed from
 
-    const soundId = `snd_${crypto.randomUUID().slice(0, 12)}`;
-    const filename = `${soundId}.mp3`;
-    const dest = path.join(dir, filename);
-
+  const picks = pickRandom(officialSounds, Math.min(SEED_COUNT, officialSounds.length));
+  for (const sound of picks) {
     try {
-      await copyFile(src, dest);
-      const fileStat = await stat(dest);
-      createSound(uid, {
-        id: soundId,
-        name: def.name,
-        filename,
-        originalFilename: def.file,
-        mimeType: "audio/mpeg",
-        sizeBytes: fileStat.size,
-        tier: DEFAULT_TIER,
-        volume: 80,
-        enabled: true,
-      });
+      await copySoundToUser(OFFICIAL_LIBRARY_UID, sound.id, uid);
     } catch {}
   }
+}
+
+// Fisher-Yates partial shuffle — picks `count` distinct random items from arr.
+function pickRandom(arr, count) {
+  const pool = arr.slice();
+  for (let i = pool.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [pool[i], pool[j]] = [pool[j], pool[i]];
+  }
+  return pool.slice(0, count);
 }
 
 // ===== Public API (for viewers) =====
@@ -590,7 +600,7 @@ export function getSoundLineage(ownerUserId, soundId) {
   return pairs;
 }
 
-export async function copySoundToUser(sourceUid, sourceSoundId, destUid, { fileCopyFn } = {}) {
+export async function copySoundToUser(sourceUid, sourceSoundId, destUid, { fileCopyFn, customName } = {}) {
   const sourceUser = soundAlertsByUser.get(String(sourceUid));
   if (!sourceUser) return { error: "Source user not found" };
   const sourceSound = sourceUser.sounds.get(String(sourceSoundId));
@@ -612,9 +622,23 @@ export async function copySoundToUser(sourceUid, sourceSoundId, destUid, { fileC
   const destDir = await ensureSoundDir(destUid);
   const destPath = path.resolve(destDir, newFilename);
 
+  // Default to an R2-aware copy when the caller doesn't supply one — a prior
+  // version of this function always fell back to a local-disk copyFile in
+  // that case, which silently produced broken (never-uploaded) audio for
+  // every caller that forgot to pass an R2 fileCopyFn once R2 was enabled in
+  // production (seedDefaultSounds was exactly that caller — see its own
+  // comment). Making the default itself storage-aware means a future caller
+  // can't reintroduce the same bug by omission.
+  const effectiveFileCopyFn = fileCopyFn || (r2Enabled
+    ? async (srcFilename, destFilename) => {
+        await copyR2Object(r2SoundKey(String(sourceUid), srcFilename), r2SoundKey(String(destUid), destFilename));
+        return { size: sourceSound.sizeBytes || 0 };
+      }
+    : undefined);
+
   let fileStat;
-  if (fileCopyFn) {
-    fileStat = await fileCopyFn(sourceSound.filename, newFilename);
+  if (effectiveFileCopyFn) {
+    fileStat = await effectiveFileCopyFn(sourceSound.filename, newFilename);
   } else {
     try {
       await copyFile(srcPath, destPath);
@@ -625,10 +649,16 @@ export async function copySoundToUser(sourceUid, sourceSoundId, destUid, { fileC
     }
   }
 
+  // Let the caller rename their copy on the way in — this only touches the
+  // new row's name, never the shared library original, so it can't affect
+  // what other broadcasters see (getSharedLibrary dedupes by sourceSoundId,
+  // not by name).
+  const trimmedCustomName = typeof customName === "string" ? customName.trim() : "";
+
   const newSound = normalizeSound({
     id: newSoundId,
     type: sourceSound.type,
-    name: sourceSound.name,
+    name: trimmedCustomName || sourceSound.name,
     filename: newFilename,
     originalFilename: sourceSound.originalFilename,
     mimeType: sourceSound.mimeType,

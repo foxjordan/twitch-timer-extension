@@ -45,7 +45,9 @@
       "Bash(node --check /tmp/verify_overlay.js)",
       "Bash(node --check /tmp/verify_admin.js)",
       "Bash(cd /Users/jordanfox/Documents/twitch-timer-extension/ebs && grep -n \"onTransactionComplete\\\\|useBits\\\\|onAuthorized\" ../extension/src/App.jsx | head -20)",
-      "Read(//Users/jordanfox/Documents/extension/src/**)"
+      "Read(//Users/jordanfox/Documents/extension/src/**)",
+      "Bash(awk 'NR>=1649 && NR<=1760 && \\(/info\\\\.\\(after|appendChild|insertAdjacent\\)/ || /card\\\\.appendChild\\\\\\(form\\\\\\)/ || /form\\\\.appendChild/ || /^\\\\s*}$/\\)' ebs/views/soundConfigPage.js)",
+      "Bash(fly apps *)"
     ],
     "additionalDirectories": [
       "/tmp"

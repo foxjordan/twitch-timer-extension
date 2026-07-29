@@ -80,6 +80,12 @@ export function renderSoundConfigPage(options = {}) {
       .library-card-owner { font-size: 11px; color: var(--text-muted); text-align: center; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; width: 100%; margin-bottom: 6px; }
       .library-card-actions { display: flex; gap: 4px; width: 100%; }
       .library-card-actions button { flex: 1; font-size: 11px; padding: 4px 6px; }
+      .library-filter-toggle { position: relative; }
+      .library-filter-count { display: inline-block; background: var(--accent-color); color: #fff; border-radius: 10px; font-size: 10px; padding: 1px 6px; margin-left: 6px; }
+      .library-filter-panel { display: none; flex-wrap: wrap; gap: 6px 14px; padding: 10px 12px; margin-bottom: 10px; border-radius: 8px; background: var(--surface-muted, #1a1a1e); border: 1px solid var(--surface-border, #303038); }
+      .library-filter-panel.open { display: flex; }
+      .library-tag-item { display: flex; align-items: center; gap: 5px; font-size: 12px; }
+      .library-tag-item input { margin: 0; }
       .row2 { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
       input[type="text"], input[type="number"], select {
         box-sizing: border-box;
@@ -351,7 +357,9 @@ export function renderSoundConfigPage(options = {}) {
               <option value="popular">Most Popular</option>
               <option value="trending">Trending (7d)</option>
             </select>
+            <button type="button" id="libraryFilterToggle" class="secondary library-filter-toggle">Filters<span id="libraryFilterCount" class="library-filter-count" style="display:none;"></span></button>
           </div>
+          <div id="libraryFilterPanel" class="library-filter-panel"></div>
           <div id="libraryList" class="library-grid">
             <div class="hint" style="grid-column: 1 / -1;">Loading library...</div>
           </div>
@@ -658,6 +666,20 @@ export function renderSoundConfigPage(options = {}) {
           if (card) card.scrollIntoView({ behavior: 'smooth', block: 'center' });
         }
 
+        // Same as revealNewSound, but for "Add & Trim" from the library —
+        // also opens the editor with the trim panel already expanded so
+        // trimming reads as one step from the picker instead of two.
+        async function revealNewSoundForTrim(soundId) {
+          await fetchSoundsAdmin();
+          switchSection('alerts');
+          history.replaceState(null, '', '#alerts');
+          var card = soundListEl ? soundListEl.querySelector('[data-sound-id="' + soundId + '"]') : null;
+          if (!card) return;
+          var s = soundsCache.find(function(x) { return x.id === soundId; });
+          if (!s) return;
+          openSoundEditor(s, card, true);
+        }
+
         function renderSoundList(sounds) {
           if (!soundListEl) return;
           soundListEl.textContent = '';
@@ -845,6 +867,10 @@ export function renderSoundConfigPage(options = {}) {
         var libraryAudio = null;
         var libraryAudioUrl = null;
         var librarySounds = [];
+        // Tags checked in the filter panel — persists across re-fetches
+        // (sort changes, adding a sound) so the facet selection doesn't
+        // reset out from under someone mid-browse.
+        var selectedTags = new Set();
 
         async function fetchLibrary() {
           try {
@@ -852,6 +878,7 @@ export function renderSoundConfigPage(options = {}) {
             var r = await fetch(API_BASE + '/library?sort=' + encodeURIComponent(sort), { cache: 'no-store' });
             var data = await r.json();
             librarySounds = data.sounds || [];
+            renderTagFacets();
             applyLibraryFilter();
           } catch (e) {
             var el = document.getElementById('libraryList');
@@ -867,13 +894,73 @@ export function renderSoundConfigPage(options = {}) {
         function applyLibraryFilter() {
           var searchInput = document.getElementById('librarySearch');
           var q = searchInput ? searchInput.value.trim().toLowerCase() : '';
-          if (!q) { renderLibraryList(librarySounds); return; }
           var filtered = librarySounds.filter(function(s) {
-            return (s.name || '').toLowerCase().indexOf(q) !== -1 ||
+            var matchesSearch = !q ||
+                   (s.name || '').toLowerCase().indexOf(q) !== -1 ||
                    (s.ownerDisplayName || '').toLowerCase().indexOf(q) !== -1 ||
                    (s.tags || []).some(function(t) { return t.toLowerCase().indexOf(q) !== -1; });
+            if (!matchesSearch) return false;
+            if (selectedTags.size === 0) return true;
+            // Matches ANY checked tag (not all) — narrowing to sounds with
+            // every checked tag would empty-result too easily since sounds
+            // only carry up to 5 free-text tags each.
+            return (s.tags || []).some(function(t) { return selectedTags.has((t || '').toLowerCase()); });
           });
           renderLibraryList(filtered);
+        }
+
+        // Faceted tag filter panel — built from whatever tags actually
+        // appear in the currently loaded library (tags are free-text, no
+        // fixed taxonomy), so it only ever offers choices with real results.
+        function renderTagFacets() {
+          var panel = document.getElementById('libraryFilterPanel');
+          if (!panel) return;
+          var counts = {};
+          librarySounds.forEach(function(s) {
+            (s.tags || []).forEach(function(t) {
+              var tag = (t || '').toLowerCase().trim();
+              if (!tag) return;
+              counts[tag] = (counts[tag] || 0) + 1;
+            });
+          });
+          var tags = Object.keys(counts).sort(function(a, b) { return counts[b] - counts[a] || a.localeCompare(b); });
+          // Drop selections for tags that no longer appear in this fetch.
+          Array.from(selectedTags).forEach(function(t) { if (!counts[t]) selectedTags.delete(t); });
+          panel.textContent = '';
+          if (!tags.length) {
+            var hint = document.createElement('div');
+            hint.className = 'hint';
+            hint.textContent = 'No tags yet.';
+            panel.appendChild(hint);
+          } else {
+            tags.forEach(function(tag) {
+              var label = document.createElement('label');
+              label.className = 'library-tag-item';
+              var cb = document.createElement('input');
+              cb.type = 'checkbox';
+              cb.checked = selectedTags.has(tag);
+              cb.addEventListener('change', function() {
+                if (cb.checked) selectedTags.add(tag); else selectedTags.delete(tag);
+                updateLibraryFilterBadge();
+                applyLibraryFilter();
+              });
+              label.appendChild(cb);
+              label.appendChild(document.createTextNode(tag + ' (' + counts[tag] + ')'));
+              panel.appendChild(label);
+            });
+          }
+          updateLibraryFilterBadge();
+        }
+
+        function updateLibraryFilterBadge() {
+          var badge = document.getElementById('libraryFilterCount');
+          if (!badge) return;
+          if (selectedTags.size > 0) {
+            badge.textContent = String(selectedTags.size);
+            badge.style.display = 'inline-block';
+          } else {
+            badge.style.display = 'none';
+          }
         }
 
         // Search/filter
@@ -884,6 +971,13 @@ export function renderSoundConfigPage(options = {}) {
             searchInput.addEventListener('input', function() {
               clearTimeout(debounceTimer);
               debounceTimer = setTimeout(applyLibraryFilter, 200);
+            });
+          }
+          var filterToggle = document.getElementById('libraryFilterToggle');
+          var filterPanel = document.getElementById('libraryFilterPanel');
+          if (filterToggle && filterPanel) {
+            filterToggle.addEventListener('click', function() {
+              filterPanel.classList.toggle('open');
             });
           }
         })();
@@ -976,45 +1070,104 @@ export function renderSoundConfigPage(options = {}) {
               card.appendChild(tagsDiv);
             }
 
-            // Add button
+            // Add / Add & Trim — addArea is its own sub-container so it can
+            // be wiped and re-rendered (rename step <-> buttons <-> "Added")
+            // without disturbing the admin Delete button appended to
+            // actions below.
             var actions = document.createElement('div');
             actions.className = 'library-card-actions';
-            var addBtn = document.createElement('button');
-            if (s.owned) {
-              addBtn.className = 'secondary';
-              addBtn.textContent = 'Added';
-              addBtn.disabled = true;
-              addBtn.style.opacity = '0.5';
-            } else {
-              addBtn.textContent = 'Add';
+            var addArea = document.createElement('div');
+            addArea.style.cssText = 'display:flex; gap:6px; flex-wrap:wrap; align-items:center;';
+            actions.appendChild(addArea);
+
+            function renderAdded() {
+              addArea.textContent = '';
+              var addedBtn = document.createElement('button');
+              addedBtn.className = 'secondary';
+              addedBtn.textContent = 'Added';
+              addedBtn.disabled = true;
+              addedBtn.style.opacity = '0.5';
+              addArea.appendChild(addedBtn);
             }
-            addBtn.addEventListener('click', async function() {
-              if (s.owned) return;
-              flashButton(addBtn);
-              setBusy(addBtn, true);
-              try {
-                var r = await fetch(API_BASE + '/library/add', {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({ ownerUserId: s.ownerUserId, soundId: s.id })
-                });
-                if (!r.ok) {
-                  var body = await r.json().catch(function() { return {}; });
-                  throw new Error(body.error || 'Failed to add');
+
+            function renderAddButtons() {
+              addArea.textContent = '';
+              var addBtn = document.createElement('button');
+              addBtn.textContent = 'Add';
+              var addTrimBtn = document.createElement('button');
+              addTrimBtn.className = 'secondary';
+              addTrimBtn.textContent = 'Add & Trim';
+              addTrimBtn.style.cssText = 'font-size:12px;';
+              addBtn.addEventListener('click', function() { renderRenameStep(false); });
+              addTrimBtn.addEventListener('click', function() { renderRenameStep(true); });
+              addArea.appendChild(addBtn);
+              addArea.appendChild(addTrimBtn);
+            }
+
+            // Shared inline rename step for both Add and Add & Trim — lets a
+            // streamer rename their copy before it's created rather than
+            // having to find it again afterward in their own sound list.
+            // Only touches the new copy's own name field (sounds_store.js
+            // copySoundToUser), never the shared library original.
+            function renderRenameStep(openTrimAfter) {
+              addArea.textContent = '';
+              var nameInput = document.createElement('input');
+              nameInput.type = 'text';
+              nameInput.value = s.name;
+              nameInput.maxLength = 100;
+              nameInput.style.cssText = 'width:140px; font-size:12px; padding:3px 6px;';
+
+              var confirmBtn = document.createElement('button');
+              confirmBtn.textContent = openTrimAfter ? 'Add & Trim' : 'Add';
+              confirmBtn.style.cssText = 'font-size:12px; padding:3px 8px;';
+
+              var cancelBtn = document.createElement('button');
+              cancelBtn.className = 'secondary';
+              cancelBtn.textContent = 'Cancel';
+              cancelBtn.style.cssText = 'font-size:12px; padding:3px 8px;';
+              cancelBtn.addEventListener('click', renderAddButtons);
+
+              confirmBtn.addEventListener('click', async function() {
+                flashButton(confirmBtn);
+                setBusy(confirmBtn, true);
+                try {
+                  var r = await fetch(API_BASE + '/library/add', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ ownerUserId: s.ownerUserId, soundId: s.id, name: nameInput.value })
+                  });
+                  var data = await r.json().catch(function() { return {}; });
+                  if (!r.ok) throw new Error(data.error || 'Failed to add');
+                  s.owned = true;
+                  renderAdded();
+                  // Counts toward the setup funnel's "created an alert" step
+                  // alongside sound_uploaded/clip_created/video_uploaded —
+                  // someone who only ever adds from the library, never
+                  // uploads their own file, should still read as having
+                  // completed setup.
+                  logDashboardEvent('sound_added_from_library', { openTrimAfter: openTrimAfter });
+                  if (openTrimAfter && data.sound && data.sound.id) {
+                    await revealNewSoundForTrim(data.sound.id);
+                  } else {
+                    await fetchSoundsAdmin();
+                  }
+                } catch (err) {
+                  addArea.textContent = '';
+                  var errBtn = document.createElement('button');
+                  errBtn.className = 'secondary';
+                  errBtn.textContent = err.message || 'Error';
+                  addArea.appendChild(errBtn);
+                  setTimeout(renderAddButtons, 2000);
                 }
-                s.owned = true;
-                addBtn.className = 'secondary';
-                addBtn.textContent = 'Added';
-                addBtn.style.opacity = '0.5';
-                addBtn.disabled = true;
-                await fetchSoundsAdmin();
-              } catch (err) {
-                addBtn.textContent = err.message || 'Error';
-                setTimeout(function() { addBtn.textContent = 'Add'; }, 2000);
-              }
-              setBusy(addBtn, false);
-            });
-            actions.appendChild(addBtn);
+                setBusy(confirmBtn, false);
+              });
+
+              addArea.appendChild(nameInput);
+              addArea.appendChild(confirmBtn);
+              addArea.appendChild(cancelBtn);
+            }
+
+            if (s.owned) renderAdded(); else renderAddButtons();
             if (IS_SUPER_ADMIN) {
               var delBtn = document.createElement('button');
               delBtn.className = 'secondary';
@@ -1226,7 +1379,7 @@ export function renderSoundConfigPage(options = {}) {
           return { btn: btn, panel: panel };
         }
 
-        function openSoundEditor(s, card) {
+        function openSoundEditor(s, card, autoOpenTrim) {
           var info = card.querySelector('.sound-info');
           if (!info) return;
           var existing = card.querySelector('.sound-edit-form');
@@ -1704,6 +1857,14 @@ export function renderSoundConfigPage(options = {}) {
 
           form.appendChild(btnRow);
           info.appendChild(form);
+
+          // Used by the "Add & Trim" library flow to land the streamer
+          // straight in the trim panel instead of making them find and
+          // click "Trim Audio" themselves right after adding.
+          if (autoOpenTrim) {
+            trimToggle.click();
+            form.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          }
         }
 
         async function updateSoundAdmin(soundId, patch) {

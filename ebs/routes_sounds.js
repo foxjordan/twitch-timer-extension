@@ -930,21 +930,14 @@ export function mountSoundRoutes(app, deps = {}) {
   app.post("/api/sounds/library/add", async (req, res) => {
     const uid = requireBroadcaster(req, res);
     if (!uid) return;
-    const { ownerUserId, soundId } = req.body || {};
+    const { ownerUserId, soundId, name } = req.body || {};
     if (!ownerUserId || !soundId) {
       return res.status(400).json({ error: "ownerUserId and soundId are required" });
     }
     try {
-      const fileCopyFn = r2Enabled
-        ? async (srcFilename, destFilename) => {
-            const srcKey = r2SoundKey(String(ownerUserId), srcFilename);
-            const destKey = r2SoundKey(String(uid), destFilename);
-            await copyR2Object(srcKey, destKey);
-            const src = getSound(String(ownerUserId), soundId);
-            return { size: src?.sizeBytes || 0 };
-          }
-        : undefined;
-      const result = await copySoundToUser(ownerUserId, soundId, uid, { fileCopyFn });
+      // copySoundToUser defaults to an R2-aware copy itself now — no need
+      // to build a fileCopyFn here.
+      const result = await copySoundToUser(ownerUserId, soundId, uid, { customName: name });
       if (result.error) return res.status(400).json(result);
       logger.info("library_sound_added", { userId: uid, sourceUserId: ownerUserId, sourceSoundId: soundId, newSoundId: result.id });
       res.status(201).json({ sound: result });

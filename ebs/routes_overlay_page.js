@@ -3,6 +3,7 @@ import { renderOverlayConfigPage } from "./views/overlayConfigPage.js";
 import { renderGoalsConfigPage } from "./views/goalsConfigPage.js";
 import { renderGoalsOverlayPage } from "./views/goalsOverlayPage.js";
 import { renderWheelOverlayPage } from "./views/wheelOverlayPage.js";
+import { renderPromptOverlayPage } from "./views/promptOverlayPage.js";
 import { renderSoundAlertOverlayPage } from "./views/soundAlertOverlayPage.js";
 import { renderSoundConfigPage } from "./views/soundConfigPage.js";
 import { isSuperAdmin } from "./routes_admin.js";
@@ -47,6 +48,16 @@ export function mountOverlayPageRoutes(app, deps) {
   app.get("/overlay/wheel", (req, res) => {
     if (!requireOverlayAuth(req, res)) return;
     const html = renderWheelOverlayPage();
+    res.setHeader("Content-Type", "text/html; charset=utf-8");
+    res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+    res.setHeader("Pragma", "no-cache");
+    res.setHeader("Expires", "0");
+    res.send(html);
+  });
+
+  app.get("/overlay/prompt", (req, res) => {
+    if (!requireOverlayAuth(req, res)) return;
+    const html = renderPromptOverlayPage();
     res.setHeader("Content-Type", "text/html; charset=utf-8");
     res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
     res.setHeader("Pragma", "no-cache");
@@ -160,6 +171,11 @@ ${channels.length === 0 ? '<p style="color:#adadb8;font-size:13px;">No one has a
       isSuperAdmin: superAdmin,
       delegateMode: isManagingOther,
       managedByName: isManagingOther ? (req.session.managingAsName || req.session.managingAs) : null,
+      // Arriving via the extension's own "Manage on Livestreamer Hub" link
+      // (?ref=extension) is itself proof they already have the extension
+      // installed — showing an "Install Extension" promo at that point is
+      // just noise on top of their live preview.
+      cameFromExtension: req.query.ref === "extension",
     });
     res.setHeader("Content-Type", "text/html; charset=utf-8");
     res.send(html);

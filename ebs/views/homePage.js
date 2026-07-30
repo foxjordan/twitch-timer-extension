@@ -30,17 +30,17 @@ export function renderHomePage(options = {}) {
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Livestreamer Hub – Free Tools & Overlays for Twitch Streamers</title>
-    <meta name="description" content="Free tools and overlays for Twitch streamers — countdown timers, sound &amp; video bit alerts, spinning wheels, stream goals, and more." />
+    <title>Livestreamer Hub – Free Subathon & Countdown Timer for Twitch</title>
+    <meta name="description" content="Free subathon &amp; countdown timer for Twitch, with live Bit Alerts, goal bars, spinning wheels, and OBS-ready overlays. Reliable, easy to set up, and free." />
     <link rel="canonical" href="https://livestreamerhub.com/" />
-    <meta property="og:title" content="Livestreamer Hub – Free Tools & Overlays for Twitch Streamers" />
-    <meta property="og:description" content="Free tools and overlays for Twitch streamers — timers, sound alerts, spinning wheels, and more." />
+    <meta property="og:title" content="Livestreamer Hub – Free Subathon & Countdown Timer for Twitch" />
+    <meta property="og:description" content="Free subathon &amp; countdown timer for Twitch, with live Bit Alerts, goal bars, spinning wheels, and OBS-ready overlays." />
     <meta property="og:image" content="https://livestreamerhub.com/assets/link_preview.png" />
     <meta property="og:url" content="https://livestreamerhub.com" />
     <meta property="og:type" content="website" />
     <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:title" content="Livestreamer Hub – Free Tools & Overlays for Twitch Streamers" />
-    <meta name="twitter:description" content="Free tools and overlays for Twitch streamers — timers, sound alerts, spinning wheels, and more." />
+    <meta name="twitter:title" content="Livestreamer Hub – Free Subathon & Countdown Timer for Twitch" />
+    <meta name="twitter:description" content="Free subathon &amp; countdown timer for Twitch, with live Bit Alerts, goal bars, spinning wheels, and OBS-ready overlays." />
     <meta name="twitter:image" content="https://livestreamerhub.com/assets/link_preview.png" />
     <link rel="icon" type="image/png" href="/assets/convertico-coin_24x24.png">
     <script type="application/ld+json">
@@ -49,7 +49,7 @@ export function renderHomePage(options = {}) {
       "@type": "WebApplication",
       "name": "Livestreamer Hub",
       "url": "https://livestreamerhub.com",
-      "description": "Free tools and overlays for Twitch streamers — countdown timers, sound and video bit alerts, spinning wheels, stream goals, and more.",
+      "description": "Free subathon and countdown timer for Twitch, with live Bit Alerts, goal bars, spinning wheels, and OBS-ready overlays.",
       "applicationCategory": "Multimedia",
       "operatingSystem": "Web",
       "offers": {

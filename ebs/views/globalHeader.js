@@ -192,8 +192,11 @@ export function renderGlobalHeader(options = {}) {
   const adminHref = `${base}/admin`;
   const manageHref = `${base}/manage`;
 
+  const dashboardHref = `${base}/dashboard`;
+
   const navLinks = [
     { href: homeHref, label: "Home", key: "home" },
+    { href: dashboardHref, label: "Dashboard", key: "dashboard" },
     { href: configHref, label: "Countdown", key: "config" },
     { href: soundsHref, label: "Sound Alerts", key: "sounds" },
     { href: `${base}/goals/config`, label: "Goals", key: "goals" },

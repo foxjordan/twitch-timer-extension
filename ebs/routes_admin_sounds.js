@@ -19,7 +19,6 @@ import { serveFileFromStorage, proxyImageFromStorage, attachThumbnailFromUrl } f
 import { fetchChannelEmotes } from "./twitch_api.js";
 import { fetchSevenTvChannelEmotes, fetchSevenTvGlobalEmotes } from "./seventv_api.js";
 import { searchKlipyGifs } from "./klipy_api.js";
-import { r2Enabled, r2SoundKey, copyR2Object } from "./r2.js";
 import {
   listSounds,
   getSound,
@@ -631,16 +630,9 @@ export function mountAdminSoundRoutes(app, ctx = {}) {
       return res.status(400).json({ error: "ownerUserId and soundId are required" });
     }
     try {
-      const fileCopyFn = r2Enabled
-        ? async (srcFilename, destFilename) => {
-            const srcKey = r2SoundKey(String(ownerUserId), srcFilename);
-            const destKey = r2SoundKey(String(uid), destFilename);
-            await copyR2Object(srcKey, destKey);
-            const src = getSound(String(ownerUserId), soundId);
-            return { size: src?.sizeBytes || 0 };
-          }
-        : undefined;
-      const result = await copySoundToUser(ownerUserId, soundId, uid, { fileCopyFn });
+      // copySoundToUser defaults to an R2-aware copy itself now — no need
+      // to build a fileCopyFn here.
+      const result = await copySoundToUser(ownerUserId, soundId, uid);
       if (result.error) return res.status(400).json(result);
       logger.info("admin_library_sound_added", { admin: req.session.twitchUser.id, userId: uid, sourceUserId: ownerUserId, sourceSoundId: soundId, newSoundId: result.id });
       res.status(201).json({ sound: result });

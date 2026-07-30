@@ -264,6 +264,7 @@ setInterval(() => {
   }
 }, SSE_HEARTBEAT_MS);
 const lastWheelSpinByKey = new Map();
+const lastPromptByKey = new Map();
 const DEFAULT_WHEEL_OPTIONS = [
   { label: "Heads", color: "#9146FF" },
   { label: "Tails", color: "#F97316" },
@@ -696,6 +697,32 @@ app.post("/api/wheel/spin", (req, res) => {
   res.json(payload);
 });
 
+// Prompt Engine — manually-triggered conversation prompts for a Browser
+// Source overlay, same broadcast/late-join-cache shape as the wheel above.
+// An empty text clears the overlay (used by the "Hide" button).
+app.post("/api/prompt/show", (req, res) => {
+  if (!req?.session?.isAdmin)
+    return res.status(401).json({ error: "Admin login required" });
+  const overlayKey = normKey(
+    req.body?.overlayKey || req.query.key || req.session?.userOverlayKey || ""
+  );
+  if (!overlayKey)
+    return res.status(400).json({ error: "Overlay key is required" });
+  const text = String(req.body?.text || "").slice(0, 280).trim();
+  const payload = { text, shownAt: new Date().toISOString() };
+  lastPromptByKey.set(overlayKey, payload);
+  for (const client of Array.from(sseClients)) {
+    if (!client || client.key !== overlayKey) continue;
+    try {
+      client.res.write("event: prompt_show\n");
+      client.res.write(`data: ${JSON.stringify(payload)}\n\n`);
+    } catch (e) {
+      sseClients.delete(client);
+    }
+  }
+  res.json(payload);
+});
+
 // moved to routes_overlay_api.js
 
 // Timer pause/resume (admin only)
@@ -851,6 +878,12 @@ app.get("/api/overlay/stream", (req, res) => {
   if (lastWheel) {
     res.write("event: wheel_spin\n");
     res.write(`data: ${JSON.stringify(lastWheel)}\n\n`);
+  }
+
+  const lastPrompt = lastPromptByKey.get(key);
+  if (lastPrompt) {
+    res.write("event: prompt_show\n");
+    res.write(`data: ${JSON.stringify(lastPrompt)}\n\n`);
   }
 
   req.on("close", () => {

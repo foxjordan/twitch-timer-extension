@@ -618,9 +618,7 @@ export async function copySoundToUser(sourceUid, sourceSoundId, destUid, { fileC
   const ext = path.extname(sourceSound.filename) || ".mp3";
   const newFilename = `${newSoundId}${ext}`;
 
-  const srcPath = path.resolve(SOUNDS_FILE_DIR, String(sourceUid), sourceSound.filename);
   const destDir = await ensureSoundDir(destUid);
-  const destPath = path.resolve(destDir, newFilename);
 
   // Default to an R2-aware copy when the caller doesn't supply one — a prior
   // version of this function always fell back to a local-disk copyFile in
@@ -628,24 +626,41 @@ export async function copySoundToUser(sourceUid, sourceSoundId, destUid, { fileC
   // every caller that forgot to pass an R2 fileCopyFn once R2 was enabled in
   // production (seedDefaultSounds was exactly that caller — see its own
   // comment). Making the default itself storage-aware means a future caller
-  // can't reintroduce the same bug by omission.
+  // can't reintroduce the same bug by omission. Also reused below for the
+  // thumbnail copy — it's just "copy this filename from source to dest,"
+  // agnostic to what the file actually is.
   const effectiveFileCopyFn = fileCopyFn || (r2Enabled
     ? async (srcFilename, destFilename) => {
         await copyR2Object(r2SoundKey(String(sourceUid), srcFilename), r2SoundKey(String(destUid), destFilename));
         return { size: sourceSound.sizeBytes || 0 };
       }
-    : undefined);
+    : async (srcFilename, destFilename) => {
+        const srcPath = path.resolve(SOUNDS_FILE_DIR, String(sourceUid), srcFilename);
+        const destPath = path.resolve(destDir, destFilename);
+        await copyFile(srcPath, destPath);
+        return stat(destPath);
+      });
 
   let fileStat;
-  if (effectiveFileCopyFn) {
+  try {
     fileStat = await effectiveFileCopyFn(sourceSound.filename, newFilename);
-  } else {
+  } catch (err) {
+    try { await unlink(path.resolve(destDir, newFilename)); } catch {}
+    throw err;
+  }
+
+  // Copy the thumbnail too, so the streamer's copy looks like the library
+  // entry they picked by default — they can still change or remove it
+  // afterward in the sound editor. Best-effort: a failed thumbnail copy
+  // shouldn't block adding the sound itself.
+  let newImageFilename = "";
+  if (sourceSound.imageFilename) {
     try {
-      await copyFile(srcPath, destPath);
-      fileStat = await stat(destPath);
-    } catch (err) {
-      try { await unlink(destPath); } catch {}
-      throw err;
+      const imgExt = path.extname(sourceSound.imageFilename) || ".png";
+      newImageFilename = `${newSoundId}_img${imgExt}`;
+      await effectiveFileCopyFn(sourceSound.imageFilename, newImageFilename);
+    } catch {
+      newImageFilename = "";
     }
   }
 
@@ -663,7 +678,7 @@ export async function copySoundToUser(sourceUid, sourceSoundId, destUid, { fileC
     originalFilename: sourceSound.originalFilename,
     mimeType: sourceSound.mimeType,
     sizeBytes: fileStat.size,
-    imageFilename: "", // not copied — streamer uploads their own
+    imageFilename: newImageFilename,
     tier: DEFAULT_TIER,
     enabled: true,
     volume: sourceSound.volume,

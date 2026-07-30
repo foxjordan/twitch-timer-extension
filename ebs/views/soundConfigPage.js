@@ -21,6 +21,7 @@ export function renderSoundConfigPage(options = {}) {
   const managedUserName = String(options.managedUserName || "");
   const delegateMode = Boolean(options.delegateMode);
   const managedByName = String(options.managedByName || "");
+  const cameFromExtension = Boolean(options.cameFromExtension);
   const termsUrl = `${base}/terms`;
   const privacyUrl = `${base}/privacy`;
   const gdprUrl = `${base}/gdpr`;
@@ -143,6 +144,19 @@ export function renderSoundConfigPage(options = {}) {
         font-size: 12px;
         line-height: 1.4;
       }
+      .ext-promo-dismiss {
+        position: absolute;
+        top: 6px;
+        right: 8px;
+        background: transparent;
+        border: 0;
+        color: var(--text-muted);
+        font-size: 16px;
+        line-height: 1;
+        cursor: pointer;
+        padding: 4px;
+      }
+      .ext-promo-dismiss:hover { color: var(--text-color); }
       .ext-promo-title {
         font-weight: 700;
         font-size: 13px;
@@ -209,7 +223,8 @@ export function renderSoundConfigPage(options = {}) {
     })}
 
     <!-- Floating extension promo -->
-    <aside class="ext-promo">
+    <aside class="ext-promo" id="extPromo">
+      <button class="ext-promo-dismiss" id="extPromoDismiss" type="button" aria-label="Dismiss">&times;</button>
       <div class="ext-promo-title">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#9146ff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
         Twitch Extension
@@ -518,6 +533,34 @@ export function renderSoundConfigPage(options = {}) {
         var TTS_API_BASE = ${JSON.stringify(ttsApiBase)};
         var IS_ADMIN_MODE = ${JSON.stringify(isAdminMode)};
         var IS_SUPER_ADMIN = ${JSON.stringify(isSuperAdmin)};
+        var CAME_FROM_EXTENSION = ${JSON.stringify(cameFromExtension)};
+
+        // Extension install promo — dismissible, and never shown again once
+        // dismissed or once we know for a fact they already have the
+        // extension (they arrived via its own "Manage on Livestreamer Hub"
+        // link, which only exists inside the extension's config panel).
+        (function() {
+          var EXT_PROMO_DISMISSED_KEY = 'lsh_ext_promo_dismissed';
+          var promo = document.getElementById('extPromo');
+          if (!promo) return;
+          var dismissBtn = document.getElementById('extPromoDismiss');
+          var dismissed = false;
+          try { dismissed = localStorage.getItem(EXT_PROMO_DISMISSED_KEY) === '1'; } catch (e) {}
+
+          if (CAME_FROM_EXTENSION) {
+            try { localStorage.setItem(EXT_PROMO_DISMISSED_KEY, '1'); } catch (e) {}
+            dismissed = true;
+          }
+
+          if (dismissed) {
+            promo.style.display = 'none';
+          } else if (dismissBtn) {
+            dismissBtn.addEventListener('click', function() {
+              promo.style.display = 'none';
+              try { localStorage.setItem(EXT_PROMO_DISMISSED_KEY, '1'); } catch (e) {}
+            });
+          }
+        })();
 
         function setBusy(btn, busy) { if (!btn) return; btn.disabled = !!busy; }
         function flashButton(btn) { if (!btn) return; btn.classList.add('btn-click'); setTimeout(function() { btn.classList.remove('btn-click'); }, 160); }
@@ -3193,6 +3236,15 @@ export function renderSoundConfigPage(options = {}) {
             }
           }
         ];
+
+        // Drop any step whose target is missing or hidden (e.g. the
+        // extension promo once dismissed or known-unnecessary) rather than
+        // letting driver.js try to highlight nothing.
+        tourSteps = tourSteps.filter(function(step) {
+          var el = document.querySelector(step.element);
+          if (!el) return false;
+          return window.getComputedStyle(el).display !== 'none';
+        });
 
         function startTour() {
           var driverObj = window.driver.js.driver({

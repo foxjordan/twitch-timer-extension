@@ -13,6 +13,9 @@ export function renderUtilitiesPage(options = {}) {
   const wheelOverlayBase = String(
     options.wheelOverlayBase || `${base}/overlay/wheel`
   );
+  const promptOverlayBase = String(
+    options.promptOverlayBase || `${base}/overlay/prompt`
+  );
   const privacyUrl = `${base}/privacy`;
   const gdprUrl = `${base}/gdpr`;
   const termsUrl = `${base}/terms`;
@@ -106,6 +109,16 @@ export function renderUtilitiesPage(options = {}) {
       .wheel-share button { align-self: flex-start; background: var(--secondary-button-bg); color: var(--secondary-button-text); border: 1px solid var(--secondary-button-border); border-radius: 10px; padding: 8px 14px; cursor: pointer; font-weight: 600; }
       .add-wheel-btn { align-self: flex-start; background: var(--secondary-button-bg); color: var(--secondary-button-text); border: 1px solid var(--secondary-button-border); border-radius: 10px; padding: 10px 18px; cursor: pointer; font-weight: 600; font-size: 14px; }
       .add-wheel-btn:hover { border-color: var(--accent-color); color: var(--accent-color); }
+      .prompt-card { background: var(--surface-color); border: 1px solid var(--surface-border); border-radius: 16px; padding: 20px; box-shadow: 0 20px 40px rgba(15,23,42,0.12); display:flex; flex-direction: column; gap: 14px; max-width: 640px; }
+      .prompt-current { font-size: 16px; font-weight: 600; min-height: 24px; }
+      .prompt-current .prompt-empty { color: var(--text-muted); font-weight: 400; }
+      .prompt-controls { display:flex; gap: 10px; flex-wrap: wrap; }
+      .prompt-controls button.secondary { background: var(--secondary-button-bg); color: var(--secondary-button-text); border: 1px solid var(--secondary-button-border); }
+      .prompt-list-label { font-size: 13px; letter-spacing:.04em; text-transform: uppercase; color: var(--text-muted); }
+      .prompt-textarea { width: 100%; min-height: 220px; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--input-border); background: var(--input-bg); color: var(--text-color); font-family: inherit; font-size: 14px; line-height: 1.6; resize: vertical; box-sizing: border-box; }
+      .prompt-hint { font-size: 12px; color: var(--text-muted); }
+      .prompt-share { display:flex; flex-wrap: wrap; gap: 8px; align-items: center; font-size: 13px; color: var(--text-muted); }
+      .prompt-share button { align-self: flex-start; background: var(--secondary-button-bg); color: var(--secondary-button-text); border: 1px solid var(--secondary-button-border); border-radius: 10px; padding: 8px 14px; cursor: pointer; font-weight: 600; }
       .secondary-tools { margin-top: 8px; }
       .secondary-tools h2 { margin: 0 0 12px; font-size: 18px; color: var(--text-muted); }
       .global-footer { margin-top: 24px; padding-top: 18px; border-top: 1px solid var(--surface-border); display:flex; flex-wrap: wrap; gap: 12px; justify-content: center; font-size: 14px; color: var(--text-muted); }
@@ -130,6 +143,7 @@ export function renderUtilitiesPage(options = {}) {
       <nav class="sidebar">
         <div class="sidebar-nav">
           <button class="sidebar-nav-item active" data-section="wheels">Wheels</button>
+          <button class="sidebar-nav-item" data-section="prompts">Prompts</button>
           <button class="sidebar-nav-item" data-section="quick-tools">Quick Tools</button>
         </div>
       </nav>
@@ -141,6 +155,32 @@ export function renderUtilitiesPage(options = {}) {
       <div class="wheels-section">
         <div id="wheelsContainer"></div>
         <button id="addWheelBtn" class="add-wheel-btn" type="button">+ Add wheel</button>
+      </div>
+      </div>
+
+      <div class="section-page" data-section="prompts">
+      <div class="wheels-section">
+        <h2>Chat prompt engine</h2>
+        <p class="lead" style="margin-bottom:0;">Keep a bank of conversation starters and push one to your overlay any time chat goes quiet.</p>
+        <div class="prompt-card">
+          <div>
+            <div class="prompt-list-label">Now showing</div>
+            <div class="prompt-current" id="promptCurrent"><span class="prompt-empty">Nothing shown yet</span></div>
+          </div>
+          <div class="prompt-controls">
+            <button id="promptShowBtn" type="button">Show random prompt</button>
+            <button id="promptHideBtn" type="button" class="secondary">Hide</button>
+          </div>
+          <div>
+            <div class="prompt-list-label">Prompt bank (one per line)</div>
+            <textarea id="promptTextarea" class="prompt-textarea" spellcheck="false"></textarea>
+            <div class="prompt-hint">Saved automatically in this browser. Won&rsquo;t repeat the same prompt twice in a row.</div>
+          </div>
+          <div class="prompt-share">
+            <button id="promptCopyBtn" type="button">Copy Browser Source link</button>
+            <span id="promptCopyStatus"></span>
+          </div>
+        </div>
       </div>
       </div>
 
@@ -204,8 +244,19 @@ export function renderUtilitiesPage(options = {}) {
         document.querySelectorAll('.sidebar-nav-item').forEach(function(btn) {
           btn.addEventListener('click', function() {
             switchSection(btn.getAttribute('data-section'));
+            history.replaceState(null, '', '#' + btn.getAttribute('data-section'));
           });
         });
+        (function() {
+          var requested = String(window.location.hash || '').replace('#', '');
+          var validSections = Array.prototype.map.call(
+            document.querySelectorAll('.sidebar-nav-item'),
+            function(el) { return el.getAttribute('data-section'); }
+          );
+          if (requested && validSections.indexOf(requested) !== -1) {
+            switchSection(requested);
+          }
+        })();
 
         var wheelOverlayBase = ${JSON.stringify(wheelOverlayBase)};
         var overlayShareKey = ${JSON.stringify(overlayKey)};
@@ -817,6 +868,116 @@ export function renderUtilitiesPage(options = {}) {
             wheelInstances.push(createWheelInstance(cfg));
             updateDeleteButtons();
             saveAllWheels();
+          });
+        }
+
+        /* ---- Chat Prompt Engine ---- */
+        var promptOverlayBase = ${JSON.stringify(promptOverlayBase)};
+        var PROMPTS_STORAGE_KEY = 'lsh_prompts';
+        var DEFAULT_PROMPTS = [
+          "What's the best game you've played this year?",
+          "If you could instantly master one skill, what would it be?",
+          "What's a hot take you have about this game?",
+          "What's the last thing that made you laugh?",
+          "Coffee, tea, or energy drink — what's fueling you right now?",
+          "What's a hobby you'd get into if money wasn't a factor?",
+          "What's the weirdest food combo you actually enjoy?",
+          "If you could add one feature to this game, what would it be?",
+          "What's a movie or show you could rewatch forever?",
+          "What's something small that made your day better recently?",
+          "Cats or dogs? Defend your answer.",
+          "What's a game you're embarrassed to admit you love?",
+        ];
+
+        var promptTextarea = document.getElementById('promptTextarea');
+        var promptShowBtn = document.getElementById('promptShowBtn');
+        var promptHideBtn = document.getElementById('promptHideBtn');
+        var promptCurrent = document.getElementById('promptCurrent');
+        var promptCopyBtn = document.getElementById('promptCopyBtn');
+        var promptCopyStatus = document.getElementById('promptCopyStatus');
+        var lastShownPrompt = '';
+        var promptLineSplitRegex = new RegExp('\\r?\\n+');
+
+        function loadPromptList() {
+          try {
+            var raw = localStorage.getItem(PROMPTS_STORAGE_KEY);
+            if (raw) {
+              var parsed = JSON.parse(raw);
+              if (Array.isArray(parsed) && parsed.length) return parsed;
+            }
+          } catch (e) {}
+          return DEFAULT_PROMPTS.slice();
+        }
+
+        function savePromptList(list) {
+          try { localStorage.setItem(PROMPTS_STORAGE_KEY, JSON.stringify(list)); } catch (e) {}
+        }
+
+        function getPromptListFromTextarea() {
+          return promptTextarea.value.split(promptLineSplitRegex).map(function(line) { return line.trim(); }).filter(Boolean);
+        }
+
+        if (promptTextarea) {
+          promptTextarea.value = loadPromptList().join('\\n');
+          promptTextarea.addEventListener('input', function() {
+            savePromptList(getPromptListFromTextarea());
+          });
+        }
+
+        function setPromptCurrentDisplay(text) {
+          if (!promptCurrent) return;
+          if (text) {
+            promptCurrent.textContent = text;
+          } else {
+            promptCurrent.innerHTML = '<span class="prompt-empty">Nothing shown yet</span>';
+          }
+        }
+
+        function postPrompt(text) {
+          if (!overlayShareKey) { if (promptCopyStatus) promptCopyStatus.textContent = 'Set an overlay key first.'; return; }
+          fetch('/api/prompt/show', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ overlayKey: overlayShareKey, text: text }),
+          }).then(function(resp) {
+            if (!resp.ok) throw new Error('Request failed');
+            return resp.json();
+          }).then(function() {
+            setPromptCurrentDisplay(text);
+            if (text) lastShownPrompt = text;
+          }).catch(function() {
+            if (promptCurrent) promptCurrent.textContent = 'Failed to update overlay';
+          });
+        }
+
+        if (promptShowBtn) {
+          promptShowBtn.addEventListener('click', function() {
+            var list = getPromptListFromTextarea();
+            if (!list.length) { setPromptCurrentDisplay(''); return; }
+            var candidates = list.length > 1 ? list.filter(function(p) { return p !== lastShownPrompt; }) : list;
+            var pick = candidates[Math.floor(Math.random() * candidates.length)];
+            postPrompt(pick);
+          });
+        }
+
+        if (promptHideBtn) {
+          promptHideBtn.addEventListener('click', function() {
+            postPrompt('');
+          });
+        }
+
+        if (promptCopyBtn) {
+          promptCopyBtn.addEventListener('click', function() {
+            if (!overlayShareKey) { promptCopyStatus.textContent = 'Set an overlay key first.'; return; }
+            var params = new URLSearchParams();
+            params.set('key', overlayShareKey);
+            var shareUrl = promptOverlayBase + '?' + params.toString();
+            navigator.clipboard.writeText(shareUrl).then(function() {
+              promptCopyStatus.textContent = 'Copied!';
+            }).catch(function() {
+              promptCopyStatus.textContent = 'Copy failed';
+            });
+            setTimeout(function() { promptCopyStatus.textContent = ''; }, 2500);
           });
         }
 

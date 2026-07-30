@@ -1,4 +1,6 @@
 import { renderHomePage } from "./views/homePage.js";
+import { renderSubathonTimerPage } from "./views/subathonTimerPage.js";
+import { renderDashboardPage } from "./views/dashboardPage.js";
 import { renderPrivacyPage } from "./views/privacyPage.js";
 import { renderGdprPage } from "./views/gdprPage.js";
 import { renderTermsPage } from "./views/termsPage.js";
@@ -8,6 +10,7 @@ import { isSuperAdmin } from "./routes_admin.js";
 const ROBOTS_TXT = `User-agent: *
 Allow: /
 Disallow: /admin
+Disallow: /dashboard
 Disallow: /overlay/config
 Disallow: /sounds/config
 Disallow: /goals/config
@@ -25,6 +28,11 @@ const SITEMAP_XML = `<?xml version="1.0" encoding="UTF-8"?>
     <loc>https://livestreamerhub.com/</loc>
     <changefreq>weekly</changefreq>
     <priority>1.0</priority>
+  </url>
+  <url>
+    <loc>https://livestreamerhub.com/subathon-timer</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.9</priority>
   </url>
   <url>
     <loc>https://livestreamerhub.com/privacy</loc>
@@ -85,6 +93,46 @@ export function mountHomePageRoutes(app) {
     res.send(html);
   });
 
+  app.get("/dashboard", (req, res) => {
+    if (!req.session?.isAdmin) {
+      return res.redirect(`/auth/login?next=${encodeURIComponent("/dashboard")}`);
+    }
+    const adminName =
+      req.session?.twitchUser?.display_name ||
+      req.session?.twitchUser?.login ||
+      "Admin";
+    const overlayKey =
+      req.session?.userOverlayKey || req.session?.twitchUser?.id || "";
+    const html = renderDashboardPage({
+      base: "",
+      adminName,
+      overlayKey,
+      showUtilitiesLink: true,
+      showAdminLink: isSuperAdmin(req),
+    });
+    res.setHeader("Content-Type", "text/html; charset=utf-8");
+    res.setHeader("Cache-Control", "no-store");
+    res.send(html);
+  });
+
+  app.get("/subathon-timer", (req, res) => {
+    const isAdmin = Boolean(req.session?.isAdmin);
+    const adminName =
+      req.session?.twitchUser?.display_name ||
+      req.session?.twitchUser?.login ||
+      "your Twitch account";
+    const html = renderSubathonTimerPage({
+      base: "",
+      isAdmin,
+      adminName,
+      showUtilitiesLink: isAdmin,
+      showAdminLink: isSuperAdmin(req),
+    });
+    res.setHeader("Content-Type", "text/html; charset=utf-8");
+    res.setHeader("Cache-Control", "public, max-age=300");
+    res.send(html);
+  });
+
   app.get("/privacy", (req, res) => {
     const html = renderPrivacyPage({ base: "", contactEmail });
     res.setHeader("Content-Type", "text/html; charset=utf-8");
@@ -119,11 +167,13 @@ export function mountHomePageRoutes(app) {
     const overlayKey =
       req.session?.userOverlayKey || req.session?.twitchUser?.id || "";
     const wheelOverlayBase = `/overlay/wheel`;
+    const promptOverlayBase = `/overlay/prompt`;
     const html = renderUtilitiesPage({
       base: "",
       adminName,
       overlayKey,
       wheelOverlayBase,
+      promptOverlayBase,
       showAdminLink: isSuperAdmin(req),
     });
     res.setHeader("Content-Type", "text/html; charset=utf-8");

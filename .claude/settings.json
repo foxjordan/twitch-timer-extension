@@ -47,7 +47,16 @@
       "Bash(cd /Users/jordanfox/Documents/twitch-timer-extension/ebs && grep -n \"onTransactionComplete\\\\|useBits\\\\|onAuthorized\" ../extension/src/App.jsx | head -20)",
       "Read(//Users/jordanfox/Documents/extension/src/**)",
       "Bash(awk 'NR>=1649 && NR<=1760 && \\(/info\\\\.\\(after|appendChild|insertAdjacent\\)/ || /card\\\\.appendChild\\\\\\(form\\\\\\)/ || /form\\\\.appendChild/ || /^\\\\s*}$/\\)' ebs/views/soundConfigPage.js)",
-      "Bash(fly apps *)"
+      "Bash(fly apps *)",
+      "WebFetch(domain:old.reddit.com)",
+      "WebFetch(domain:www.reddit.com)",
+      "WebFetch(domain:mattd.substack.com)",
+      "WebFetch(domain:blerp.com)",
+      "WebFetch(domain:streamtimer.io)",
+      "WebFetch(domain:subathontimer.com)",
+      "WebFetch(domain:www.streamloots.com)",
+      "WebFetch(domain:widgets.streamelements.com)",
+      "WebFetch(domain:obsproject.com)"
     ],
     "additionalDirectories": [
       "/tmp"

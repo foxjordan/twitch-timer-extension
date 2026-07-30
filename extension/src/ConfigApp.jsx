@@ -595,7 +595,7 @@ function ConfigApp() {
       <div style={styles.headingRow}>
         <h2 style={styles.heading}>Livestreamer Alerts</h2>
         <a
-          href={`${EBS_BASE}/sounds/config`}
+          href={`${EBS_BASE}/sounds/config?ref=extension`}
           target="_blank"
           rel="noopener noreferrer"
           style={styles.link}

@@ -207,8 +207,16 @@ function normalizeSound(raw = {}, uid = null) {
     channelPointsEnabled: false,
     channelPointsCost: sanitizeNumber(raw.channelPointsCost, DEFAULT_CHANNEL_POINTS_COST, 1, 1_000_000),
     channelPointsRewardId: "",
+    // Enforced by Twitch itself (is_global_cooldown_enabled/global_cooldown_seconds
+    // on the Custom Reward), shared across every viewer — separate from
+    // cooldownMs below, which only throttles the Bits panel client-side and
+    // has no effect on Channel Points redemptions at all. 0 = no cooldown.
+    channelPointsCooldownSeconds: sanitizeNumber(raw.channelPointsCooldownSeconds, 0, 0, 3600),
     enabled: typeof raw.enabled === "boolean" ? raw.enabled : true,
     volume: sanitizeNumber(raw.volume, 80, 0, 100),
+    // Bits-panel cooldown only — enforced client-side, per-viewer, in the
+    // extension (see App.jsx/ComponentApp.jsx). Has no effect on Channel
+    // Points redemptions; see channelPointsCooldownSeconds above for that.
     cooldownMs: sanitizeNumber(raw.cooldownMs, 5000, 0, 60000),
     // Sounds owned by the official library are always shared/approved,
     // regardless of what's passed in — this is a trust boundary, not just a
@@ -322,13 +330,14 @@ export function updateSound(uid, soundId, patch = {}) {
 // (see channel_points_api.js) — deliberately separate from updateSound()'s
 // patch whitelist so this can only ever reflect what Twitch actually has,
 // never something a client claimed via the generic PUT endpoint.
-export function setSoundChannelPoints(uid, soundId, { enabled, cost, rewardId }) {
+export function setSoundChannelPoints(uid, soundId, { enabled, cost, rewardId, cooldownSeconds }) {
   const user = ensureUser(uid);
   const sound = user.sounds.get(String(soundId));
   if (!sound) return null;
   if (typeof enabled === "boolean") sound.channelPointsEnabled = enabled;
   if (typeof cost === "number") sound.channelPointsCost = sanitizeNumber(cost, sound.channelPointsCost, 1, 1_000_000);
   if (typeof rewardId === "string") sound.channelPointsRewardId = rewardId;
+  if (typeof cooldownSeconds === "number") sound.channelPointsCooldownSeconds = sanitizeNumber(cooldownSeconds, sound.channelPointsCooldownSeconds, 0, 3600);
   sound.updatedAt = nowIso();
   persistSoundAlerts().catch(() => {});
   return deepClone(sound);

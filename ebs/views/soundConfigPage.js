@@ -61,6 +61,7 @@ export function renderSoundConfigPage(options = {}) {
            on short mobile viewports — see overlayConfigPage.js for the
            matching fix and full reasoning. */
         .tour-btn { bottom: 12px; right: 12px; padding: 6px 10px; font-size: 12px; }
+        .back-to-top-btn { bottom: 56px; right: 12px; width: 38px; height: 38px; }
       }
       h1 { margin: 0 0 4px; font-size: 26px; }
       .subtitle { margin: 0 0 24px; color: var(--text-muted); font-size: 14px; }
@@ -68,7 +69,7 @@ export function renderSoundConfigPage(options = {}) {
       .card h2 { margin: 0 0 12px; font-size: 17px; }
       .library-search { width: 100%; box-sizing: border-box; padding: 8px 12px; border-radius: 8px; border: 1px solid var(--input-border); background: var(--input-bg); color: var(--text-color); font-size: 14px; margin-bottom: 12px; }
       .library-search::placeholder { color: var(--text-muted); }
-      .library-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 10px; }
+      .library-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 10px; }
       .library-card { display: flex; flex-direction: column; align-items: center; padding: 8px 6px; border-radius: 10px; background: var(--surface-muted, #1a1a1e); border: 1px solid var(--surface-border, #303038); cursor: default; transition: background 0.15s, transform 0.1s; position: relative; }
       .library-card:hover { background: var(--surface-color, #2a2a32); transform: scale(1.03); }
       .library-card-thumb { width: 100%; padding-bottom: 100%; border-radius: 8px; position: relative; background: var(--code-bg, #0e0e10); overflow: hidden; margin-bottom: 6px; }
@@ -78,9 +79,19 @@ export function renderSoundConfigPage(options = {}) {
       .library-card-preview { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,0.5); border-radius: 8px; cursor: pointer; opacity: 0; transition: opacity 0.15s; }
       .library-card-thumb:hover .library-card-preview { opacity: 1; }
       .library-card-name { font-size: 12px; font-weight: 600; text-align: center; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; width: 100%; margin-bottom: 2px; }
-      .library-card-owner { font-size: 11px; color: var(--text-muted); text-align: center; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; width: 100%; margin-bottom: 6px; }
-      .library-card-actions { display: flex; gap: 4px; width: 100%; }
-      .library-card-actions button { flex: 1; font-size: 11px; padding: 4px 6px; }
+      .library-card-owner { font-size: 11px; color: var(--text-muted); text-align: center; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; width: 100%; margin-bottom: 2px; }
+      .library-card-plays { font-size: 11px; color: var(--text-muted); text-align: center; width: 100%; margin-bottom: 6px; }
+      .library-card-actions { display: flex; flex-direction: column; gap: 4px; width: 100%; margin-top: auto; padding-top: 8px; }
+      .library-card-primary-btn { width: 100%; font-size: 12px; padding: 7px 6px; font-weight: 600; }
+      .library-card-primary-btn.is-remove { background: transparent; color: #ef4444; border: 1px solid #ef4444; }
+      .library-card-admin-delete { width: 100%; background: transparent; border: 0; color: var(--text-muted); font-size: 10px; padding: 2px; cursor: pointer; text-decoration: underline; }
+      .library-card-admin-delete:hover { color: #ef4444; }
+      .library-pagination { display: flex; align-items: center; justify-content: center; gap: 6px; flex-wrap: wrap; margin-top: 18px; }
+      .library-pagination button { min-width: 34px; padding: 6px 10px; font-size: 13px; background: var(--secondary-button-bg); color: var(--secondary-button-text); border: 1px solid var(--secondary-button-border); }
+      .library-pagination button.active { background: var(--accent-color); color: #fff; border-color: var(--accent-color); }
+      .library-pagination button:disabled { opacity: 0.4; cursor: not-allowed; }
+      .back-to-top-btn { position: fixed; right: 20px; bottom: 68px; z-index: 95; width: 44px; height: 44px; border-radius: 50%; background: var(--accent-color); color: #fff; border: 0; font-size: 18px; cursor: pointer; box-shadow: 0 4px 16px rgba(0,0,0,0.3); display: none; align-items: center; justify-content: center; }
+      .back-to-top-btn.visible { display: flex; }
       .library-filter-toggle { position: relative; }
       .library-filter-count { display: inline-block; background: var(--accent-color); color: #fff; border-radius: 10px; font-size: 10px; padding: 1px 6px; margin-left: 6px; }
       .library-filter-panel { display: none; flex-wrap: wrap; gap: 6px 14px; padding: 10px 12px; margin-bottom: 10px; border-radius: 8px; background: var(--surface-muted, #1a1a1e); border: 1px solid var(--surface-border, #303038); }
@@ -237,7 +248,6 @@ export function renderSoundConfigPage(options = {}) {
       <nav class="sidebar">
         <div class="sidebar-nav">
           <button class="sidebar-nav-item active" data-section="alerts">Alerts</button>
-          <button class="sidebar-nav-item" data-section="create">Create Alert</button>
           <button class="sidebar-nav-item" data-section="library">Community Library</button>
           <button class="sidebar-nav-item" data-section="settings">Settings</button>
           <button class="sidebar-nav-item" data-section="tts">Text-to-Speech</button>
@@ -333,15 +343,6 @@ export function renderSoundConfigPage(options = {}) {
       </div>
       </div>
 
-      <div class="section-page" data-section="create">
-      <!-- Create Alert -->
-      <div class="card" id="createAlertCard">
-        <h2>Create Alert</h2>
-        <p class="hint" style="margin-bottom:14px;">A guided setup — pick a source, add a thumbnail, and set your Bits cost.</p>
-        <button id="openCreateWizardBtn" style="padding:10px 22px; font-size:14px;">+ New Alert</button>
-      </div>
-      </div>
-
       <!-- Create Alert wizard -->
       <div id="createWizardBackdrop" class="modal-backdrop" style="display:none;">
         <div class="modal-box">
@@ -356,6 +357,17 @@ export function renderSoundConfigPage(options = {}) {
             <button id="wizardBackBtn" class="secondary" type="button" style="display:none;">Back</button>
             <button id="wizardNextBtn" type="button">Next</button>
           </div>
+        </div>
+      </div>
+
+      <!-- Add from Library modal -->
+      <div id="addFromLibraryBackdrop" class="modal-backdrop" style="display:none;">
+        <div class="modal-box" style="max-width:400px;">
+          <div class="modal-header">
+            <strong>Add to Your Alerts</strong>
+            <button id="addFromLibraryCloseBtn" class="modal-close" type="button" aria-label="Close">&times;</button>
+          </div>
+          <div id="addFromLibraryBody" class="modal-body"></div>
         </div>
       </div>
 
@@ -378,6 +390,7 @@ export function renderSoundConfigPage(options = {}) {
           <div id="libraryList" class="library-grid">
             <div class="hint" style="grid-column: 1 / -1;">Loading library...</div>
           </div>
+          <div id="libraryPagination" class="library-pagination"></div>
         </div>
       </div>
       </div>
@@ -385,8 +398,11 @@ export function renderSoundConfigPage(options = {}) {
       <div class="section-page active" data-section="alerts">
       <!-- Sound List -->
       <div class="card">
-        <h2>Alerts (<span id="soundCount">0</span>/20) <span id="soundTestHint" class="hint" style="font-size:12px; margin-left:8px;"></span></h2>
-        <div id="soundList" style="display:flex; flex-direction:column; gap:6px;">
+        <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:8px; margin-bottom:4px;">
+          <h2 style="margin:0;">Alerts (<span id="soundCount">0</span>/20) <span id="soundTestHint" class="hint" style="font-size:12px; margin-left:8px;"></span></h2>
+          <button id="openCreateWizardBtn" style="padding:8px 16px; font-size:13px;">+ New Alert</button>
+        </div>
+        <div id="soundList" style="display:flex; flex-direction:column; gap:6px; margin-top:10px;">
           <div class="hint">Loading sounds…</div>
         </div>
       </div>
@@ -642,7 +658,7 @@ export function renderSoundConfigPage(options = {}) {
           });
           var livePreviewWrapEl = document.getElementById('livePreviewWrap');
           if (livePreviewWrapEl) {
-            livePreviewWrapEl.style.display = (sectionId === 'alerts' || sectionId === 'create') ? '' : 'none';
+            livePreviewWrapEl.style.display = (sectionId === 'alerts') ? '' : 'none';
           }
         }
         document.querySelectorAll('.sidebar-nav-item').forEach(function(btn) {
@@ -709,9 +725,10 @@ export function renderSoundConfigPage(options = {}) {
           if (card) card.scrollIntoView({ behavior: 'smooth', block: 'center' });
         }
 
-        // Same as revealNewSound, but for "Add & Trim" from the library —
-        // also opens the editor with the trim panel already expanded so
-        // trimming reads as one step from the picker instead of two.
+        // Same as revealNewSound, but for the "Trim Audio" follow-up after
+        // adding a sound from the library — also opens the editor with the
+        // trim panel already expanded so trimming reads as one step from
+        // the picker instead of two.
         async function revealNewSoundForTrim(soundId) {
           await fetchSoundsAdmin();
           switchSection('alerts');
@@ -934,6 +951,14 @@ export function renderSoundConfigPage(options = {}) {
           librarySortEl.addEventListener('change', function() { fetchLibrary(); });
         }
 
+        // Paginated so a large library doesn't render as one very long
+        // scroll — libraryFilteredSounds holds the full (already
+        // search/tag-filtered) result set; only one page's worth is ever
+        // handed to renderLibraryList at a time.
+        var LIBRARY_PAGE_SIZE = 24;
+        var libraryFilteredSounds = [];
+        var libraryCurrentPage = 1;
+
         function applyLibraryFilter() {
           var searchInput = document.getElementById('librarySearch');
           var q = searchInput ? searchInput.value.trim().toLowerCase() : '';
@@ -949,7 +974,72 @@ export function renderSoundConfigPage(options = {}) {
             // only carry up to 5 free-text tags each.
             return (s.tags || []).some(function(t) { return selectedTags.has((t || '').toLowerCase()); });
           });
-          renderLibraryList(filtered);
+          libraryFilteredSounds = filtered;
+          libraryCurrentPage = 1;
+          renderLibraryPage();
+        }
+
+        function renderLibraryPage() {
+          var totalPages = Math.max(1, Math.ceil(libraryFilteredSounds.length / LIBRARY_PAGE_SIZE));
+          if (libraryCurrentPage > totalPages) libraryCurrentPage = totalPages;
+          var start = (libraryCurrentPage - 1) * LIBRARY_PAGE_SIZE;
+          renderLibraryList(libraryFilteredSounds.slice(start, start + LIBRARY_PAGE_SIZE));
+          renderLibraryPaginationControls(totalPages);
+        }
+
+        function renderLibraryPaginationControls(totalPages) {
+          var el = document.getElementById('libraryPagination');
+          if (!el) return;
+          el.textContent = '';
+          if (totalPages <= 1) return;
+
+          function goToPage(p) {
+            libraryCurrentPage = Math.min(totalPages, Math.max(1, p));
+            renderLibraryPage();
+            var listEl = document.getElementById('libraryList');
+            if (listEl) listEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          }
+
+          function addPageBtn(label, page, opts) {
+            opts = opts || {};
+            var btn = document.createElement('button');
+            btn.type = 'button';
+            btn.textContent = label;
+            if (opts.active) btn.className = 'active';
+            if (opts.disabled) btn.disabled = true;
+            btn.addEventListener('click', function() { goToPage(page); });
+            el.appendChild(btn);
+            return btn;
+          }
+          function addEllipsis() {
+            var span = document.createElement('span');
+            span.className = 'hint';
+            span.textContent = '\\u2026';
+            el.appendChild(span);
+          }
+
+          addPageBtn('\\u2039 Prev', libraryCurrentPage - 1, { disabled: libraryCurrentPage <= 1 });
+
+          // Window numbered buttons around the current page rather than
+          // listing every page — keeps the control usable for a large library.
+          var windowSize = 5;
+          var startPage = Math.max(1, libraryCurrentPage - Math.floor(windowSize / 2));
+          var endPage = Math.min(totalPages, startPage + windowSize - 1);
+          startPage = Math.max(1, endPage - windowSize + 1);
+
+          if (startPage > 1) {
+            addPageBtn('1', 1);
+            if (startPage > 2) addEllipsis();
+          }
+          for (var p = startPage; p <= endPage; p++) {
+            addPageBtn(String(p), p, { active: p === libraryCurrentPage });
+          }
+          if (endPage < totalPages) {
+            if (endPage < totalPages - 1) addEllipsis();
+            addPageBtn(String(totalPages), totalPages);
+          }
+
+          addPageBtn('Next \\u203a', libraryCurrentPage + 1, { disabled: libraryCurrentPage >= totalPages });
         }
 
         // Faceted tag filter panel — built from whatever tags actually
@@ -1105,6 +1195,14 @@ export function renderSoundConfigPage(options = {}) {
             ownerDiv.textContent = s.ownerDisplayName || 'Unknown';
             card.appendChild(ownerDiv);
 
+            // Play count — social proof, aggregated across every
+            // broadcaster's copy of this sound (see getSoundLineage).
+            var playCountDiv = document.createElement('div');
+            playCountDiv.className = 'library-card-plays';
+            var playCount = Number(s.playCount) || 0;
+            playCountDiv.textContent = '\\u25B6 ' + playCount.toLocaleString() + (playCount === 1 ? ' play' : ' plays');
+            card.appendChild(playCountDiv);
+
             // Tags
             if (s.tags && s.tags.length) {
               var tagsDiv = document.createElement('div');
@@ -1113,110 +1211,61 @@ export function renderSoundConfigPage(options = {}) {
               card.appendChild(tagsDiv);
             }
 
-            // Add / Add & Trim — addArea is its own sub-container so it can
-            // be wiped and re-rendered (rename step <-> buttons <-> "Added")
-            // without disturbing the admin Delete button appended to
-            // actions below.
+            // Single full-width Add/Remove button — replaces the old
+            // cramped Add/Add & Trim/rename-inline cluster, which looked
+            // fine on a wide admin screen but cramped and unprofessional on
+            // a regular streamer's narrower library grid. Add opens a modal
+            // for the name (and an optional trim follow-up); Remove deletes
+            // the streamer's own copy directly, found via sourceUserId/
+            // sourceSoundId provenance against their own soundsCache.
             var actions = document.createElement('div');
             actions.className = 'library-card-actions';
-            var addArea = document.createElement('div');
-            addArea.style.cssText = 'display:flex; gap:6px; flex-wrap:wrap; align-items:center;';
-            actions.appendChild(addArea);
 
-            function renderAdded() {
-              addArea.textContent = '';
-              var addedBtn = document.createElement('button');
-              addedBtn.className = 'secondary';
-              addedBtn.textContent = 'Added';
-              addedBtn.disabled = true;
-              addedBtn.style.opacity = '0.5';
-              addArea.appendChild(addedBtn);
-            }
+            var primaryBtn = document.createElement('button');
 
-            function renderAddButtons() {
-              addArea.textContent = '';
-              var addBtn = document.createElement('button');
-              addBtn.textContent = 'Add';
-              var addTrimBtn = document.createElement('button');
-              addTrimBtn.className = 'secondary';
-              addTrimBtn.textContent = 'Add & Trim';
-              addTrimBtn.style.cssText = 'font-size:12px;';
-              addBtn.addEventListener('click', function() { renderRenameStep(false); });
-              addTrimBtn.addEventListener('click', function() { renderRenameStep(true); });
-              addArea.appendChild(addBtn);
-              addArea.appendChild(addTrimBtn);
-            }
-
-            // Shared inline rename step for both Add and Add & Trim — lets a
-            // streamer rename their copy before it's created rather than
-            // having to find it again afterward in their own sound list.
-            // Only touches the new copy's own name field (sounds_store.js
-            // copySoundToUser), never the shared library original.
-            function renderRenameStep(openTrimAfter) {
-              addArea.textContent = '';
-              var nameInput = document.createElement('input');
-              nameInput.type = 'text';
-              nameInput.value = s.name;
-              nameInput.maxLength = 100;
-              nameInput.style.cssText = 'width:140px; font-size:12px; padding:3px 6px;';
-
-              var confirmBtn = document.createElement('button');
-              confirmBtn.textContent = openTrimAfter ? 'Add & Trim' : 'Add';
-              confirmBtn.style.cssText = 'font-size:12px; padding:3px 8px;';
-
-              var cancelBtn = document.createElement('button');
-              cancelBtn.className = 'secondary';
-              cancelBtn.textContent = 'Cancel';
-              cancelBtn.style.cssText = 'font-size:12px; padding:3px 8px;';
-              cancelBtn.addEventListener('click', renderAddButtons);
-
-              confirmBtn.addEventListener('click', async function() {
-                flashButton(confirmBtn);
-                setBusy(confirmBtn, true);
-                try {
-                  var r = await fetch(API_BASE + '/library/add', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ ownerUserId: s.ownerUserId, soundId: s.id, name: nameInput.value })
-                  });
-                  var data = await r.json().catch(function() { return {}; });
-                  if (!r.ok) throw new Error(data.error || 'Failed to add');
-                  s.owned = true;
-                  renderAdded();
-                  // Counts toward the setup funnel's "created an alert" step
-                  // alongside sound_uploaded/clip_created/video_uploaded —
-                  // someone who only ever adds from the library, never
-                  // uploads their own file, should still read as having
-                  // completed setup.
-                  logDashboardEvent('sound_added_from_library', { openTrimAfter: openTrimAfter });
-                  if (openTrimAfter && data.sound && data.sound.id) {
-                    await revealNewSoundForTrim(data.sound.id);
-                  } else {
-                    await fetchSoundsAdmin();
-                  }
-                } catch (err) {
-                  addArea.textContent = '';
-                  var errBtn = document.createElement('button');
-                  errBtn.className = 'secondary';
-                  errBtn.textContent = err.message || 'Error';
-                  addArea.appendChild(errBtn);
-                  setTimeout(renderAddButtons, 2000);
-                }
-                setBusy(confirmBtn, false);
+            function findOwnedSound() {
+              return soundsCache.find(function(x) {
+                return x.sourceUserId === s.ownerUserId && x.sourceSoundId === s.id;
               });
-
-              addArea.appendChild(nameInput);
-              addArea.appendChild(confirmBtn);
-              addArea.appendChild(cancelBtn);
             }
 
-            if (s.owned) renderAdded(); else renderAddButtons();
+            function renderPrimaryButton() {
+              primaryBtn.className = 'library-card-primary-btn' + (s.owned ? ' is-remove' : '');
+              primaryBtn.textContent = s.owned ? 'Remove' : 'Add';
+            }
+
+            primaryBtn.addEventListener('click', function() {
+              if (s.owned) {
+                var owned = findOwnedSound();
+                if (!owned) return;
+                if (!confirm('Remove "' + owned.name + '" from your alerts?')) return;
+                setBusy(primaryBtn, true);
+                fetch(API_BASE + '/' + encodeURIComponent(owned.id), { method: 'DELETE', credentials: 'same-origin' })
+                  .then(function(r) { if (!r.ok) throw new Error('Failed to remove'); })
+                  .then(function() {
+                    s.owned = false;
+                    renderPrimaryButton();
+                    return fetchSoundsAdmin();
+                  })
+                  .catch(function() {
+                    primaryBtn.textContent = 'Error';
+                    setTimeout(renderPrimaryButton, 2000);
+                  })
+                  .then(function() { setBusy(primaryBtn, false); });
+              } else {
+                openAddFromLibraryModal(s, function(added) {
+                  if (added) { s.owned = true; renderPrimaryButton(); }
+                });
+              }
+            });
+
+            renderPrimaryButton();
+            actions.appendChild(primaryBtn);
+
             if (IS_SUPER_ADMIN) {
               var delBtn = document.createElement('button');
-              delBtn.className = 'secondary';
-              delBtn.textContent = 'Delete';
-              delBtn.title = 'Remove from library (admin)';
-              delBtn.style.cssText = 'color:#ef4444; border-color:#ef4444;';
+              delBtn.className = 'library-card-admin-delete';
+              delBtn.textContent = 'Delete from library (admin)';
               delBtn.addEventListener('click', async function() {
                 if (!confirm('Delete "' + s.name + '" from the library? This removes the sound from the uploader\\'s account permanently.')) return;
                 flashButton(delBtn);
@@ -1235,7 +1284,7 @@ export function renderSoundConfigPage(options = {}) {
                   librarySounds = librarySounds.filter(function(x) { return !(x.ownerUserId === s.ownerUserId && x.id === s.id); });
                 } catch (err) {
                   delBtn.textContent = err.message || 'Error';
-                  setTimeout(function() { delBtn.textContent = 'Delete'; }, 3000);
+                  setTimeout(function() { delBtn.textContent = 'Delete from library (admin)'; }, 3000);
                 }
                 setBusy(delBtn, false);
               });
@@ -1246,6 +1295,140 @@ export function renderSoundConfigPage(options = {}) {
             listEl.appendChild(card);
           });
         }
+
+        // ===== Add from Library modal =====
+        // Wizard-style modal (same .modal-backdrop/.modal-box shell as
+        // Create Alert) shown when a card's Add button is clicked, instead
+        // of cramming a rename input + Add/Add & Trim buttons into the card
+        // itself. Two states rendered into the same body: confirm (name +
+        // Add/Cancel) then, on success, a follow-up (Trim Audio/Done).
+        var addFromLibraryBackdrop = document.getElementById('addFromLibraryBackdrop');
+        var addFromLibraryBody = document.getElementById('addFromLibraryBody');
+        var addFromLibraryCloseBtn = document.getElementById('addFromLibraryCloseBtn');
+        var addFromLibraryCurrent = null; // { s, onDone }
+        var addFromLibraryAdded = false;
+
+        function closeAddFromLibraryModal() {
+          if (addFromLibraryBackdrop) addFromLibraryBackdrop.style.display = 'none';
+          var cb = addFromLibraryCurrent && addFromLibraryCurrent.onDone;
+          var added = addFromLibraryAdded;
+          addFromLibraryCurrent = null;
+          if (cb) cb(added);
+        }
+
+        function openAddFromLibraryModal(s, onDone) {
+          if (!addFromLibraryBackdrop || !addFromLibraryBody) return;
+          addFromLibraryCurrent = { s: s, onDone: onDone };
+          addFromLibraryAdded = false;
+          addFromLibraryBackdrop.style.display = 'flex';
+          renderAddFromLibraryConfirmStep(s);
+        }
+
+        function renderAddFromLibraryConfirmStep(s) {
+          addFromLibraryBody.textContent = '';
+
+          var nameLabel = document.createElement('label');
+          nameLabel.style.cssText = 'font-size:13px; display:block; margin-bottom:6px; color:var(--text-muted);';
+          nameLabel.textContent = 'Name';
+          addFromLibraryBody.appendChild(nameLabel);
+
+          var nameInput = document.createElement('input');
+          nameInput.type = 'text';
+          nameInput.value = s.name;
+          nameInput.maxLength = 100;
+          nameInput.style.cssText = 'width:100%; box-sizing:border-box; margin-bottom:12px;';
+          addFromLibraryBody.appendChild(nameInput);
+
+          var hint = document.createElement('div');
+          hint.className = 'hint';
+          hint.style.marginBottom = '14px';
+          hint.textContent = 'From ' + (s.ownerDisplayName || 'a community member') + '. Renaming only changes your copy — the shared library entry is unaffected.';
+          addFromLibraryBody.appendChild(hint);
+
+          var errorEl = document.createElement('div');
+          errorEl.className = 'hint';
+          errorEl.style.cssText = 'color:#ef4444; margin-bottom:8px;';
+          addFromLibraryBody.appendChild(errorEl);
+
+          var btnRow = document.createElement('div');
+          btnRow.style.cssText = 'display:flex; gap:8px; justify-content:flex-end;';
+          var cancelBtn = document.createElement('button');
+          cancelBtn.className = 'secondary';
+          cancelBtn.textContent = 'Cancel';
+          cancelBtn.type = 'button';
+          cancelBtn.addEventListener('click', closeAddFromLibraryModal);
+          var addBtn = document.createElement('button');
+          addBtn.textContent = 'Add';
+          addBtn.type = 'button';
+          addBtn.addEventListener('click', async function() {
+            setBusy(addBtn, true);
+            errorEl.textContent = '';
+            try {
+              var r = await fetch(API_BASE + '/library/add', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ ownerUserId: s.ownerUserId, soundId: s.id, name: nameInput.value })
+              });
+              var data = await r.json().catch(function() { return {}; });
+              if (!r.ok) throw new Error(data.error || 'Failed to add');
+              addFromLibraryAdded = true;
+              // Counts toward the setup funnel's "created an alert" step
+              // alongside sound_uploaded/clip_created/video_uploaded —
+              // someone who only ever adds from the library, never uploads
+              // their own file, should still read as having completed setup.
+              logDashboardEvent('sound_added_from_library', {});
+              await fetchSoundsAdmin();
+              renderAddFromLibrarySuccessStep(data.sound);
+            } catch (err) {
+              errorEl.textContent = err.message || 'Failed to add';
+            }
+            setBusy(addBtn, false);
+          });
+          btnRow.appendChild(cancelBtn);
+          btnRow.appendChild(addBtn);
+          addFromLibraryBody.appendChild(btnRow);
+
+          nameInput.focus();
+          nameInput.select();
+        }
+
+        function renderAddFromLibrarySuccessStep(newSound) {
+          addFromLibraryBody.textContent = '';
+          var msg = document.createElement('div');
+          msg.style.cssText = 'margin-bottom:16px;';
+          msg.textContent = 'Added "' + (newSound && newSound.name || '') + '" to your alerts.';
+          addFromLibraryBody.appendChild(msg);
+
+          var btnRow = document.createElement('div');
+          btnRow.style.cssText = 'display:flex; gap:8px; justify-content:flex-end;';
+          var doneBtn = document.createElement('button');
+          doneBtn.className = 'secondary';
+          doneBtn.textContent = 'Done';
+          doneBtn.type = 'button';
+          doneBtn.addEventListener('click', closeAddFromLibraryModal);
+          var trimBtn = document.createElement('button');
+          trimBtn.textContent = 'Trim Audio';
+          trimBtn.type = 'button';
+          trimBtn.addEventListener('click', function() {
+            closeAddFromLibraryModal();
+            if (newSound && newSound.id) revealNewSoundForTrim(newSound.id);
+          });
+          btnRow.appendChild(doneBtn);
+          btnRow.appendChild(trimBtn);
+          addFromLibraryBody.appendChild(btnRow);
+        }
+
+        if (addFromLibraryCloseBtn) addFromLibraryCloseBtn.addEventListener('click', closeAddFromLibraryModal);
+        if (addFromLibraryBackdrop) {
+          addFromLibraryBackdrop.addEventListener('click', function(e) {
+            if (e.target === addFromLibraryBackdrop) closeAddFromLibraryModal();
+          });
+        }
+        document.addEventListener('keydown', function(e) {
+          if (e.key === 'Escape' && addFromLibraryCurrent && addFromLibraryBackdrop && addFromLibraryBackdrop.style.display !== 'none') {
+            closeAddFromLibraryModal();
+          }
+        });
 
         // Pick a thumbnail from an emote source instead of uploading a file
         // — automatically on-brand, zero design effort. Shared by both the
@@ -1464,24 +1647,23 @@ export function renderSoundConfigPage(options = {}) {
           tierSelect.disabled = !s.tier;
           enableBitsCb.addEventListener('change', function() { tierSelect.disabled = !enableBitsCb.checked; });
 
-          var volLabel = document.createElement('label');
-          volLabel.style.cssText = 'display:flex; align-items:center; gap:4px; font-size:12px;';
-          volLabel.textContent = 'Vol ';
-          var volRange = document.createElement('input');
-          volRange.type = 'range';
-          volRange.min = '0';
-          volRange.max = '100';
-          volRange.value = String(s.volume);
-          volRange.style.cssText = 'width:60px;';
-          var volSpan = document.createElement('span');
-          volSpan.textContent = s.volume + '%';
-          volRange.addEventListener('input', function() { volSpan.textContent = this.value + '%'; });
-          volLabel.appendChild(volRange);
-          volLabel.appendChild(volSpan);
-
           row.appendChild(enableBitsLabel);
           row.appendChild(tierSelect);
-          row.appendChild(volLabel);
+
+          // Bits Cooldown — enforced client-side, per-viewer, inside the Bits
+          // panel only (see App.jsx/ComponentApp.jsx). Has no effect on
+          // Channel Points redemptions — that has its own cooldown below,
+          // enforced by Twitch itself.
+          var cdLabel = document.createElement('label');
+          cdLabel.style.cssText = 'display:flex; align-items:center; gap:4px; font-size:12px;';
+          cdLabel.textContent = 'Bits Cooldown (sec) ';
+          var cdInput = document.createElement('input');
+          cdInput.type = 'number';
+          cdInput.min = '0';
+          cdInput.max = '60';
+          cdInput.value = String(Math.round((s.cooldownMs || 5000) / 1000));
+          cdInput.style.cssText = 'width:60px;';
+          cdLabel.appendChild(cdInput);
 
           // Channel Points — a second, independent trigger alongside Bits.
           // Unlike everything else in this form, this can't be a plain field:
@@ -1507,13 +1689,39 @@ export function renderSoundConfigPage(options = {}) {
           cpCostInput.style.cssText = 'width:80px; font-size:12px;';
           cpCostInput.disabled = !s.channelPointsEnabled;
 
+          cpRow.appendChild(cpLabel);
+          cpRow.appendChild(cpCostInput);
+
+          // Channel Points Cooldown — enforced by Twitch itself
+          // (is_global_cooldown_enabled / global_cooldown_seconds on the
+          // Custom Reward), shared across every viewer — a real cooldown,
+          // unlike the Bits one above. Applied together with the cost
+          // whenever "Update" below is clicked.
+          var cpCdRow = document.createElement('div');
+          cpCdRow.style.cssText = 'display:flex; align-items:center; gap:8px; flex-wrap:wrap;';
+          var cpCdLabel = document.createElement('label');
+          cpCdLabel.style.cssText = 'display:flex; align-items:center; gap:4px; font-size:12px;';
+          cpCdLabel.textContent = 'Channel Points Cooldown (sec) ';
+          var cpCdInput = document.createElement('input');
+          cpCdInput.type = 'number';
+          cpCdInput.min = '0';
+          cpCdInput.max = '3600';
+          cpCdInput.value = String(s.channelPointsCooldownSeconds || 0);
+          cpCdInput.style.cssText = 'width:70px;';
+          cpCdInput.disabled = !s.channelPointsEnabled;
+          cpCdLabel.appendChild(cpCdInput);
+          cpCdRow.appendChild(cpCdLabel);
+
+          var cpActionRow = document.createElement('div');
+          cpActionRow.style.cssText = 'display:flex; align-items:center; gap:8px; flex-wrap:wrap;';
           var cpUpdateBtn = document.createElement('button');
-          cpUpdateBtn.textContent = 'Update Cost';
+          cpUpdateBtn.textContent = 'Update';
           cpUpdateBtn.className = 'secondary';
           cpUpdateBtn.style.cssText = 'font-size:11px; padding:3px 8px; display:' + (s.channelPointsEnabled ? 'inline-block' : 'none') + ';';
-
           var cpHint = document.createElement('span');
           cpHint.className = 'hint';
+          cpActionRow.appendChild(cpUpdateBtn);
+          cpActionRow.appendChild(cpHint);
 
           async function applyChannelPoints(enabled) {
             setBusy(cpCheckbox, true);
@@ -1523,12 +1731,13 @@ export function renderSoundConfigPage(options = {}) {
               var r = await fetch(API_BASE + '/' + encodeURIComponent(s.id) + '/channel-points', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ enabled: enabled, cost: Number(cpCostInput.value) || undefined })
+                body: JSON.stringify({ enabled: enabled, cost: Number(cpCostInput.value) || undefined, cooldownSeconds: Number(cpCdInput.value) || 0 })
               });
               var body = await r.json().catch(function() { return {}; });
               if (!r.ok) throw new Error(body.error || 'Failed to update Channel Points');
               s.channelPointsEnabled = Boolean(body.sound && body.sound.channelPointsEnabled);
               cpCostInput.disabled = !s.channelPointsEnabled;
+              cpCdInput.disabled = !s.channelPointsEnabled;
               cpUpdateBtn.style.display = s.channelPointsEnabled ? 'inline-block' : 'none';
               cpHint.textContent = enabled ? 'Live on your Channel Points!' : 'Removed';
               setTimeout(function() { cpHint.textContent = ''; }, 2500);
@@ -1543,21 +1752,23 @@ export function renderSoundConfigPage(options = {}) {
           cpCheckbox.addEventListener('change', function() { applyChannelPoints(cpCheckbox.checked); });
           cpUpdateBtn.addEventListener('click', function() { applyChannelPoints(true); });
 
-          cpRow.appendChild(cpLabel);
-          cpRow.appendChild(cpCostInput);
-          cpRow.appendChild(cpUpdateBtn);
-          cpRow.appendChild(cpHint);
-
-          var cdLabel = document.createElement('label');
-          cdLabel.style.cssText = 'display:flex; align-items:center; gap:4px; font-size:12px;';
-          cdLabel.textContent = 'Cooldown (sec) ';
-          var cdInput = document.createElement('input');
-          cdInput.type = 'number';
-          cdInput.min = '0';
-          cdInput.max = '60';
-          cdInput.value = String(Math.round((s.cooldownMs || 5000) / 1000));
-          cdInput.style.cssText = 'width:60px;';
-          cdLabel.appendChild(cdInput);
+          // Volume — applies to the sound regardless of what triggers it, so
+          // it's kept visually separate from both Bits and Channel Points
+          // rather than sitting next to the Bits row implying a tie to it.
+          var volLabel = document.createElement('label');
+          volLabel.style.cssText = 'display:flex; align-items:center; gap:4px; font-size:12px;';
+          volLabel.textContent = 'Volume ';
+          var volRange = document.createElement('input');
+          volRange.type = 'range';
+          volRange.min = '0';
+          volRange.max = '100';
+          volRange.value = String(s.volume);
+          volRange.style.cssText = 'width:100px;';
+          var volSpan = document.createElement('span');
+          volSpan.textContent = s.volume + '%';
+          volRange.addEventListener('input', function() { volSpan.textContent = this.value + '%'; });
+          volLabel.appendChild(volRange);
+          volLabel.appendChild(volSpan);
 
           // Image upload section
           var imageSection = document.createElement('div');
@@ -1866,8 +2077,11 @@ export function renderSoundConfigPage(options = {}) {
 
           form.appendChild(nameInput);
           form.appendChild(row);
-          form.appendChild(cpRow);
           form.appendChild(cdLabel);
+          form.appendChild(cpRow);
+          form.appendChild(cpCdRow);
+          form.appendChild(cpActionRow);
+          form.appendChild(volLabel);
           form.appendChild(imageSection);
           form.appendChild(sharedLabel);
           if (!s.type || s.type === 'sound') {
@@ -2291,28 +2505,14 @@ export function renderSoundConfigPage(options = {}) {
           tierRow.appendChild(enableBitsLabel);
           tierRow.appendChild(tierSelect);
 
-          var volRow = document.createElement('div');
-          volRow.style.cssText = 'margin-bottom:10px; display:flex; align-items:center; gap:8px;';
-          var volLabel = document.createElement('span');
-          volLabel.className = 'hint';
-          volLabel.textContent = 'Volume';
-          var volRange = document.createElement('input');
-          volRange.type = 'range';
-          volRange.min = '0'; volRange.max = '100'; volRange.value = String(s.volume || 80);
-          volRange.id = 'wizardVolume';
-          var volVal = document.createElement('span');
-          volVal.className = 'hint';
-          volVal.textContent = (s.volume || 80) + '%';
-          volRange.addEventListener('input', function() { volVal.textContent = this.value + '%'; });
-          volRow.appendChild(volLabel);
-          volRow.appendChild(volRange);
-          volRow.appendChild(volVal);
-
+          // Bits Cooldown — enforced client-side, per-viewer, inside the
+          // Bits panel only. Has no effect on Channel Points redemptions —
+          // that has its own cooldown below, enforced by Twitch itself.
           var cdRow = document.createElement('div');
           cdRow.style.cssText = 'margin-bottom:10px; display:flex; align-items:center; gap:8px;';
           var cdLabel = document.createElement('span');
           cdLabel.className = 'hint';
-          cdLabel.textContent = 'Cooldown (sec)';
+          cdLabel.textContent = 'Bits Cooldown (sec)';
           var cdInput = document.createElement('input');
           cdInput.type = 'number';
           cdInput.min = '0'; cdInput.max = '60';
@@ -2323,9 +2523,10 @@ export function renderSoundConfigPage(options = {}) {
           cdRow.appendChild(cdInput);
 
           // Channel Points here is just the desired end-state (checked +
-          // cost) — unlike the per-sound editor, there is no separate
-          // immediate action; finishWizard() creates the real Twitch Custom
-          // Reward as part of Finish, alongside the rest of the settings.
+          // cost + cooldown) — unlike the per-sound editor, there is no
+          // separate immediate action; finishWizard() creates the real
+          // Twitch Custom Reward as part of Finish, alongside the rest of
+          // the settings.
           var cpRow = document.createElement('div');
           cpRow.style.cssText = 'display:flex; align-items:center; gap:8px; margin-bottom:10px; flex-wrap:wrap;';
           var cpLabel = document.createElement('label');
@@ -2343,9 +2544,52 @@ export function renderSoundConfigPage(options = {}) {
           cpCostInput.value = '500';
           cpCostInput.disabled = true;
           cpCostInput.style.cssText = 'width:80px; font-size:12px;';
-          cpCb.addEventListener('change', function() { cpCostInput.disabled = !cpCb.checked; });
           cpRow.appendChild(cpLabel);
           cpRow.appendChild(cpCostInput);
+
+          // Channel Points Cooldown — enforced by Twitch itself
+          // (is_global_cooldown_enabled / global_cooldown_seconds on the
+          // Custom Reward), shared across every viewer.
+          var cpCdRow = document.createElement('div');
+          cpCdRow.style.cssText = 'display:flex; align-items:center; gap:8px; margin-bottom:10px; flex-wrap:wrap;';
+          var cpCdLabel = document.createElement('span');
+          cpCdLabel.className = 'hint';
+          cpCdLabel.textContent = 'Channel Points Cooldown (sec)';
+          var cpCdInput = document.createElement('input');
+          cpCdInput.type = 'number';
+          cpCdInput.min = '0';
+          cpCdInput.max = '3600';
+          cpCdInput.id = 'wizardChannelPointsCooldown';
+          cpCdInput.value = '0';
+          cpCdInput.disabled = true;
+          cpCdInput.style.cssText = 'width:70px;';
+          cpCdRow.appendChild(cpCdLabel);
+          cpCdRow.appendChild(cpCdInput);
+
+          cpCb.addEventListener('change', function() {
+            cpCostInput.disabled = !cpCb.checked;
+            cpCdInput.disabled = !cpCb.checked;
+          });
+
+          // Volume — applies to the sound regardless of what triggers it, so
+          // it's kept visually separate from both Bits and Channel Points
+          // rather than sitting next to the Bits row implying a tie to it.
+          var volRow = document.createElement('div');
+          volRow.style.cssText = 'margin-bottom:10px; display:flex; align-items:center; gap:8px;';
+          var volLabel = document.createElement('span');
+          volLabel.className = 'hint';
+          volLabel.textContent = 'Volume';
+          var volRange = document.createElement('input');
+          volRange.type = 'range';
+          volRange.min = '0'; volRange.max = '100'; volRange.value = String(s.volume || 80);
+          volRange.id = 'wizardVolume';
+          var volVal = document.createElement('span');
+          volVal.className = 'hint';
+          volVal.textContent = (s.volume || 80) + '%';
+          volRange.addEventListener('input', function() { volVal.textContent = this.value + '%'; });
+          volRow.appendChild(volLabel);
+          volRow.appendChild(volRange);
+          volRow.appendChild(volVal);
 
           var shareLabel = document.createElement('label');
           shareLabel.style.cssText = 'display:flex; align-items:center; gap:6px; font-size:13px; margin-bottom:10px;';
@@ -2357,9 +2601,10 @@ export function renderSoundConfigPage(options = {}) {
           shareLabel.appendChild(document.createTextNode('Share to Community Library'));
 
           wizardBodyEl.appendChild(tierRow);
-          wizardBodyEl.appendChild(volRow);
           wizardBodyEl.appendChild(cdRow);
           wizardBodyEl.appendChild(cpRow);
+          wizardBodyEl.appendChild(cpCdRow);
+          wizardBodyEl.appendChild(volRow);
           wizardBodyEl.appendChild(shareLabel);
 
           if (!s.type || s.type === 'sound') {
@@ -2464,6 +2709,7 @@ export function renderSoundConfigPage(options = {}) {
           }
           var cpCb = document.getElementById('wizardChannelPoints');
           var cpCostInput = document.getElementById('wizardChannelPointsCost');
+          var cpCdInput = document.getElementById('wizardChannelPointsCooldown');
           var wantsChannelPoints = Boolean(cpCb && cpCb.checked);
 
           wizardNextBtn.disabled = true;
@@ -2485,7 +2731,7 @@ export function renderSoundConfigPage(options = {}) {
               var cpRes = await fetch(API_BASE + '/' + encodeURIComponent(wizard.createdSound.id) + '/channel-points', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ enabled: true, cost: Number(cpCostInput.value) || undefined })
+                body: JSON.stringify({ enabled: true, cost: Number(cpCostInput.value) || undefined, cooldownSeconds: Number(cpCdInput && cpCdInput.value) || 0 })
               });
               var cpBody = await cpRes.json().catch(function() { return {}; });
               if (!cpRes.ok) throw new Error(cpBody.error || 'Failed to enable Channel Points');
@@ -3182,6 +3428,21 @@ export function renderSoundConfigPage(options = {}) {
       })();
     </script>` : ''}
     <button class="tour-btn" id="tourBtn" title="Show guided tour">Take A Tour</button>
+    <button class="back-to-top-btn" id="backToTopBtn" title="Back to top" aria-label="Back to top" type="button">&uarr;</button>
+    <script>
+      (function() {
+        var backToTopBtn = document.getElementById('backToTopBtn');
+        if (!backToTopBtn) return;
+        function updateBackToTop() {
+          backToTopBtn.classList.toggle('visible', window.scrollY > 500);
+        }
+        window.addEventListener('scroll', updateBackToTop, { passive: true });
+        updateBackToTop();
+        backToTopBtn.addEventListener('click', function() {
+          window.scrollTo({ top: 0, behavior: 'smooth' });
+        });
+      })();
+    </script>
     <script src="https://cdn.jsdelivr.net/npm/driver.js@1.3.1/dist/driver.js.iife.js"></script>
     <script>
       (function() {
@@ -3190,7 +3451,7 @@ export function renderSoundConfigPage(options = {}) {
           document.querySelectorAll('.section-page').forEach(function(el) { el.classList.toggle('active', el.getAttribute('data-section') === s); });
           document.querySelectorAll('.sidebar-nav-item').forEach(function(el) { el.classList.toggle('active', el.getAttribute('data-section') === s); });
           var livePreviewWrapEl = document.getElementById('livePreviewWrap');
-          if (livePreviewWrapEl) livePreviewWrapEl.style.display = (s === 'alerts' || s === 'create') ? '' : 'none';
+          if (livePreviewWrapEl) livePreviewWrapEl.style.display = (s === 'alerts') ? '' : 'none';
         }
         var tourSteps = [
           {
@@ -3205,7 +3466,7 @@ export function renderSoundConfigPage(options = {}) {
             element: '.sidebar-nav',
             popover: {
               title: 'Navigation',
-              description: 'Use the sidebar to switch between sections: Alerts, Create, Library, Settings, TTS, and History.',
+              description: 'Use the sidebar to switch between sections: Alerts, Library, Settings, TTS, and History.',
               side: 'right', align: 'start'
             }
           },
@@ -3219,13 +3480,12 @@ export function renderSoundConfigPage(options = {}) {
             onHighlightStarted: function() { tourSwitchSection('alerts'); }
           },
           {
-            element: '#createAlertCard',
+            element: '#openCreateWizardBtn',
             popover: {
               title: 'Create Alert',
               description: 'Upload a sound, paste a Twitch clip URL, or upload a video. Each alert gets its own Bits tier and volume.',
               side: 'bottom', align: 'center'
-            },
-            onHighlightStarted: function() { tourSwitchSection('create'); }
+            }
           },
           {
             element: '.ext-promo',

@@ -22,7 +22,17 @@ function rewardTitleForSound(soundName) {
 // should_redemptions_skip_request_queue is what makes a redemption fire
 // immediately instead of sitting in the streamer's mod-approval queue —
 // without it, this wouldn't behave anything like an instant Bits alert.
-export async function createChannelPointsReward({ broadcasterId, accessToken, soundName, cost }) {
+// Twitch enforces this cooldown itself, shared across every viewer, before a
+// redemption ever reaches us — a real global cooldown, unlike the Bits panel's
+// client-side-only per-viewer throttle.
+function cooldownFields(globalCooldownSeconds) {
+  const seconds = Math.round(Number(globalCooldownSeconds) || 0);
+  return seconds > 0
+    ? { is_global_cooldown_enabled: true, global_cooldown_seconds: seconds }
+    : { is_global_cooldown_enabled: false };
+}
+
+export async function createChannelPointsReward({ broadcasterId, accessToken, soundName, cost, globalCooldownSeconds }) {
   if (!accessToken) return { error: "no_access_token" };
   const res = await fetch(`${REWARDS_URL}?broadcaster_id=${encodeURIComponent(broadcasterId)}`, {
     method: "POST",
@@ -32,6 +42,7 @@ export async function createChannelPointsReward({ broadcasterId, accessToken, so
       cost,
       is_enabled: true,
       should_redemptions_skip_request_queue: true,
+      ...cooldownFields(globalCooldownSeconds),
     }),
   });
   const body = await res.json().catch(() => ({}));
@@ -44,12 +55,13 @@ export async function createChannelPointsReward({ broadcasterId, accessToken, so
   return { rewardId: reward.id };
 }
 
-export async function updateChannelPointsReward({ broadcasterId, accessToken, rewardId, soundName, cost }) {
+export async function updateChannelPointsReward({ broadcasterId, accessToken, rewardId, soundName, cost, globalCooldownSeconds }) {
   if (!accessToken) return { error: "no_access_token" };
   const params = new URLSearchParams({ broadcaster_id: broadcasterId, id: rewardId });
   const patch = {};
   if (typeof cost === "number") patch.cost = cost;
   if (typeof soundName === "string") patch.title = rewardTitleForSound(soundName);
+  if (typeof globalCooldownSeconds === "number") Object.assign(patch, cooldownFields(globalCooldownSeconds));
   const res = await fetch(`${REWARDS_URL}?${params.toString()}`, {
     method: "PATCH",
     headers: authHeaders(accessToken),

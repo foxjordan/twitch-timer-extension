@@ -873,10 +873,8 @@ export function mountSoundRoutes(app, deps = {}) {
     const library = getSharedLibrary(uid);
     const sort = req.query.sort;
 
-    if (sort !== "popular" && sort !== "trending") {
-      return res.json({ sounds: library });
-    }
-
+    // playCount is attached regardless of sort — it's shown as social proof
+    // on every card, not just used for ranking under popular/trending.
     try {
       const sinceDays = sort === "trending" ? 7 : null;
       const lineageByItem = library.map((item) => getSoundLineage(item.ownerUserId, item.id));
@@ -889,7 +887,9 @@ export function mountSoundRoutes(app, deps = {}) {
         );
         return { ...item, playCount };
       });
-      withCounts.sort((a, b) => b.playCount - a.playCount);
+      if (sort === "popular" || sort === "trending") {
+        withCounts.sort((a, b) => b.playCount - a.playCount);
+      }
       res.json({ sounds: withCounts });
     } catch (err) {
       logger.error("library_sort_failed", { sort, message: err?.message });
@@ -1010,6 +1010,10 @@ export function mountSoundRoutes(app, deps = {}) {
     const cost = Number.isFinite(requestedCost) && requestedCost > 0
       ? Math.round(requestedCost)
       : (sound.channelPointsCost || DEFAULT_CHANNEL_POINTS_COST);
+    const requestedCooldown = Number(req.body?.cooldownSeconds);
+    const cooldownSeconds = Number.isFinite(requestedCooldown) && requestedCooldown >= 0
+      ? Math.round(requestedCooldown)
+      : (sound.channelPointsCooldownSeconds || 0);
 
     if (!wantsEnabled) {
       if (sound.channelPointsEnabled && sound.channelPointsRewardId) {
@@ -1042,9 +1046,10 @@ export function mountSoundRoutes(app, deps = {}) {
         rewardId: sound.channelPointsRewardId,
         soundName: sound.name,
         cost,
+        globalCooldownSeconds: cooldownSeconds,
       });
       if (result.error) return res.status(400).json({ error: result.error });
-      const updated = setSoundChannelPoints(uid, sound.id, { enabled: true, cost });
+      const updated = setSoundChannelPoints(uid, sound.id, { enabled: true, cost, cooldownSeconds });
       return res.json({ sound: updated });
     }
 
@@ -1059,10 +1064,11 @@ export function mountSoundRoutes(app, deps = {}) {
       accessToken,
       soundName: sound.name,
       cost,
+      globalCooldownSeconds: cooldownSeconds,
     });
     if (result.error) return res.status(400).json({ error: result.error });
-    const updated = setSoundChannelPoints(uid, sound.id, { enabled: true, cost, rewardId: result.rewardId });
-    logger.info("channel_points_reward_created", { userId: uid, soundId: sound.id, rewardId: result.rewardId, cost });
+    const updated = setSoundChannelPoints(uid, sound.id, { enabled: true, cost, cooldownSeconds, rewardId: result.rewardId });
+    logger.info("channel_points_reward_created", { userId: uid, soundId: sound.id, rewardId: result.rewardId, cost, cooldownSeconds });
     res.json({ sound: updated });
   });
 

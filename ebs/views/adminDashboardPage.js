@@ -1283,6 +1283,19 @@ export function renderAdminDashboardPage(options = {}) {
             var card = document.createElement('div');
             card.style.cssText = 'display:flex; align-items:center; gap:10px; padding:10px; background:var(--surface-muted); border-radius:8px;';
 
+            var thumbImg = document.createElement('img');
+            thumbImg.style.cssText = 'width:40px; height:40px; border-radius:6px; object-fit:cover; flex-shrink:0; background:var(--surface-color);';
+            thumbImg.alt = '';
+            if (s.imageFilename) {
+              // 'official' matches OFFICIAL_LIBRARY_UID in sounds_store.js —
+              // a stable, non-secret pseudo-broadcaster id, not worth
+              // round-tripping through the server just to inject a constant.
+              thumbImg.src = '/api/sounds/library/official/' + encodeURIComponent(s.id) + '/image?t=' + Date.now();
+            } else {
+              thumbImg.src = '/assets/icons/megaphone.png';
+            }
+            card.appendChild(thumbImg);
+
             var info = document.createElement('div');
             info.style.cssText = 'flex:1; min-width:0;';
             var nameDiv = document.createElement('div');
@@ -1339,6 +1352,157 @@ export function renderAdminDashboardPage(options = {}) {
                 .catch(function() {});
             });
             card.appendChild(editBtn);
+
+            // Thumbnail panel — hidden until "Thumbnail" is clicked. Upload
+            // a file directly, search Klipy GIFs, or remove the current one.
+            var thumbPanel = document.createElement('div');
+            thumbPanel.style.cssText = 'display:none; margin-top:6px; padding:10px; background:var(--surface-color); border:1px solid var(--surface-border); border-radius:8px; font-size:12px;';
+
+            var thumbBtn = document.createElement('button');
+            thumbBtn.className = 'secondary';
+            thumbBtn.textContent = 'Thumbnail';
+            thumbBtn.addEventListener('click', function() {
+              var opening = thumbPanel.style.display === 'none';
+              thumbPanel.style.display = opening ? 'block' : 'none';
+              if (!opening) return;
+              renderThumbPanel();
+            });
+            card.appendChild(thumbBtn);
+
+            function refreshThumbImg() {
+              thumbImg.src = s.imageFilename
+                ? '/api/sounds/library/official/' + encodeURIComponent(s.id) + '/image?t=' + Date.now()
+                : '/assets/icons/megaphone.png';
+            }
+
+            function renderThumbPanel() {
+              thumbPanel.textContent = '';
+
+              var uploadRow = document.createElement('div');
+              uploadRow.style.cssText = 'display:flex; gap:6px; align-items:center; flex-wrap:wrap; margin-bottom:8px;';
+              var fileInput = document.createElement('input');
+              fileInput.type = 'file';
+              fileInput.accept = 'image/png,image/jpeg,image/gif,image/webp';
+              fileInput.style.cssText = 'font-size:12px; max-width:200px;';
+              var uploadBtn = document.createElement('button');
+              uploadBtn.textContent = 'Upload';
+              var thumbStatus = document.createElement('span');
+              thumbStatus.className = 'hint';
+              uploadBtn.addEventListener('click', function() {
+                if (!fileInput.files || !fileInput.files[0]) { thumbStatus.textContent = 'Choose a file first'; return; }
+                uploadBtn.disabled = true;
+                thumbStatus.textContent = 'Uploading\\u2026';
+                var fd = new FormData();
+                fd.append('image', fileInput.files[0]);
+                fetch('/api/admin/official-library/' + encodeURIComponent(s.id) + '/image', {
+                  method: 'POST', credentials: 'same-origin', body: fd
+                })
+                  .then(function(r) { return r.json().then(function(body) { return { ok: r.ok, body: body }; }); })
+                  .then(function(res) {
+                    if (!res.ok) throw new Error(res.body.error || 'Upload failed');
+                    s.imageFilename = res.body.sound.imageFilename;
+                    refreshThumbImg();
+                    thumbStatus.textContent = 'Done!';
+                    renderThumbPanel();
+                  })
+                  .catch(function(err) { thumbStatus.textContent = err.message || 'Upload failed'; })
+                  .then(function() { uploadBtn.disabled = false; });
+              });
+              uploadRow.appendChild(fileInput);
+              uploadRow.appendChild(uploadBtn);
+              uploadRow.appendChild(thumbStatus);
+              thumbPanel.appendChild(uploadRow);
+
+              if (s.imageFilename) {
+                var removeBtn = document.createElement('button');
+                removeBtn.className = 'secondary';
+                removeBtn.style.cssText = 'color:#ef4444; border-color:#ef4444; margin-bottom:8px;';
+                removeBtn.textContent = 'Remove current thumbnail';
+                removeBtn.addEventListener('click', function() {
+                  removeBtn.disabled = true;
+                  fetch('/api/admin/official-library/' + encodeURIComponent(s.id) + '/image', {
+                    method: 'DELETE', credentials: 'same-origin'
+                  })
+                    .then(function(r) { return r.json(); })
+                    .then(function(body) {
+                      s.imageFilename = body.sound ? body.sound.imageFilename : '';
+                      refreshThumbImg();
+                      renderThumbPanel();
+                    })
+                    .catch(function() { removeBtn.disabled = false; });
+                });
+                thumbPanel.appendChild(removeBtn);
+              }
+
+              // Klipy GIF search — same allowlisted-host attach flow as the
+              // per-sound editor, scoped to the official library's own routes.
+              var gifLabel = document.createElement('div');
+              gifLabel.className = 'hint';
+              gifLabel.style.marginBottom = '4px';
+              gifLabel.textContent = 'Or search Klipy GIFs:';
+              thumbPanel.appendChild(gifLabel);
+
+              var gifSearchInput = document.createElement('input');
+              gifSearchInput.type = 'text';
+              gifSearchInput.placeholder = 'Search KLIPY\\u2026';
+              gifSearchInput.style.cssText = 'font-size:12px; padding:4px 6px; width:200px;';
+              thumbPanel.appendChild(gifSearchInput);
+
+              var gifGrid = document.createElement('div');
+              gifGrid.style.cssText = 'display:flex; flex-wrap:wrap; gap:6px; margin-top:6px; max-height:160px; overflow-y:auto;';
+              thumbPanel.appendChild(gifGrid);
+
+              var gifAttribution = document.createElement('div');
+              gifAttribution.className = 'hint';
+              gifAttribution.style.cssText = 'font-size:10px; opacity:0.7; margin-top:2px;';
+              gifAttribution.textContent = 'Powered by KLIPY';
+              thumbPanel.appendChild(gifAttribution);
+
+              var gifDebounce = null;
+              gifSearchInput.addEventListener('input', function() {
+                if (gifDebounce) clearTimeout(gifDebounce);
+                var query = gifSearchInput.value.trim();
+                if (!query) { gifGrid.textContent = ''; return; }
+                gifDebounce = setTimeout(function() { runGifSearch(query); }, 400);
+              });
+
+              function runGifSearch(query) {
+                gifGrid.textContent = 'Searching\\u2026';
+                fetch('/api/admin/official-library/klipy-search?q=' + encodeURIComponent(query), { credentials: 'same-origin' })
+                  .then(function(r) { return r.json(); })
+                  .then(function(body) {
+                    var results = body.gifs || [];
+                    gifGrid.textContent = '';
+                    if (!results.length) gifGrid.textContent = 'No results.';
+                    results.forEach(function(gif) {
+                      if (!gif.thumbUrl || !gif.attachUrl) return;
+                      var gifImg = document.createElement('img');
+                      gifImg.src = gif.thumbUrl;
+                      gifImg.alt = gif.title || '';
+                      gifImg.title = gif.title || '';
+                      gifImg.style.cssText = 'width:48px; height:48px; object-fit:cover; cursor:pointer; border-radius:4px;';
+                      gifImg.addEventListener('click', function() {
+                        thumbStatus.textContent = 'Setting thumbnail\\u2026';
+                        fetch('/api/admin/official-library/' + encodeURIComponent(s.id) + '/thumbnail-from-url', {
+                          method: 'POST', credentials: 'same-origin',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({ url: gif.attachUrl })
+                        })
+                          .then(function(r) { return r.json().then(function(b) { return { ok: r.ok, body: b }; }); })
+                          .then(function(res) {
+                            if (!res.ok) throw new Error(res.body.error || 'Failed to set thumbnail');
+                            s.imageFilename = res.body.sound.imageFilename;
+                            refreshThumbImg();
+                            renderThumbPanel();
+                          })
+                          .catch(function(err) { thumbStatus.textContent = err.message || 'Failed'; });
+                      });
+                      gifGrid.appendChild(gifImg);
+                    });
+                  })
+                  .catch(function() { gifGrid.textContent = 'Search failed.'; });
+              }
+            }
 
             // Trim panel — hidden until "Trim" is clicked, fetches duration
             // on first open, then posts trimStart/trimEnd on Apply.
@@ -1600,6 +1764,7 @@ export function renderAdminDashboardPage(options = {}) {
             card.appendChild(delBtn);
 
             wrapper.appendChild(card);
+            wrapper.appendChild(thumbPanel);
             wrapper.appendChild(trimPanel);
             officialListEl.appendChild(wrapper);
           });

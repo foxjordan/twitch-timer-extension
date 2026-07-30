@@ -14,7 +14,9 @@ import {
   deleteFileFromStorage,
   serveFileFromStorage,
   downloadFromR2ToTemp,
+  attachThumbnailFromUrl,
 } from "./routes_sounds.js";
+import { searchKlipyGifs } from "./klipy_api.js";
 import {
   OFFICIAL_LIBRARY_UID,
   listSounds,
@@ -23,9 +25,12 @@ import {
   updateSound,
   deleteSound,
   generateFilename,
+  generateImageFilename,
   getSoundFilePath,
   ALLOWED_MIME_TYPES,
+  ALLOWED_IMAGE_MIME_TYPES,
   MAX_OFFICIAL_LIBRARY_FILE_SIZE,
+  MAX_IMAGE_SIZE,
   SOUNDS_FILE_DIR,
 } from "./sounds_store.js";
 
@@ -38,6 +43,14 @@ const upload = multer({
   limits: { fileSize: MAX_OFFICIAL_LIBRARY_FILE_SIZE },
   fileFilter: (_req, file, cb) => {
     cb(null, ALLOWED_MIME_TYPES.includes(file.mimetype));
+  },
+});
+
+const imageUpload = multer({
+  dest: MULTER_TMP_DIR,
+  limits: { fileSize: MAX_IMAGE_SIZE },
+  fileFilter: (_req, file, cb) => {
+    cb(null, ALLOWED_IMAGE_MIME_TYPES.includes(file.mimetype));
   },
 });
 
@@ -130,6 +143,73 @@ export function mountOfficialLibraryRoutes(app) {
       soundId: req.params.soundId,
     });
     res.json({ ok: true });
+  });
+
+  // Upload/replace a thumbnail for an official library sound — mirrors
+  // POST /api/sounds/:soundId/image in routes_sounds.js, scoped to
+  // OFFICIAL_LIBRARY_UID instead of a broadcaster.
+  app.post("/api/admin/official-library/:soundId/image", imageUpload.single("image"), async (req, res) => {
+    if (!requireSuperAdmin(req, res)) return;
+    const sound = getSound(OFFICIAL_LIBRARY_UID, req.params.soundId);
+    if (!sound) return res.status(404).json({ error: "Sound not found" });
+    if (!req.file) {
+      return res.status(400).json({ error: "No image file provided or unsupported format" });
+    }
+    try {
+      if (sound.imageFilename) {
+        await deleteFileFromStorage(OFFICIAL_LIBRARY_UID, sound.imageFilename);
+      }
+      const imageFilename = generateImageFilename(sound.id, req.file.mimetype);
+      await uploadToStorage(OFFICIAL_LIBRARY_UID, imageFilename, req.file.path, req.file.mimetype);
+      const updated = updateSound(OFFICIAL_LIBRARY_UID, sound.id, { imageFilename });
+      logger.info("official_library_image_uploaded", { admin: req.session.twitchUser.id, soundId: sound.id, imageFilename });
+      res.json({ sound: updated });
+    } catch (err) {
+      logger.error("official_library_image_upload_failed", { soundId: req.params.soundId, message: err?.message });
+      res.status(500).json({ error: "Failed to upload image" });
+    }
+  });
+
+  // Remove an official library sound's thumbnail.
+  app.delete("/api/admin/official-library/:soundId/image", async (req, res) => {
+    if (!requireSuperAdmin(req, res)) return;
+    const sound = getSound(OFFICIAL_LIBRARY_UID, req.params.soundId);
+    if (!sound) return res.status(404).json({ error: "Sound not found" });
+    if (sound.imageFilename) {
+      await deleteFileFromStorage(OFFICIAL_LIBRARY_UID, sound.imageFilename);
+    }
+    const updated = updateSound(OFFICIAL_LIBRARY_UID, sound.id, { imageFilename: "" });
+    res.json({ sound: updated });
+  });
+
+  // GIF search for a thumbnail, via Klipy — same customerId-scoped search as
+  // the broadcaster-facing /api/sounds/klipy-search, just admin-gated.
+  app.get("/api/admin/official-library/klipy-search", async (req, res) => {
+    if (!requireSuperAdmin(req, res)) return;
+    const query = String(req.query?.q || "").trim();
+    if (!query) return res.json({ gifs: [], hasNext: false });
+    const result = await searchKlipyGifs(query, { customerId: OFFICIAL_LIBRARY_UID, page: req.query?.page || 1 });
+    res.json(result);
+  });
+
+  // Attach a thumbnail from an external URL (Klipy GIFs) instead of an
+  // upload — reuses the same allowlisted-host fetch as the broadcaster-facing
+  // route, so this can't be turned into an open SSRF fetch.
+  app.post("/api/admin/official-library/:soundId/thumbnail-from-url", async (req, res) => {
+    if (!requireSuperAdmin(req, res)) return;
+    const sound = getSound(OFFICIAL_LIBRARY_UID, req.params.soundId);
+    if (!sound) return res.status(404).json({ error: "Sound not found" });
+    const imageUrl = String(req.body?.url || "");
+    if (!imageUrl) return res.status(400).json({ error: "url is required" });
+    try {
+      const result = await attachThumbnailFromUrl(OFFICIAL_LIBRARY_UID, sound, imageUrl);
+      if (result.error) return res.status(400).json({ error: result.error });
+      logger.info("official_library_thumbnail_from_url", { admin: req.session.twitchUser.id, soundId: sound.id });
+      res.json({ sound: result.sound });
+    } catch (err) {
+      logger.error("official_library_thumbnail_from_url_failed", { soundId: sound.id, message: err?.message });
+      res.status(500).json({ error: "Failed to set thumbnail" });
+    }
   });
 
   // Admin preview only (session-gated) — plain redirect/pipe is fine here

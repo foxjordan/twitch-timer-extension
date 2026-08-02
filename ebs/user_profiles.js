@@ -50,6 +50,19 @@ export function getUserProfile(userId) {
   return profiles.get(String(userId)) || null;
 }
 
+// Twitch only returns `email` on the /users response when the token was
+// granted user:read:email — existing users won't have one until their next
+// login re-consents to the added scope. Kept separate from setUserProfile so
+// callers without a fresh email value (e.g. backfillUserProfile, which uses
+// an app token and never gets one) don't accidentally clear an existing one.
+export function setUserEmail(userId, email) {
+  if (!email) return;
+  const uid = String(userId);
+  const existing = profiles.get(uid) || {};
+  profiles.set(uid, { ...existing, email });
+  persistUserProfiles().catch(() => {});
+}
+
 // Fetches and stores { login, displayName } for a broadcaster who's missing
 // one or both — shared by any code path that discovers a broadcaster without
 // a complete profile (extension-JWT-only users who never did the full OAuth

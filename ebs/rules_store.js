@@ -59,6 +59,15 @@ function mergeRules(base, patch = {}) {
       add_seconds: numberOr(next.follow?.add_seconds ?? 600, patch.follow.add_seconds)
     };
   }
+  if (patch.raid) {
+    next.raid = {
+      enabled: (typeof patch.raid.enabled === 'boolean') ? patch.raid.enabled : (next.raid?.enabled ?? false),
+      min_viewers: numberOr(next.raid?.min_viewers ?? 1, patch.raid.min_viewers, 1),
+      base_seconds: numberOr(next.raid?.base_seconds ?? 300, patch.raid.base_seconds, 0),
+      perViewerEnabled: (typeof patch.raid.perViewerEnabled === 'boolean') ? patch.raid.perViewerEnabled : (next.raid?.perViewerEnabled ?? false),
+      perViewerSeconds: numberOr(next.raid?.perViewerSeconds ?? 0, patch.raid.perViewerSeconds, 0),
+    };
+  }
   if (patch.thirdPartyTip) {
     next.thirdPartyTip = {
       per_unit: numberOr(next.thirdPartyTip?.per_unit ?? 60, patch.thirdPartyTip.per_unit, 0),

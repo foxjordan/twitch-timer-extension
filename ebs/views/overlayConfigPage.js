@@ -490,6 +490,21 @@ export function renderOverlayConfigPage(options = {}) {
                     <label style="display:flex; gap:6px; align-items:center; opacity:.85;"><input id="r_follow_enabled" type="checkbox" /> Enabled</label>
                   </div>
                 </div>
+                <div class="control"><label>Raids</label>
+                  <div style="display:flex; gap:16px; align-items:center; flex-wrap:wrap;">
+                    <label style="display:flex; gap:6px; align-items:center; opacity:.85;"><input id="r_raid_enabled" type="checkbox" /> Enabled</label>
+                    <label style="display:flex; gap:6px; align-items:center;">Min. raiders to trigger <input id="r_raid_min_viewers" type="number" min="1" step="1" value="1" style="max-width:80px" /></label>
+                  </div>
+                </div>
+                <div class="control"><label>Raid add (sec, flat)</label><input id="r_raid_base" type="number" min="0" step="1" value="300" style="max-width:140px" />
+                  <div class="hint" style="margin-top:2px;">Added once per raid, regardless of size (if it meets the minimum above).</div>
+                </div>
+                <div class="control"><label style="display:flex; gap:6px; align-items:center;"><input id="r_raid_per_viewer_enabled" type="checkbox" /> Also scale by raid size</label>
+                  <div style="display:flex; gap:8px; align-items:center; margin-top:6px;">
+                    <input id="r_raid_per_viewer_seconds" type="number" min="0" step="1" value="0" style="max-width:140px" />
+                    <span class="hint">sec added per raider, on top of the flat amount above</span>
+                  </div>
+                </div>
                 <div class="control"><label>Hype Train Multiplier</label><input id="r_hype" type="number" min="0" step="0.1" value="2"></div>
                 <div class="control"><label>Bonus Time Multiplier</label><input id="r_bonus" type="number" min="0" step="0.1" value="2"></div>
                 <div class="control"><label style="display:flex; gap:6px; align-items:center;"><input id="r_bonus_stack" type="checkbox" /> Stack bonus with hype train</label>
@@ -569,6 +584,9 @@ export function renderOverlayConfigPage(options = {}) {
                 <span class="cmd-var">{tip_per}<span class="cmd-var-tip"><div class="cmd-var-tip-name">{tip_per}</div><div class="cmd-var-tip-desc">Time added per unit of a 3rd-party tip (e.g. per £1 on StreamElements).</div><div class="cmd-var-tip-val" data-var="tip_per">—</div></span></span>
                 <span class="cmd-var">{tip_min}<span class="cmd-var-tip"><div class="cmd-var-tip-name">{tip_min}</div><div class="cmd-var-tip-desc">Minimum tip amount required to add time.</div><div class="cmd-var-tip-val" data-var="tip_min">—</div></span></span>
                 <span class="cmd-var">{follow}<span class="cmd-var-tip"><div class="cmd-var-tip-name">{follow}</div><div class="cmd-var-tip-desc">Time added when someone follows the channel (only if follows are enabled).</div><div class="cmd-var-tip-val" data-var="follow">—</div></span></span>
+                <span class="cmd-var">{raid}<span class="cmd-var-tip"><div class="cmd-var-tip-name">{raid}</div><div class="cmd-var-tip-desc">Flat time added per raid (only if raids are enabled).</div><div class="cmd-var-tip-val" data-var="raid">—</div></span></span>
+                <span class="cmd-var">{raid_per_viewer}<span class="cmd-var-tip"><div class="cmd-var-tip-name">{raid_per_viewer}</div><div class="cmd-var-tip-desc">Extra time added per raider, on top of the flat amount (only if raid scaling is enabled).</div><div class="cmd-var-tip-val" data-var="raid_per_viewer">—</div></span></span>
+                <span class="cmd-var">{raid_min}<span class="cmd-var-tip"><div class="cmd-var-tip-name">{raid_min}</div><div class="cmd-var-tip-desc">Minimum raiders needed to trigger the raid rule.</div><div class="cmd-var-tip-val" data-var="raid_min">—</div></span></span>
                 <span class="cmd-var">{hype_mult}<span class="cmd-var-tip"><div class="cmd-var-tip-name">{hype_mult}</div><div class="cmd-var-tip-desc">Multiplier applied to all time additions during a Hype Train.</div><div class="cmd-var-tip-val" data-var="hype_mult">—</div></span></span>
               </div>
             </div>
@@ -792,6 +810,9 @@ export function renderOverlayConfigPage(options = {}) {
               } else detail = 'SE Tip';
             } else if (src === 'channel.follow') {
               detail = (who || 'Someone') + ' followed';
+            } else if (src === 'channel.raid') {
+              var raidViewers = Number(e.raidViewers || 0);
+              detail = (who || 'Someone') + ' raided' + (raidViewers > 0 ? ' with ' + raidViewers.toLocaleString() + ' viewer' + (raidViewers === 1 ? '' : 's') : '');
             } else if (src === 'channel.hype_train.begin') {
               detail = 'Hype Train started';
             } else if (src === 'channel.hype_train.progress') {
@@ -1343,6 +1364,13 @@ export function renderOverlayConfigPage(options = {}) {
               if (document.getElementById('r_follow_add')) document.getElementById('r_follow_add').value = add;
               if (document.getElementById('r_follow_enabled')) document.getElementById('r_follow_enabled').checked = enabled;
             }
+            if (rr && rr.raid) {
+              if (document.getElementById('r_raid_enabled')) document.getElementById('r_raid_enabled').checked = Boolean(rr.raid.enabled);
+              if (document.getElementById('r_raid_min_viewers')) document.getElementById('r_raid_min_viewers').value = rr.raid.min_viewers ?? 1;
+              if (document.getElementById('r_raid_base')) document.getElementById('r_raid_base').value = rr.raid.base_seconds ?? 300;
+              if (document.getElementById('r_raid_per_viewer_enabled')) document.getElementById('r_raid_per_viewer_enabled').checked = Boolean(rr.raid.perViewerEnabled);
+              if (document.getElementById('r_raid_per_viewer_seconds')) document.getElementById('r_raid_per_viewer_seconds').value = rr.raid.perViewerSeconds ?? 0;
+            }
             if (rr && rr.thirdPartyTip) {
               if (document.getElementById('r_tip_per_unit')) document.getElementById('r_tip_per_unit').value = rr.thirdPartyTip.per_unit ?? 60;
               if (document.getElementById('r_tip_min')) document.getElementById('r_tip_min').value = rr.thirdPartyTip.min_amount ?? 1;
@@ -1389,6 +1417,13 @@ export function renderOverlayConfigPage(options = {}) {
             charity: { per_usd: Number((document.getElementById('r_charity_per_usd')||{}).value||60) },
             thirdPartyTip: { per_unit: Number((document.getElementById('r_tip_per_unit')||{}).value||60), min_amount: Number((document.getElementById('r_tip_min')||{}).value||1) },
             follow: { enabled: Boolean((document.getElementById('r_follow_enabled')||{}).checked), add_seconds: Number((document.getElementById('r_follow_add')||{}).value||600) },
+            raid: {
+              enabled: Boolean((document.getElementById('r_raid_enabled')||{}).checked),
+              min_viewers: Number((document.getElementById('r_raid_min_viewers')||{}).value||1),
+              base_seconds: Number((document.getElementById('r_raid_base')||{}).value||300),
+              perViewerEnabled: Boolean((document.getElementById('r_raid_per_viewer_enabled')||{}).checked),
+              perViewerSeconds: Number((document.getElementById('r_raid_per_viewer_seconds')||{}).value||0)
+            },
             hypeTrain: { multiplier: Number(document.getElementById('r_hype').value||2) },
             bonusTime: { multiplier: Number(document.getElementById('r_bonus')?.value||2), stackWithHype: Boolean(document.getElementById('r_bonus_stack')?.checked) }
           };
@@ -1432,6 +1467,9 @@ export function renderOverlayConfigPage(options = {}) {
               tip_per:     fmtSecsClient(r.thirdPartyTip?.per_unit ?? 0),
               tip_min:     String(r.thirdPartyTip?.min_amount ?? 1),
               follow:      fmtSecsClient(r.follow?.add_seconds ?? 0),
+              raid:        fmtSecsClient(r.raid?.base_seconds ?? 0),
+              raid_per_viewer: fmtSecsClient(r.raid?.perViewerEnabled ? (r.raid?.perViewerSeconds ?? 0) : 0),
+              raid_min:    String(r.raid?.min_viewers ?? 1),
               hype_mult:   String(r.hypeTrain?.multiplier ?? 1),
             };
           }
@@ -1460,6 +1498,12 @@ export function renderOverlayConfigPage(options = {}) {
               parts.push('Tips ' + min + '=+' + fmtSecsClient(r.thirdPartyTip.per_unit));
             }
             if (r.follow?.enabled && r.follow?.add_seconds > 0) parts.push('Follow +' + fmtSecsClient(r.follow.add_seconds));
+            if (r.raid?.enabled) {
+              var raidBits = [];
+              if (r.raid.base_seconds > 0) raidBits.push('+' + fmtSecsClient(r.raid.base_seconds));
+              if (r.raid.perViewerEnabled && r.raid.perViewerSeconds > 0) raidBits.push('+' + fmtSecsClient(r.raid.perViewerSeconds) + '/raider');
+              if (raidBits.length) parts.push('Raid ' + raidBits.join(' '));
+            }
             return 'Timer Rules: ' + (parts.length ? parts.join(' | ') : 'No rules configured');
           }
           function refreshVarValues() {

@@ -1617,6 +1617,12 @@ function buildRulesSummary(rules) {
   if (rules.follow?.enabled && rules.follow?.add_seconds > 0) {
     parts.push(`Follow +${fmtSecs(rules.follow.add_seconds)}`);
   }
+  if (rules.raid?.enabled) {
+    const raidBits = [];
+    if (rules.raid.base_seconds > 0) raidBits.push(`+${fmtSecs(rules.raid.base_seconds)}`);
+    if (rules.raid.perViewerEnabled && rules.raid.perViewerSeconds > 0) raidBits.push(`+${fmtSecs(rules.raid.perViewerSeconds)}/raider`);
+    if (raidBits.length) parts.push(`Raid ${raidBits.join(" ")}`);
+  }
   const text = "Timer Rules: " + (parts.length ? parts.join(" | ") : "No rules configured");
   return text.slice(0, 500);
 }
@@ -1637,6 +1643,9 @@ function applyCustomMessage(template, rules) {
     tip_per:     fmtSecs(r.thirdPartyTip?.per_unit ?? 0),
     tip_min:     String(r.thirdPartyTip?.min_amount ?? 1),
     follow:      fmtSecs(r.follow?.add_seconds ?? 0),
+    raid:        fmtSecs(r.raid?.base_seconds ?? 0),
+    raid_per_viewer: fmtSecs(r.raid?.perViewerEnabled ? (r.raid?.perViewerSeconds ?? 0) : 0),
+    raid_min:    String(r.raid?.min_viewers ?? 1),
     hype_mult:   String(r.hypeTrain?.multiplier ?? 1),
   };
   return template.replace(/\{(\w+)\}/g, (match, key) => vars[key] ?? match).slice(0, 500);
@@ -1744,6 +1753,17 @@ function secondsFromEvent(notification, uid = "default") {
       if (RULES.follow?.enabled) return Number(RULES.follow.add_seconds || 0) | 0;
       return 0;
     }
+    case "channel.raid": {
+      if (!RULES.raid?.enabled) return 0;
+      const viewers = Number(e.viewers) || 0;
+      const minViewers = Math.max(1, Number(RULES.raid.min_viewers || 1));
+      if (viewers < minViewers) return 0;
+      let total = Math.max(0, Number(RULES.raid.base_seconds || 0));
+      if (RULES.raid.perViewerEnabled) {
+        total += viewers * Math.max(0, Number(RULES.raid.perViewerSeconds || 0));
+      }
+      return Math.floor(total);
+    }
     default:
       return 0;
   }
@@ -1759,7 +1779,12 @@ async function handleEventSub(notification, expectedUserId = null) {
   const e = notification?.payload?.event ?? {};
 
   // CRITICAL FIX: Extract broadcaster ID from event payload
-  const broadcasterId = notification?.payload?.subscription?.condition?.broadcaster_user_id;
+  // channel.raid subscribes with to_broadcaster_user_id (we only ever
+  // subscribe for raids landing on us), not broadcaster_user_id like every
+  // other event type here.
+  const broadcasterId =
+    notification?.payload?.subscription?.condition?.broadcaster_user_id ||
+    notification?.payload?.subscription?.condition?.to_broadcaster_user_id;
 
   if (!broadcasterId) {
     logger.warn("eventsub_missing_broadcaster_id", { type: subType });
@@ -1943,8 +1968,11 @@ async function processEventTimer(notification, timerUid, id, now) {
       giftCount: e.total ?? e.cumulative_total ?? e.total_count,
       charityAmount: e.amount?.value,
       charityDecimals: e.amount?.decimal_places,
+      raidViewers: e.viewers,
       userId: timerUid,
-      userName: e.is_anonymous ? "Anonymous" : (e.user_name || e.user_login || undefined),
+      userName: e.is_anonymous
+        ? "Anonymous"
+        : (e.user_name || e.user_login || e.from_broadcaster_user_name || e.from_broadcaster_user_login || undefined),
       isAnonymous: e.is_anonymous || false,
     });
 

@@ -51,6 +51,8 @@ export function renderAdminDashboardPage(options = {}) {
       thead th { text-align: left; padding: 8px 10px; border-bottom: 2px solid var(--surface-border); color: var(--text-muted); font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: 0.04em; white-space: nowrap; }
       tbody td { padding: 10px; border-bottom: 1px solid var(--surface-border); vertical-align: middle; }
       tbody tr:last-child td { border-bottom: none; }
+      .row-toggle-btn { display: none; align-items: center; gap: 4px; margin-top: 8px; font-size: 11px; font-weight: 600; padding: 4px 10px; border-radius: 999px; background: var(--surface-color); color: var(--text-muted); border: 1px solid var(--surface-border); cursor: pointer; }
+      .row-toggle-btn:hover { color: var(--text-color); }
       /* Below 700px, .responsive-table stacks each row into a card instead
          of relying on horizontal scroll — the classic "hide thead, promote
          td[data-label] to a heading via ::before" technique. Scoped to this
@@ -63,6 +65,13 @@ export function renderAdminDashboardPage(options = {}) {
         .responsive-table td { border-bottom: 1px solid var(--surface-border); padding: 8px 0; }
         .responsive-table td:last-child { border-bottom: none; }
         .responsive-table td[data-label]::before { content: attr(data-label); display: block; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.03em; color: var(--text-muted); margin-bottom: 4px; }
+        /* Broadcaster cards default to collapsed (name/status/features only)
+           on mobile, where seven stacked fields per row made the list very
+           long to scroll — Timer/Time Added/Last Event/Actions only show
+           once a card is expanded. Desktop keeps the full table untouched. */
+        .broadcaster-table tr .detail-cell { display: none; }
+        .broadcaster-table tr.row-expanded .detail-cell { display: block; }
+        .row-toggle-btn { display: inline-flex; }
       }
       .badge { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 600; }
       .badge-live { background: #eb0400; color: #fff; }
@@ -77,6 +86,15 @@ export function renderAdminDashboardPage(options = {}) {
       .broadcasters-toolbar button { padding: 4px 10px; border-radius: 6px; border: 1px solid var(--surface-border); background: var(--surface-muted); color: var(--text-color); font-size: 12px; cursor: pointer; }
       .broadcasters-toolbar button:disabled { opacity: 0.4; cursor: default; }
       .broadcasters-toolbar .spacer { flex: 1; }
+      .analytics-toolbar { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; font-size: 13px; }
+      .analytics-toolbar .range-preset-btn { padding: 5px 12px; border-radius: 999px; border: 1px solid var(--surface-border); background: var(--surface-muted); color: var(--text-muted); font-size: 12px; font-weight: 600; cursor: pointer; }
+      .analytics-toolbar .range-preset-btn:hover { color: var(--text-color); }
+      .analytics-toolbar .range-preset-btn.active { background: #9146ff; border-color: #9146ff; color: #fff; }
+      .analytics-toolbar select, .analytics-toolbar input[type="date"] { padding: 4px 8px; border-radius: 6px; border: 1px solid var(--surface-border); background: var(--surface-muted); color: var(--text-color); font-size: 12px; }
+      .analytics-toolbar .toolbar-divider { width: 1px; align-self: stretch; background: var(--surface-border); margin: 0 2px; }
+      .analytics-toolbar .toolbar-apply-btn { padding: 5px 12px; border-radius: 6px; border: 1px solid var(--surface-border); background: var(--surface-muted); color: var(--text-color); font-size: 12px; font-weight: 600; cursor: pointer; }
+      .analytics-toolbar .toolbar-apply-btn:hover { color: #9146ff; border-color: #9146ff; }
+      .analytics-range-label { font-size: 12px; color: var(--text-muted); margin: -8px 0 16px; }
       #backToTopBtn { position: fixed; bottom: 24px; right: 24px; z-index: 50; background: #9146ff; color: #fff; border: none; border-radius: 999px; padding: 10px 16px; font-size: 12px; font-weight: 600; cursor: pointer; box-shadow: 0 4px 12px rgba(0,0,0,0.3); display: none; }
       #backToTopBtn:hover { background: #7c3aed; }
       .btn-ban { background: #dc2626; color: #fff; border: none; padding: 4px 10px; border-radius: 6px; font-size: 12px; cursor: pointer; font-weight: 600; }
@@ -395,6 +413,23 @@ export function renderAdminDashboardPage(options = {}) {
       <button id="backToTopBtn" type="button">&uarr; Back to top</button>
 
       <div class="section-page" data-section="analytics">
+      <div class="analytics-toolbar" id="analyticsToolbar">
+        <button type="button" class="range-preset-btn" data-preset="24h">Last 24 Hours</button>
+        <button type="button" class="range-preset-btn" data-preset="7d">Last 7 Days</button>
+        <button type="button" class="range-preset-btn" data-preset="30d">Last 30 Days</button>
+        <button type="button" class="range-preset-btn" data-preset="thisMonth">This Month</button>
+        <button type="button" class="range-preset-btn active" data-preset="all">All Time</button>
+        <div class="toolbar-divider"></div>
+        <select id="analyticsMonthSelect">
+          <option value="">Pick a month&hellip;</option>
+        </select>
+        <div class="toolbar-divider"></div>
+        <input type="date" id="analyticsFromInput" title="From date">
+        <span style="color:var(--text-muted);">&ndash;</span>
+        <input type="date" id="analyticsToInput" title="To date">
+        <button type="button" class="toolbar-apply-btn" id="analyticsApplyCustomBtn">Apply</button>
+      </div>
+      <div class="analytics-range-label" id="analyticsRangeLabel">Showing all-time data.</div>
       <div class="overview-grid" id="analyticsStats">
         <div class="stat-card"><div class="stat-value" id="anSoundBits">--</div><div class="stat-label">Sound Alert Bits</div></div>
         <div class="stat-card"><div class="stat-value" id="anTtsBits">--</div><div class="stat-label">TTS Bits</div></div>
@@ -615,7 +650,7 @@ export function renderAdminDashboardPage(options = {}) {
         function renderBroadcasterTable(users) {
           // Build table with DOM methods to avoid innerHTML with dynamic content
           var table = document.createElement('table');
-          table.className = 'responsive-table';
+          table.className = 'responsive-table broadcaster-table';
           var thead = document.createElement('thead');
           var headerRow = document.createElement('tr');
           ['Broadcaster', 'Status', 'Timer', 'Time Added', 'Features', 'Last Event', 'Actions'].forEach(function(label) {
@@ -686,11 +721,24 @@ export function renderAdminDashboardPage(options = {}) {
             if (u.timerPaused) addBadge('Paused', 'badge-paused');
             if (u.capReached) addBadge('Capped', 'badge-capped');
             if (u.banned) addBadge('Banned', 'badge-banned');
+            // Mobile-only — expands the card to reveal Timer/Time Added/Last
+            // Event/Actions, hidden by default (see .detail-cell CSS).
+            var toggleBtn = document.createElement('button');
+            toggleBtn.type = 'button';
+            toggleBtn.className = 'row-toggle-btn';
+            toggleBtn.textContent = '\\u25be Details';
+            toggleBtn.addEventListener('click', function() {
+              var expanded = tr.classList.toggle('row-expanded');
+              toggleBtn.textContent = expanded ? '\\u25b4 Hide' : '\\u25be Details';
+            });
+            tdStatus.appendChild(document.createElement('br'));
+            tdStatus.appendChild(toggleBtn);
             tr.appendChild(tdStatus);
 
             // Timer
             var tdTimer = document.createElement('td');
             tdTimer.setAttribute('data-label', 'Timer');
+            tdTimer.className = 'detail-cell';
             var timerMain = document.createElement('div');
             timerMain.textContent = u.remaining != null ? formatSeconds(u.remaining) : '--';
             tdTimer.appendChild(timerMain);
@@ -708,6 +756,7 @@ export function renderAdminDashboardPage(options = {}) {
             // Time Added
             var tdAdded = document.createElement('td');
             tdAdded.setAttribute('data-label', 'Time Added');
+            tdAdded.className = 'detail-cell';
             tdAdded.textContent = formatSeconds(u.additionsTotal || 0);
             tr.appendChild(tdAdded);
 
@@ -734,12 +783,14 @@ export function renderAdminDashboardPage(options = {}) {
             // Last Event
             var tdEvent = document.createElement('td');
             tdEvent.setAttribute('data-label', 'Last Event');
+            tdEvent.className = 'detail-cell';
             tdEvent.textContent = timeAgo(u.lastEventAt);
             tr.appendChild(tdEvent);
 
             // Actions
             var tdActions = document.createElement('td');
             tdActions.setAttribute('data-label', 'Actions');
+            tdActions.className = 'detail-cell';
             // Manage is a plain navigation link that sat directly beside Ban/
             // Delete with only a few px of gap — an easy misclick/mistap on
             // a row whose other buttons are destructive. Styled as its own
@@ -2130,6 +2181,103 @@ export function renderAdminDashboardPage(options = {}) {
       (function() {
         var analyticsLoaded = false;
         var selectedStreamer = null;
+        var selectedStreamerName = null;
+
+        // { from, to } as ISO strings, or null for an unbounded side — null/null
+        // means all-time. Read by every analytics fetch via rangeQueryString().
+        var currentRange = { from: null, to: null };
+
+        function rangeQueryString() {
+          var params = [];
+          if (currentRange.from) params.push('from=' + encodeURIComponent(currentRange.from));
+          if (currentRange.to) params.push('to=' + encodeURIComponent(currentRange.to));
+          return params.length ? '?' + params.join('&') : '';
+        }
+
+        function clearActivePresets() {
+          document.querySelectorAll('.range-preset-btn').forEach(function(b) { b.classList.remove('active'); });
+        }
+
+        function setRange(from, to, label) {
+          currentRange = { from: from ? from.toISOString() : null, to: to ? to.toISOString() : null };
+          var labelEl = document.getElementById('analyticsRangeLabel');
+          if (labelEl) labelEl.textContent = label;
+          if (analyticsLoaded) {
+            fetchAnalytics();
+            if (selectedStreamer) fetchStreamerDetail(selectedStreamer, selectedStreamerName);
+          }
+        }
+
+        document.querySelectorAll('.range-preset-btn').forEach(function(btn) {
+          btn.addEventListener('click', function() {
+            clearActivePresets();
+            btn.classList.add('active');
+            var monthSel = document.getElementById('analyticsMonthSelect');
+            var fromInput = document.getElementById('analyticsFromInput');
+            var toInput = document.getElementById('analyticsToInput');
+            if (monthSel) monthSel.value = '';
+            if (fromInput) fromInput.value = '';
+            if (toInput) toInput.value = '';
+            var preset = btn.getAttribute('data-preset');
+            var now = new Date();
+            if (preset === 'all') {
+              setRange(null, null, 'Showing all-time data.');
+            } else if (preset === '24h') {
+              setRange(new Date(now.getTime() - 24 * 60 * 60 * 1000), null, 'Showing the last 24 hours.');
+            } else if (preset === '7d') {
+              setRange(new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000), null, 'Showing the last 7 days.');
+            } else if (preset === '30d') {
+              setRange(new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000), null, 'Showing the last 30 days.');
+            } else if (preset === 'thisMonth') {
+              var start = new Date(now.getFullYear(), now.getMonth(), 1);
+              setRange(start, null, 'Showing ' + start.toLocaleDateString(undefined, { month: 'long', year: 'numeric' }) + ' to date.');
+            }
+          });
+        });
+
+        (function populateMonthSelect() {
+          var sel = document.getElementById('analyticsMonthSelect');
+          if (!sel) return;
+          var now = new Date();
+          for (var i = 0; i < 12; i++) {
+            var d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+            var value = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
+            var opt = document.createElement('option');
+            opt.value = value;
+            opt.textContent = d.toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
+            sel.appendChild(opt);
+          }
+          sel.addEventListener('change', function() {
+            var val = this.value;
+            if (!val) return;
+            clearActivePresets();
+            var fromInput = document.getElementById('analyticsFromInput');
+            var toInput = document.getElementById('analyticsToInput');
+            if (fromInput) fromInput.value = '';
+            if (toInput) toInput.value = '';
+            var parts = val.split('-');
+            var year = parseInt(parts[0], 10), month = parseInt(parts[1], 10) - 1;
+            var start = new Date(year, month, 1);
+            var end = new Date(year, month + 1, 1);
+            setRange(start, end, 'Showing ' + start.toLocaleDateString(undefined, { month: 'long', year: 'numeric' }) + '.');
+          });
+        })();
+
+        var applyCustomBtn = document.getElementById('analyticsApplyCustomBtn');
+        if (applyCustomBtn) {
+          applyCustomBtn.addEventListener('click', function() {
+            var fromVal = document.getElementById('analyticsFromInput').value;
+            var toVal = document.getElementById('analyticsToInput').value;
+            if (!fromVal && !toVal) return;
+            clearActivePresets();
+            var monthSel = document.getElementById('analyticsMonthSelect');
+            if (monthSel) monthSel.value = '';
+            var from = fromVal ? new Date(fromVal + 'T00:00:00') : null;
+            var to = toVal ? new Date(new Date(toVal + 'T00:00:00').getTime() + 24 * 60 * 60 * 1000) : null;
+            var label = 'Showing ' + (fromVal || 'the beginning') + ' through ' + (toVal || 'now') + '.';
+            setRange(from, to, label);
+          });
+        }
 
         function fmtBits(n) {
           if (n == null) return '--';
@@ -2236,8 +2384,9 @@ export function renderAdminDashboardPage(options = {}) {
             });
             tr.addEventListener('click', function() {
               selectedStreamer = row.channelId;
+              selectedStreamerName = row.displayName || row.channelId;
               renderStreamersTable(streamers);
-              fetchStreamerDetail(row.channelId, row.displayName || row.channelId);
+              fetchStreamerDetail(row.channelId, selectedStreamerName);
             });
             tbody.appendChild(tr);
           });
@@ -2281,7 +2430,7 @@ export function renderAdminDashboardPage(options = {}) {
           detailTitle.textContent = displayName;
           detailBody.textContent = '';
           detailBody.appendChild(makeEmptyState('Loading...'));
-          fetch('/api/admin/analytics/' + encodeURIComponent(channelId), { credentials: 'same-origin' })
+          fetch('/api/admin/analytics/' + encodeURIComponent(channelId) + rangeQueryString(), { credentials: 'same-origin' })
             .then(function(r) { return r.json(); })
             .then(function(data) {
               detailBody.textContent = '';
@@ -2393,7 +2542,7 @@ export function renderAdminDashboardPage(options = {}) {
         }
 
         function fetchAnalyticsFunnel() {
-          fetch('/api/admin/analytics/funnel', { credentials: 'same-origin' })
+          fetch('/api/admin/analytics/funnel' + rangeQueryString(), { credentials: 'same-origin' })
             .then(function(r) { return r.json(); })
             .then(function(data) {
               if (data.error) return;
@@ -2406,7 +2555,7 @@ export function renderAdminDashboardPage(options = {}) {
         }
 
         function fetchAnalytics() {
-          fetch('/api/admin/analytics', { credentials: 'same-origin' })
+          fetch('/api/admin/analytics' + rangeQueryString(), { credentials: 'same-origin' })
             .then(function(r) { return r.json(); })
             .then(function(data) {
               if (data.error) return;

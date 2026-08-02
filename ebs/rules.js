@@ -7,6 +7,7 @@ export const RULES = {
   hypeTrain: { multiplier: 2.0 },                    // double during hype
   bonusTime: { multiplier: 2.0, stackWithHype: false }, // manual bonus multiplier
   follow: { enabled: false, add_seconds: 600 },       // optional: follow -> +10 min
+  raid: { enabled: false, min_viewers: 1, base_seconds: 300, perViewerEnabled: false, perViewerSeconds: 0 }, // optional: raid -> +5 min flat, or scale by raid size
   thirdPartyTip: { per_unit: 60, min_amount: 1 },     // 1.00 donated -> +60s, min 1.00 to trigger
   chatCommand: { enabled: false, command: 'timerules', cooldownSeconds: 30, customMessage: '' }, // viewers run !timerules to see rules in chat
 };

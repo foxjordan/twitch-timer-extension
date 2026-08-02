@@ -64,6 +64,7 @@ export async function connectEventSubWS({
         { type: 'channel.hype_train.end', version: '2' },
         { type: 'channel.channel_points_custom_reward_redemption.add', version: '1' },
         { type: 'channel.follow', version: '2' },
+        { type: 'channel.raid', version: '1' },
       ];
       // By far the highest-volume subscription of the bunch (fires for every
       // chat message, not just meaningful events) — only worth paying for on
@@ -84,6 +85,10 @@ export async function connectEventSubWS({
           }
           if (type === 'channel.chat.message') {
             body.condition = { broadcaster_user_id: broadcasterId, user_id: broadcasterId };
+          }
+          if (type === 'channel.raid') {
+            // We only care about raids landing on us, not ones we send out.
+            body.condition = { to_broadcaster_user_id: broadcasterId };
           }
           const r = await fetch('https://api.twitch.tv/helix/eventsub/subscriptions', {
             method: 'POST',

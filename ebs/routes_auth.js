@@ -6,7 +6,7 @@ import { logger } from './logger.js';
 import { storeUserAccessToken } from './twitch_tokens.js';
 import { getBaseUrl } from './base_url.js';
 import { syncSubscriptionFromStripe } from './routes_stripe.js';
-import { setUserProfile } from './user_profiles.js';
+import { setUserProfile, setUserEmail } from './user_profiles.js';
 
 /**
  * Build a signed OAuth state value that encodes the origin (so the callback
@@ -86,7 +86,7 @@ export function mountAuthRoutes(app, opts = {}) {
       client_id: clientId,
       redirect_uri: redirectUri,
       response_type: 'code',
-      scope: 'channel:read:subscriptions bits:read channel:read:charity channel:read:hype_train moderator:read:followers moderation:read user:read:chat user:write:chat channel:manage:redemptions',
+      scope: 'channel:read:subscriptions bits:read channel:read:charity channel:read:hype_train moderator:read:followers moderation:read user:read:chat user:write:chat channel:manage:redemptions user:read:email',
       force_verify: 'true',
       state
     });
@@ -166,6 +166,7 @@ export function mountAuthRoutes(app, opts = {}) {
       req.session.isAdmin = true;
       req.session.twitchUser = { id: user.id, login: user.login, display_name: user.display_name };
       try { setUserProfile(user.id, user.login, user.display_name || user.login); } catch {}
+      try { setUserEmail(user.id, user.email); } catch {}
       // ensure a per-user overlay key exists and store in session for convenience
       try { req.session.userOverlayKey = getOrCreateUserKey(user.id); } catch {}
       try { storeUserAccessToken(user.id, accessToken, expiresIn, refreshToken); } catch {}

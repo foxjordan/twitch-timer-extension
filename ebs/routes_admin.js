@@ -34,6 +34,20 @@ export function isSuperAdmin(req) {
   return SUPER_ADMIN_IDS.includes(String(req.session.twitchUser.id));
 }
 
+// Parses ?from=&to= (ISO date/datetime strings) shared by the analytics
+// routes. Either or both may be absent, meaning unbounded on that side (the
+// existing all-time behavior) — callers pass these straight into a
+// `($n::timestamptz IS NULL OR created_at ...)` clause rather than branching
+// query text, so one query shape covers "all time" and any bounded range.
+function parseDateRange(req) {
+  const from = typeof req.query.from === "string" && req.query.from ? new Date(req.query.from) : null;
+  const to = typeof req.query.to === "string" && req.query.to ? new Date(req.query.to) : null;
+  return {
+    from: from && !isNaN(from.getTime()) ? from.toISOString() : null,
+    to: to && !isNaN(to.getTime()) ? to.toISOString() : null,
+  };
+}
+
 export function mountAdminRoutes(app, ctx) {
   const {
     getAllActiveBroadcasters,
@@ -568,22 +582,30 @@ export function mountAdminRoutes(app, ctx) {
       return res.status(403).json({ error: "Access denied" });
     }
     try {
-      const result = await db.query(`
+      const { from, to } = parseDateRange(req);
+      const result = await db.query(
+        `
         WITH loaded AS (
           SELECT DISTINCT channel_id
           FROM client_events
           WHERE event_name = 'config_loaded'
+            AND ($1::timestamptz IS NULL OR created_at >= $1)
+            AND ($2::timestamptz IS NULL OR created_at < $2)
         ),
         completed AS (
           SELECT DISTINCT channel_id
           FROM client_events
           WHERE event_name IN ('sound_uploaded', 'clip_created', 'video_uploaded', 'sound_added_from_library')
+            AND ($1::timestamptz IS NULL OR created_at >= $1)
+            AND ($2::timestamptz IS NULL OR created_at < $2)
         )
         SELECT loaded.channel_id,
                (completed.channel_id IS NOT NULL) AS did_complete
           FROM loaded
           LEFT JOIN completed ON completed.channel_id = loaded.channel_id
-      `);
+      `,
+        [from, to],
+      );
 
       const byLanguage = new Map();
       for (const row of result.rows) {
@@ -605,39 +627,59 @@ export function mountAdminRoutes(app, ctx) {
       return res.status(403).json({ error: "Access denied" });
     }
     try {
+      const { from, to } = parseDateRange(req);
+      const range = [from, to];
       const [soundRes, ttsRes, skuRes, streamerRes] = await Promise.all([
-        db.query(`
+        db.query(
+          `
           SELECT
             COALESCE(SUM(bits_amount), 0)::bigint AS total_bits,
             COUNT(*) FILTER (WHERE event_kind = 'played')::int AS played_count,
             COUNT(*) FILTER (WHERE event_kind = 'test')::int   AS test_count,
             COUNT(*) FILTER (WHERE event_kind = 'failed')::int AS failed_count
           FROM sound_alert_events
-        `),
-        db.query(`
+          WHERE ($1::timestamptz IS NULL OR created_at >= $1)
+            AND ($2::timestamptz IS NULL OR created_at < $2)
+        `,
+          range,
+        ),
+        db.query(
+          `
           SELECT
             COALESCE(SUM(bits_amount), 0)::bigint AS total_bits,
             COUNT(*) FILTER (WHERE event_kind = 'played')::int   AS played_count,
             COUNT(*) FILTER (WHERE event_kind = 'test')::int     AS test_count,
             COUNT(*) FILTER (WHERE event_kind = 'rejected')::int AS rejected_count
           FROM tts_events
-        `),
-        db.query(`
+          WHERE ($1::timestamptz IS NULL OR created_at >= $1)
+            AND ($2::timestamptz IS NULL OR created_at < $2)
+        `,
+          range,
+        ),
+        db.query(
+          `
           SELECT bits_amount, src, COUNT(*)::int AS count
           FROM (
             SELECT bits_amount, 'sound' AS src
               FROM sound_alert_events
              WHERE event_kind = 'played' AND bits_amount IS NOT NULL
+               AND ($1::timestamptz IS NULL OR created_at >= $1)
+               AND ($2::timestamptz IS NULL OR created_at < $2)
             UNION ALL
             SELECT bits_amount, 'tts' AS src
               FROM tts_events
              WHERE event_kind = 'played' AND bits_amount IS NOT NULL
+               AND ($1::timestamptz IS NULL OR created_at >= $1)
+               AND ($2::timestamptz IS NULL OR created_at < $2)
           ) combined
           GROUP BY bits_amount, src
           ORDER BY count DESC
           LIMIT 20
-        `),
-        db.query(`
+        `,
+          range,
+        ),
+        db.query(
+          `
           SELECT
             channel_id,
             COALESCE(SUM(CASE WHEN src = 'sound' THEN bits_amount ELSE 0 END), 0)::bigint AS sound_bits,
@@ -647,14 +689,22 @@ export function mountAdminRoutes(app, ctx) {
             COUNT(*) FILTER (WHERE src = 'tts')::int   AS tts_count
           FROM (
             SELECT channel_id, bits_amount, 'sound' AS src
-              FROM sound_alert_events WHERE event_kind = 'played'
+              FROM sound_alert_events
+             WHERE event_kind = 'played'
+               AND ($1::timestamptz IS NULL OR created_at >= $1)
+               AND ($2::timestamptz IS NULL OR created_at < $2)
             UNION ALL
             SELECT channel_id, bits_amount, 'tts' AS src
-              FROM tts_events WHERE event_kind = 'played'
+              FROM tts_events
+             WHERE event_kind = 'played'
+               AND ($1::timestamptz IS NULL OR created_at >= $1)
+               AND ($2::timestamptz IS NULL OR created_at < $2)
           ) combined
           GROUP BY channel_id
           ORDER BY total_bits DESC
-        `),
+        `,
+          range,
+        ),
       ]);
 
       const s = soundRes.rows[0];
@@ -705,32 +755,39 @@ export function mountAdminRoutes(app, ctx) {
     }
     const uid = String(req.params.userId);
     try {
+      const { from, to } = parseDateRange(req);
       const [topSoundsRes, recentSoundRes, recentTtsRes] = await Promise.all([
         db.query(
           `SELECT sound_id, sound_name, COUNT(*)::int AS count,
                   COALESCE(SUM(bits_amount), 0)::bigint AS total_bits
              FROM sound_alert_events
             WHERE channel_id = $1 AND event_kind = 'played'
+              AND ($2::timestamptz IS NULL OR created_at >= $2)
+              AND ($3::timestamptz IS NULL OR created_at < $3)
             GROUP BY sound_id, sound_name
             ORDER BY count DESC
             LIMIT 10`,
-          [uid],
+          [uid, from, to],
         ),
         db.query(
           `SELECT sound_name, alert_type, bits_amount, viewer_user_id, created_at
              FROM sound_alert_events
             WHERE channel_id = $1 AND event_kind = 'played'
+              AND ($2::timestamptz IS NULL OR created_at >= $2)
+              AND ($3::timestamptz IS NULL OR created_at < $3)
             ORDER BY created_at DESC
             LIMIT 15`,
-          [uid],
+          [uid, from, to],
         ),
         db.query(
           `SELECT voice_name, bits_amount, viewer_user_id, created_at
              FROM tts_events
             WHERE channel_id = $1 AND event_kind = 'played'
+              AND ($2::timestamptz IS NULL OR created_at >= $2)
+              AND ($3::timestamptz IS NULL OR created_at < $3)
             ORDER BY created_at DESC
             LIMIT 15`,
-          [uid],
+          [uid, from, to],
         ),
       ]);
       res.json({

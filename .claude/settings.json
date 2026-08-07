@@ -56,7 +56,11 @@
       "WebFetch(domain:subathontimer.com)",
       "WebFetch(domain:www.streamloots.com)",
       "WebFetch(domain:widgets.streamelements.com)",
-      "WebFetch(domain:obsproject.com)"
+      "WebFetch(domain:obsproject.com)",
+      "mcp__plugin_chrome-devtools-mcp_chrome-devtools__resize_page",
+      "mcp__plugin_chrome-devtools-mcp_chrome-devtools__take_screenshot",
+      "WebFetch(domain:developers.google.com)",
+      "WebFetch(domain:help.twitch.tv)"
     ],
     "additionalDirectories": [
       "/tmp"

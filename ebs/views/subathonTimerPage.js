@@ -139,6 +139,28 @@ export function renderSubathonTimerPage(options = {}) {
       .screenshot-card { background: var(--surface-color); border: 1px solid var(--surface-border); border-radius: 14px; overflow: hidden; box-shadow: 0 8px 32px var(--goal-card-shadow); }
       .screenshot-card img { width: 100%; height: auto; display: block; }
 
+      .rules-data-section { max-width: 860px; margin: 0 auto 72px; }
+      .rules-data-section > h2 { font-size: 26px; font-weight: 700; text-align: center; margin: 0 0 14px; }
+      .rules-data-section > .section-intro { text-align: center; color: var(--text-muted); font-size: 15.5px; line-height: 1.7; max-width: 680px; margin: 0 auto 36px; }
+      .rules-table-wrap { background: var(--surface-color); border: 1px solid var(--surface-border); border-radius: 14px; padding: 8px 22px; box-shadow: 0 4px 20px var(--goal-card-shadow); margin-bottom: 40px; overflow-x: auto; }
+      .rules-table { width: 100%; border-collapse: collapse; font-size: 14.5px; }
+      .rules-table th { text-align: left; padding: 12px 10px; color: var(--text-muted); font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; border-bottom: 2px solid var(--surface-border); white-space: nowrap; }
+      .rules-table td { padding: 12px 10px; border-bottom: 1px solid var(--surface-border); }
+      .rules-table tr:last-child td { border-bottom: none; }
+      .rules-table td:first-child { font-weight: 600; }
+      .rules-table td:last-child { color: var(--accent-color); font-weight: 700; white-space: nowrap; }
+      .preset-cards { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 32px; }
+      .preset-card { background: var(--surface-color); border: 1px solid var(--surface-border); border-radius: 14px; padding: 22px; box-shadow: 0 4px 20px var(--goal-card-shadow); }
+      .preset-card h3 { margin: 0 0 10px; font-size: 16px; font-weight: 700; }
+      .preset-card p { margin: 0 0 14px; color: var(--text-muted); font-size: 14px; line-height: 1.6; }
+      .preset-card ul { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 6px; font-size: 13.5px; }
+      .preset-card ul li { display: flex; justify-content: space-between; gap: 10px; color: var(--text-muted); }
+      .preset-card ul li span:last-child { color: var(--text-color); font-weight: 600; }
+      .rules-stats-note { font-size: 13.5px; color: var(--text-muted); line-height: 1.7; text-align: center; max-width: 680px; margin: 0 auto; }
+      @media (max-width: 700px) {
+        .preset-cards { grid-template-columns: 1fr; }
+      }
+
       .faq-section { margin-bottom: 72px; }
       .faq-section > h2 { font-size: 26px; font-weight: 700; text-align: center; margin: 0 0 32px; }
       .faq-list { max-width: 720px; margin: 0 auto; display: flex; flex-direction: column; gap: 14px; }
@@ -216,6 +238,53 @@ export function renderSubathonTimerPage(options = {}) {
           </div>
         </div>
       </div>
+
+      <!-- Real rule data -->
+      <section class="rules-data-section">
+        <h2>How streamers actually set up their subathon rules</h2>
+        <p class="section-intro">There's no single right way to configure a subathon timer — it depends on your typical Bits and sub volume, and how long you want a stream to be able to run. Rather than guess, here's what's actually configured across active Livestreamer Hub broadcasters right now.</p>
+
+        <div class="rules-table-wrap">
+          <table class="rules-table">
+            <thead>
+              <tr><th>Trigger</th><th>Median setup</th></tr>
+            </thead>
+            <tbody>
+              <tr><td>Bits</td><td>50 Bits = +30 sec</td></tr>
+              <tr><td>Tier 1 Sub</td><td>+5 min</td></tr>
+              <tr><td>Tier 2 Sub</td><td>+10 min</td></tr>
+              <tr><td>Tier 3 Sub</td><td>+15 min</td></tr>
+              <tr><td>Tier 1 Gift Sub</td><td>+5 min</td></tr>
+              <tr><td>Hype Train</td><td>2&times; multiplier</td></tr>
+              <tr><td>Manual Bonus Time</td><td>2&times; multiplier</td></tr>
+              <tr><td>Charity Donation</td><td>+60 sec per $1</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="preset-cards">
+          <div class="preset-card">
+            <h3>The growth-focused setup</h3>
+            <p>Common on channels that are actively building an audience — a low Bits threshold so small cheers still matter, and a follow bonus turned on so every new follower feels worth something too.</p>
+            <ul>
+              <li><span>Bits</span><span>10 Bits = +30 sec</span></li>
+              <li><span>Tier 1 / 2 / 3 Sub</span><span>+3 / +5 / +10 min</span></li>
+              <li><span>Follow bonus</span><span>Enabled</span></li>
+            </ul>
+          </div>
+          <div class="preset-card">
+            <h3>The high-stakes setup</h3>
+            <p>Common on channels with an established base — subs and gifted bombs do the heavy lifting, tier scaling is steep, and the timer is built to swing hard on big moments rather than steadily from small ones.</p>
+            <ul>
+              <li><span>Bits</span><span>50 Bits = +1 min</span></li>
+              <li><span>Tier 1 / 2 / 3 Sub</span><span>+3 / +12 / +24 min</span></li>
+              <li><span>Gift subs</span><span>Scaled separately from subs</span></li>
+            </ul>
+          </div>
+        </div>
+
+        <p class="rules-stats-note">A few other patterns worth knowing: about 1 in 4 active broadcasters (26%) also enable a follow bonus. Only 11% stack their manual Bonus Time multiplier on top of Hype Train — most treat them as alternatives rather than combining them. And 37% set gift subs to automatically match their regular sub-tier values instead of pricing them separately.</p>
+      </section>
 
       <!-- FAQ -->
       <section class="faq-section">

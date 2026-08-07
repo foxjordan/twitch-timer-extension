@@ -5,6 +5,13 @@ import { BrandedFooter } from "./BrandedFooter.jsx";
 
 const EBS_BASE = import.meta.env.VITE_EBS_BASE || "https://livestreamerhub.com";
 
+// Timestamp (ms since navigation start) when this module started executing —
+// close enough to "the panel began loading" to use as the baseline for the
+// one-time config_load_timing event below, which exists to find out WHERE
+// the "Loading sounds..." delay users report actually goes: Twitch's own
+// onAuthorized handshake, or our own /api/sounds round trip.
+const moduleEvalAt = performance.now();
+
 // Mirrors ebs/views/theme.js's THEME_CSS_VARS so the Twitch panel uses the
 // same design tokens as the livestreamerhub.com dashboard, in both themes.
 const THEME_TOKENS = {
@@ -121,7 +128,8 @@ function ConfigApp() {
   );
 
   const fetchSounds = useCallback(
-    async (token) => {
+    async (token, timing) => {
+      const fetchStartAt = performance.now();
       try {
         const res = await fetch(`${EBS_BASE}/api/sounds`, {
           headers: { Authorization: `Bearer ${token}` },
@@ -136,6 +144,19 @@ function ConfigApp() {
         setInitialLoadFailed(true);
       } finally {
         setLoading(false);
+        // Only the initial load (see the onAuthorized handler below) passes
+        // `timing` — this reports once per panel open, not on every
+        // fetchSounds call site (e.g. not on retry-after-error paths that
+        // may call this elsewhere).
+        if (timing) {
+          const fetchEndAt = performance.now();
+          logEvent("config_load_timing", {
+            moduleToAuthorizedMs: Math.round(timing.authorizedAt - timing.moduleEvalAt),
+            authorizedToFetchStartMs: Math.round(fetchStartAt - timing.authorizedAt),
+            fetchDurationMs: Math.round(fetchEndAt - fetchStartAt),
+            totalMs: Math.round(fetchEndAt - timing.moduleEvalAt),
+          });
+        }
       }
     },
     [],
@@ -145,10 +166,11 @@ function ConfigApp() {
     setupAnalytics("config");
 
     window.Twitch?.ext?.onAuthorized((authData) => {
+      const authorizedAt = performance.now();
       setAuth(authData);
       setAnalyticsAuth(authData);
       logEvent("config_loaded");
-      fetchSounds(authData.token);
+      fetchSounds(authData.token, { moduleEvalAt, authorizedAt });
       fetch(`${EBS_BASE}/api/sounds/overlay-url`, {
         headers: { Authorization: `Bearer ${authData.token}` },
       })

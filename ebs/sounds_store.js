@@ -487,12 +487,21 @@ async function seedDefaultSoundsInternal(uid) {
   const officialSounds = listSounds(OFFICIAL_LIBRARY_UID).filter((s) => s.type === "sound");
   if (officialSounds.length === 0) return; // nothing curated to seed from
 
+  // Copy all picks concurrently rather than one at a time — each is a
+  // sequential round trip to R2 (audio + optional thumbnail), so awaiting
+  // them one by one turned a brand-new broadcaster's very first GET
+  // /api/sounds (which awaits this whole function) into several seconds of
+  // blocked "Loading sounds..." on the config panel. Running them in
+  // parallel bounds the wait to roughly the slowest single copy instead of
+  // the sum of all of them. Safe to parallelize: each copy generates its
+  // own unique sound id and only ever adds a new Map entry (never mutates
+  // an existing one), and MAX_SOUNDS_PER_USER (20) is well above SEED_COUNT
+  // (4), so the redundant concurrent size checks inside copySoundToUser
+  // can't meaningfully overrun the cap.
   const picks = pickRandom(officialSounds, Math.min(SEED_COUNT, officialSounds.length));
-  for (const sound of picks) {
-    try {
-      await copySoundToUser(OFFICIAL_LIBRARY_UID, sound.id, uid);
-    } catch {}
-  }
+  await Promise.all(
+    picks.map((sound) => copySoundToUser(OFFICIAL_LIBRARY_UID, sound.id, uid).catch(() => {})),
+  );
 }
 
 // Fisher-Yates partial shuffle — picks `count` distinct random items from arr.

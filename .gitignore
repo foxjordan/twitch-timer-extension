@@ -40,3 +40,5 @@ Thumbs.db
 *.swo
 ebs/.env
 extension/.env
+# Git worktrees (local dev isolation, not part of the repo)
+.worktrees/

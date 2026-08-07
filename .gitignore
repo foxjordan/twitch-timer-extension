@@ -42,3 +42,6 @@ ebs/.env
 extension/.env
 # Git worktrees (local dev isolation, not part of the repo)
 .worktrees/
+
+# Superpowers brainstorming session artifacts (local scratch, not part of the repo)
+.superpowers/

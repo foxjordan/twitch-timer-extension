@@ -1,0 +1,19 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Preview: Panel</title>
+  </head>
+  <body style="margin:0;background:#0e0e10;color:#efeff1;font-family:Inter,system-ui,Arial,sans-serif">
+    <div id="root"></div>
+    <script type="module">
+      import { installPreviewTwitchMock } from '/src/previewMock.js';
+      installPreviewTwitchMock({
+        channelId: import.meta.env.VITE_PREVIEW_CHANNEL_ID,
+        token: import.meta.env.VITE_PREVIEW_TOKEN,
+      });
+    </script>
+    <script type="module" src="/src/App.jsx"></script>
+  </body>
+</html>

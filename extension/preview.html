@@ -1,0 +1,104 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Extension UI Preview</title>
+    <style>
+      body {
+        margin: 0;
+        font-family: Inter, system-ui, Arial, sans-serif;
+        background: #18181b;
+        color: #efeff1;
+      }
+      .banner {
+        background: #dc2626;
+        color: #fff;
+        padding: 8px 16px;
+        font-size: 13px;
+        font-weight: 600;
+        text-align: center;
+      }
+      .controls {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 10px 16px;
+        border-bottom: 1px solid #303038;
+      }
+      .controls button {
+        cursor: pointer;
+        background: #2c2c31;
+        color: #efeff1;
+        border: 1px solid #3a3a3d;
+        border-radius: 6px;
+        padding: 6px 12px;
+        font-size: 13px;
+      }
+      .panels {
+        display: flex;
+        gap: 16px;
+        padding: 16px;
+        align-items: flex-start;
+        flex-wrap: wrap;
+      }
+      .panel-col {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+      }
+      .panel-label {
+        font-size: 12px;
+        font-weight: 700;
+        text-transform: uppercase;
+        opacity: 0.7;
+      }
+      iframe {
+        border: 1px solid #303038;
+        border-radius: 8px;
+        background: #0e0e10;
+      }
+      #component-frame-wrap {
+        background:
+          linear-gradient(45deg, #2c2c31 25%, transparent 25%, transparent 75%, #2c2c31 75%),
+          linear-gradient(45deg, #2c2c31 25%, transparent 25%, transparent 75%, #2c2c31 75%);
+        background-size: 16px 16px;
+        background-position: 0 0, 8px 8px;
+        border-radius: 8px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="banner">⚠️ Connected to PRODUCTION (livestreamerhub.com) — actions taken here are real</div>
+    <div class="controls">
+      <button id="theme-toggle">Toggle theme (currently dark)</button>
+    </div>
+    <div class="panels">
+      <div class="panel-col">
+        <div class="panel-label">Config</div>
+        <iframe src="/preview-config.html" width="420" height="700"></iframe>
+      </div>
+      <div class="panel-col">
+        <div class="panel-label">Panel / Mobile</div>
+        <iframe src="/preview-panel.html" width="330" height="700"></iframe>
+      </div>
+      <div class="panel-col">
+        <div class="panel-label">Component (overlay)</div>
+        <div id="component-frame-wrap">
+          <iframe src="/preview-component.html" width="300" height="200" style="background:transparent"></iframe>
+        </div>
+      </div>
+    </div>
+    <script>
+      let theme = 'dark';
+      const btn = document.getElementById('theme-toggle');
+      btn.addEventListener('click', () => {
+        theme = theme === 'dark' ? 'light' : 'dark';
+        btn.textContent = `Toggle theme (currently ${theme})`;
+        document.querySelectorAll('iframe').forEach((frame) => {
+          frame.contentWindow.postMessage({ type: 'preview-theme', theme }, window.location.origin);
+        });
+      });
+    </script>
+  </body>
+</html>

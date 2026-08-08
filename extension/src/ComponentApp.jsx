@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, useCallback } from "react";
 import ReactDOM from "react-dom/client";
 import { setupAnalytics, setAnalyticsAuth, logEvent } from "./firebase.js";
 import { BrandedFooter } from "./BrandedFooter.jsx";
+import { CompactPulse } from "./SplashScreen.jsx";
 
 const EBS_BASE = import.meta.env.VITE_EBS_BASE || "https://livestreamerhub.com";
 
@@ -665,11 +666,11 @@ function ComponentApp() {
   if (loading) {
     return (
       <div style={containerStyle}>
-        <div style={headerStyle}>
-          <span style={{ display: "flex", alignItems: "center", gap: 6 }}><img src="./alert_wave.png" alt="" style={{ height: 18, width: 18 }} />Sound Alerts</span>
-        </div>
-        <div style={{ padding: 12, textAlign: "center", opacity: 0.5 }}>
-          Loading...
+        <div style={contentStyle}>
+          <div style={headerStyle}>
+            <span style={{ display: "flex", alignItems: "center", gap: 6 }}><img src="./alert_wave.png" alt="" style={{ height: 18, width: 18 }} />Sound Alerts</span>
+          </div>
+          <CompactPulse text="Loading your sounds…" />
         </div>
       </div>
     );
@@ -682,11 +683,13 @@ function ComponentApp() {
   if (!hasSounds && !hasTts) {
     return (
       <div style={containerStyle}>
-        <div style={headerStyle}>
-          <span style={{ display: "flex", alignItems: "center", gap: 6 }}><img src="./alert_wave.png" alt="" style={{ height: 18, width: 18 }} />Sound Alerts</span>
-        </div>
-        <div style={{ padding: 12, textAlign: "center", opacity: 0.5 }}>
-          No alerts available
+        <div style={contentStyle}>
+          <div style={headerStyle}>
+            <span style={{ display: "flex", alignItems: "center", gap: 6 }}><img src="./alert_wave.png" alt="" style={{ height: 18, width: 18 }} />Sound Alerts</span>
+          </div>
+          <div style={{ padding: 12, textAlign: "center", opacity: 0.5 }}>
+            No alerts available
+          </div>
         </div>
       </div>
     );

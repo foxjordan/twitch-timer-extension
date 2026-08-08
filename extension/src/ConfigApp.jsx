@@ -2,6 +2,7 @@ import { useEffect, useState, useRef, useCallback } from "react";
 import ReactDOM from "react-dom/client";
 import { setupAnalytics, setAnalyticsAuth, logEvent } from "./firebase.js";
 import { BrandedFooter } from "./BrandedFooter.jsx";
+import { SplashScreen } from "./SplashScreen.jsx";
 
 const EBS_BASE = import.meta.env.VITE_EBS_BASE || "https://livestreamerhub.com";
 
@@ -1670,47 +1671,6 @@ function SoundRow({
           </button>
         </div>
       )}
-    </div>
-  );
-}
-
-function SplashScreen({ t, text }) {
-  return (
-    <div
-      style={{
-        maxWidth: 900,
-        margin: "0 auto",
-        minHeight: "60vh",
-        display: "flex",
-        flexDirection: "column",
-        alignItems: "center",
-        justifyContent: "center",
-        gap: 16,
-      }}
-    >
-      <style>{`
-        @keyframes splashPulse {
-          0%, 100% { transform: scaleY(0.4); }
-          50% { transform: scaleY(1); }
-        }
-      `}</style>
-      <div style={{ display: "flex", alignItems: "flex-end", gap: 5, height: 44 }}>
-        {[16, 30, 44, 22, 34].map((h, i) => (
-          <span
-            key={i}
-            style={{
-              width: 6,
-              height: h,
-              borderRadius: 3,
-              background: `linear-gradient(180deg, ${t.linkColor}, ${t.accent})`,
-              animation: "splashPulse 1s ease-in-out infinite",
-              animationDelay: `${i * 0.12}s`,
-            }}
-          />
-        ))}
-      </div>
-      <div style={{ color: t.text, fontSize: 15, fontWeight: 600 }}>Livestreamer Hub</div>
-      <div style={{ color: t.textMuted, fontSize: 13 }}>{text}</div>
     </div>
   );
 }

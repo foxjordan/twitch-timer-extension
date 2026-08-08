@@ -2,6 +2,18 @@ import { useEffect, useRef, useState, useCallback } from "react";
 import ReactDOM from "react-dom/client";
 import { setupAnalytics, setAnalyticsAuth, logEvent } from "./firebase.js";
 import { BrandedFooter } from "./BrandedFooter.jsx";
+import { SplashScreen } from "./SplashScreen.jsx";
+
+// App.jsx has no theme system (fixed-dark by design) — these are the same
+// four values ConfigApp.jsx's THEME_TOKENS.dark uses for SplashScreen,
+// kept as a small local constant rather than introducing theme-reactivity
+// this file has never had.
+const SPLASH_TOKENS = {
+  accent: "#9146ff",
+  linkColor: "#bf94ff",
+  text: "#efeff1",
+  textMuted: "rgba(239, 239, 241, 0.8)",
+};
 
 const EBS_BASE = import.meta.env.VITE_EBS_BASE || "https://livestreamerhub.com";
 
@@ -613,50 +625,7 @@ function App() {
   }
 
   if (loading) {
-    return (
-      <div style={{ padding: 12 }}>
-        <div
-          style={{
-            padding: 14,
-            borderRadius: 16,
-            background: "#1f1f23",
-            boxShadow: "0 0 0 1px #303038 inset",
-          }}
-        >
-          <div
-            style={{
-              width: 100,
-              height: 16,
-              borderRadius: 6,
-              background: "#2a2a32",
-              marginBottom: 10,
-              animation: "pulse 1.5s ease-in-out infinite",
-            }}
-          />
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(3, 1fr)",
-              gap: 6,
-            }}
-          >
-            {[1, 2, 3, 4, 5, 6].map((i) => (
-              <div
-                key={i}
-                style={{
-                  paddingBottom: "120%",
-                  borderRadius: 8,
-                  background: "#2a2a32",
-                  animation: "pulse 1.5s ease-in-out infinite",
-                  animationDelay: `${i * 0.1}s`,
-                }}
-              />
-            ))}
-          </div>
-        </div>
-        <style>{`@keyframes pulse { 0%,100% { opacity:.4 } 50% { opacity:.7 } }`}</style>
-      </div>
-    );
+    return <SplashScreen t={SPLASH_TOKENS} text="Loading your sounds…" />;
   }
 
   const hasSounds = soundsEnabled && sounds.length > 0;

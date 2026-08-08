@@ -33,6 +33,14 @@ export function installPreviewTwitchMock({ channelId, token }) {
         useBits(tier) {
           console.log('[preview] bits.useBits() called with tier', tier);
         },
+        getProducts() {
+          // Real Twitch resolves an array of Bits SKUs
+          // ({ sku, cost: { amount, type }, displayName }) — no product
+          // simulation in v1, so an empty list is the safe, non-breaking
+          // stand-in (App.jsx/ComponentApp.jsx both just .then(setProducts)
+          // on this).
+          return Promise.resolve([]);
+        },
         onTransactionComplete() {
           // Not fired in v1 — no simulated transactions.
         },

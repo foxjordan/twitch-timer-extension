@@ -5,7 +5,22 @@ import { resolve } from 'path';
 export default defineConfig({
   plugins: [react()],
   base: './',
-  server: { port: 5173 },
+  server: {
+    port: 5173,
+    // Dev-server-only — never consulted during `vite build`, so this has no
+    // effect on the real bundled extension. Lets the preview pages (see
+    // extension/preview.html) hit real production data as same-origin
+    // requests, sidestepping the EBS's CORS allowlist (which only permits
+    // *.ext-twitch.tv / PANEL_ORIGIN, not localhost) entirely — the browser
+    // only ever talks to localhost:5173; this proxy forwards server-side.
+    proxy: {
+      '/preview-api': {
+        target: 'https://livestreamerhub.com',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/preview-api/, ''),
+      },
+    },
+  },
   build: {
     rollupOptions: {
       input: {

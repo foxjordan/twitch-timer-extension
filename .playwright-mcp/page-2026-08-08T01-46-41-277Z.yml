@@ -1,0 +1,20 @@
+- generic [active] [ref=f36e1]:
+  - generic [ref=f36e2]: ⚠️ Connected to PRODUCTION (livestreamerhub.com) — actions taken here are real
+  - button "Toggle theme (currently dark)" [ref=f36e4] [cursor=pointer]
+  - generic [ref=f36e5]:
+    - generic [ref=f36e6]:
+      - generic [ref=f36e7]: Config
+      - iframe [ref=f36e8]:
+        - generic [ref=f37e3]:
+          - generic [ref=f37e10]: Livestreamer Hub
+          - generic [ref=f37e11]: Loading your sounds…
+    - generic [ref=f36e9]:
+      - generic [ref=f36e10]: Panel / Mobile
+      - iframe [ref=f36e11]:
+        
+    - generic [ref=f36e12]:
+      - generic [ref=f36e13]: Component (overlay)
+      - iframe [ref=f36e15]:
+        - generic [ref=f39e3]:
+          - generic [ref=f39e4]: Sound Alerts
+          - generic [ref=f39e6]: Loading...

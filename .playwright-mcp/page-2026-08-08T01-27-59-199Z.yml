@@ -1,0 +1,482 @@
+- generic [ref=f28e1]:
+  - generic [ref=f28e2]: ⚠️ Connected to PRODUCTION (livestreamerhub.com) — actions taken here are real
+  - button "Toggle theme (currently light)" [active] [ref=f28e16] [cursor=pointer]
+  - generic [ref=f28e5]:
+    - generic [ref=f28e6]:
+      - generic [ref=f28e7]: Config
+      - iframe [ref=f28e8]:
+        - generic [ref=f29e12]:
+          - generic [ref=f29e13]:
+            - generic [ref=f29e14]:
+              - text: Version 1.0 live. Get updates and give feedback!
+              - link "Join the Discord!" [ref=f29e15] [cursor=pointer]:
+                - /url: https://discord.gg/fHNNcG8DX
+            - button "×" [ref=f29e16] [cursor=pointer]
+          - generic [ref=f29e17]:
+            - heading "Livestreamer Alerts" [level=2] [ref=f29e18]
+            - link "Manage on Livestreamer Hub →" [ref=f29e19] [cursor=pointer]:
+              - /url: /preview-api/sounds/config?ref=extension
+          - generic [ref=f29e20]:
+            - generic [ref=f29e21]:
+              - generic [ref=f29e22]: OBS Overlay URL
+              - generic "https://livestreamerhub.com/overlay/sounds?key=47d57302786d197cb80541b066a0872e" [ref=f29e23]
+              - button "Copy URL" [ref=f29e24] [cursor=pointer]
+            - paragraph [ref=f29e25]: Add this as a Browser Source in OBS (1920×1080). Alerts only play while this page is open.
+          - button "Quick Setup ▼" [ref=f29e27] [cursor=pointer]:
+            - heading "Quick Setup" [level=3] [ref=f29e28]
+            - generic [ref=f29e29]: ▼
+          - generic [ref=f29e30]:
+            - generic [ref=f29e31]:
+              - heading "Popular Sound Alerts" [level=3] [ref=f29e32]
+              - link "Find more on Livestreamer Hub →" [ref=f29e33] [cursor=pointer]:
+                - /url: /preview-api/sounds/config#library
+            - paragraph [ref=f29e34]: A few ready-made alerts to get you started — add any of these instantly, no files needed.
+            - generic [ref=f29e35]:
+              - generic [ref=f29e36]:
+                - button "▶" [ref=f29e37] [cursor=pointer]
+                - generic [ref=f29e38]: It's a GOAL!
+                - button "+ Add" [ref=f29e39] [cursor=pointer]
+              - generic [ref=f29e40]:
+                - button "▶" [ref=f29e41] [cursor=pointer]
+                - generic [ref=f29e42]: Jump Scare
+                - button "+ Add" [ref=f29e43] [cursor=pointer]
+              - generic [ref=f29e44]:
+                - button "▶" [ref=f29e45] [cursor=pointer]
+                - generic [ref=f29e46]: Explosion
+                - button "+ Add" [ref=f29e47] [cursor=pointer]
+              - generic [ref=f29e48]:
+                - button "▶" [ref=f29e49] [cursor=pointer]
+                - generic [ref=f29e50]: Demonic Game Over
+                - button "+ Add" [ref=f29e51] [cursor=pointer]
+              - generic [ref=f29e52]:
+                - button "▶" [ref=f29e53] [cursor=pointer]
+                - generic [ref=f29e54]: Witch Cackle
+                - button "+ Add" [ref=f29e55] [cursor=pointer]
+              - generic [ref=f29e56]:
+                - button "▶" [ref=f29e57] [cursor=pointer]
+                - generic [ref=f29e58]: Rooster Call
+                - button "+ Add" [ref=f29e59] [cursor=pointer]
+              - generic [ref=f29e60]:
+                - button "▶" [ref=f29e61] [cursor=pointer]
+                - generic [ref=f29e62]: Cat Meow
+                - button "+ Add" [ref=f29e63] [cursor=pointer]
+              - generic [ref=f29e64]:
+                - button "▶" [ref=f29e65] [cursor=pointer]
+                - generic [ref=f29e66]: Elephants
+                - button "+ Add" [ref=f29e67] [cursor=pointer]
+              - generic [ref=f29e68]:
+                - button "▶" [ref=f29e69] [cursor=pointer]
+                - generic [ref=f29e70]: Charged Laser
+                - button "+ Add" [ref=f29e71] [cursor=pointer]
+              - generic [ref=f29e72]:
+                - button "▶" [ref=f29e73] [cursor=pointer]
+                - generic [ref=f29e74]: Electric Shock
+                - button "+ Add" [ref=f29e75] [cursor=pointer]
+          - generic [ref=f29e76]:
+            - heading "Add New Alert Media" [level=3] [ref=f29e77]
+            - generic [ref=f29e78]:
+              - button "Sound" [ref=f29e79] [cursor=pointer]
+              - button "Twitch Clip" [ref=f29e80] [cursor=pointer]
+              - button "Video" [ref=f29e81] [cursor=pointer]
+            - generic [ref=f29e82]:
+              - generic [ref=f29e83]: "Max 5 MB. Accepted: MP3, OGG, WAV, WebM, M4A."
+              - button "Choose File" [ref=f29e85]
+              - textbox "Sound name" [ref=f29e87]
+              - generic [ref=f29e88]:
+                - combobox [ref=f29e89]:
+                  - option "10 Bits"
+                  - option "25 Bits"
+                  - option "50 Bits"
+                  - option "75 Bits"
+                  - option "100 Bits" [selected]
+                  - option "150 Bits"
+                  - option "200 Bits"
+                  - option "250 Bits"
+                  - option "300 Bits"
+                  - option "500 Bits"
+                  - option "1000 Bits"
+                  - option "1250 Bits"
+                  - option "1500 Bits"
+                  - option "1750 Bits"
+                  - option "2000 Bits"
+                  - option "2500 Bits"
+                  - option "3000 Bits"
+                  - option "4000 Bits"
+                  - option "5000 Bits"
+                  - option "7500 Bits"
+                  - option "10000 Bits"
+                - generic [ref=f29e90]:
+                  - text: Vol
+                  - slider "Vol 80%" [ref=f29e91]: "80"
+                  - generic [ref=f29e92]: 80%
+              - button "Upload Sound" [ref=f29e93] [cursor=pointer]
+          - generic [ref=f29e94]:
+            - generic [ref=f29e95]:
+              - heading "Your Alerts (9/20)" [level=3] [ref=f29e96]
+              - link "View Activity →" [ref=f29e97] [cursor=pointer]:
+                - /url: /preview-api/sounds/config#activity
+            - paragraph [ref=f29e98]: These are the alerts shown to your viewers. Uncheck one to hide it without deleting it.
+            - generic [ref=f29e99]:
+              - generic:
+                - generic: Runaway
+                - generic: 100 Bits · Vol 61%
+              - generic [ref=f29e101]:
+                - generic "Show this alert to viewers" [ref=f29e102] [cursor=pointer]:
+                  - checkbox "Show" [checked] [ref=f29e103]
+                  - text: Show
+                - button "Edit" [ref=f29e104] [cursor=pointer]
+                - button "Preview" [ref=f29e105] [cursor=pointer]
+                - button "Test" [ref=f29e106] [cursor=pointer]
+                - button "Del" [ref=f29e107] [cursor=pointer]
+            - generic [ref=f29e108]:
+              - generic:
+                - generic: Scary Alarm
+                - generic: 100 Bits · Vol 80%
+              - generic [ref=f29e110]:
+                - generic "Show this alert to viewers" [ref=f29e111] [cursor=pointer]:
+                  - checkbox "Show" [checked] [ref=f29e112]
+                  - text: Show
+                - button "Edit" [ref=f29e113] [cursor=pointer]
+                - button "Preview" [ref=f29e114] [cursor=pointer]
+                - button "Test" [ref=f29e115] [cursor=pointer]
+                - button "Del" [ref=f29e116] [cursor=pointer]
+            - generic [ref=f29e117]:
+              - generic:
+                - generic: Cows Mooing
+                - generic: 100 Bits · Vol 80%
+              - generic [ref=f29e119]:
+                - generic "Show this alert to viewers" [ref=f29e120] [cursor=pointer]:
+                  - checkbox "Show" [checked] [ref=f29e121]
+                  - text: Show
+                - button "Edit" [ref=f29e122] [cursor=pointer]
+                - button "Preview" [ref=f29e123] [cursor=pointer]
+                - button "Test" [ref=f29e124] [cursor=pointer]
+                - button "Del" [ref=f29e125] [cursor=pointer]
+            - generic [ref=f29e126]:
+              - generic:
+                - generic: M16 Gun Burst
+                - generic: 100 Bits · Vol 80%
+              - generic [ref=f29e131]:
+                - generic "Show this alert to viewers" [ref=f29e132] [cursor=pointer]:
+                  - checkbox "Show" [checked] [ref=f29e133]
+                  - text: Show
+                - button "Edit" [ref=f29e134] [cursor=pointer]
+                - button "Preview" [ref=f29e135] [cursor=pointer]
+                - button "Test" [ref=f29e136] [cursor=pointer]
+                - button "Del" [ref=f29e137] [cursor=pointer]
+            - generic [ref=f29e138]:
+              - generic:
+                - generic: Military Alarm
+                - generic: 100 Bits · Vol 80%
+              - generic [ref=f29e143]:
+                - generic "Show this alert to viewers" [ref=f29e144] [cursor=pointer]:
+                  - checkbox "Show" [checked] [ref=f29e145]
+                  - text: Show
+                - button "Edit" [ref=f29e146] [cursor=pointer]
+                - button "Preview" [ref=f29e147] [cursor=pointer]
+                - button "Test" [ref=f29e148] [cursor=pointer]
+                - button "Del" [ref=f29e149] [cursor=pointer]
+            - generic [ref=f29e150]:
+              - generic:
+                - generic: Bell Arpeggio
+                - generic: 100 Bits · Vol 80%
+              - generic [ref=f29e155]:
+                - generic "Show this alert to viewers" [ref=f29e156] [cursor=pointer]:
+                  - checkbox "Show" [checked] [ref=f29e157]
+                  - text: Show
+                - button "Edit" [ref=f29e158] [cursor=pointer]
+                - button "Preview" [ref=f29e159] [cursor=pointer]
+                - button "Test" [ref=f29e160] [cursor=pointer]
+                - button "Del" [ref=f29e161] [cursor=pointer]
+            - generic [ref=f29e162]:
+              - generic:
+                - generic: Old Modem Dial
+                - generic: 100 Bits · Vol 80%
+              - generic [ref=f29e167]:
+                - generic "Show this alert to viewers" [ref=f29e168] [cursor=pointer]:
+                  - checkbox "Show" [checked] [ref=f29e169]
+                  - text: Show
+                - button "Edit" [ref=f29e170] [cursor=pointer]
+                - button "Preview" [ref=f29e171] [cursor=pointer]
+                - button "Test" [ref=f29e172] [cursor=pointer]
+                - button "Del" [ref=f29e173] [cursor=pointer]
+            - generic [ref=f29e174]:
+              - generic:
+                - generic: Rifle Shots
+                - generic: 100 Bits · Vol 80%
+              - generic [ref=f29e179]:
+                - generic "Show this alert to viewers" [ref=f29e180] [cursor=pointer]:
+                  - checkbox "Show" [checked] [ref=f29e181]
+                  - text: Show
+                - button "Edit" [ref=f29e182] [cursor=pointer]
+                - button "Preview" [ref=f29e183] [cursor=pointer]
+                - button "Test" [ref=f29e184] [cursor=pointer]
+                - button "Del" [ref=f29e185] [cursor=pointer]
+            - generic [ref=f29e186]:
+              - generic:
+                - generic: Crowd Cheering
+                - generic: 100 Bits · Vol 80%
+              - generic [ref=f29e191]:
+                - generic "Show this alert to viewers" [ref=f29e192] [cursor=pointer]:
+                  - checkbox "Show" [checked] [ref=f29e193]
+                  - text: Show
+                - button "Edit" [ref=f29e194] [cursor=pointer]
+                - button "Preview" [ref=f29e195] [cursor=pointer]
+                - button "Test" [ref=f29e196] [cursor=pointer]
+                - button "Del" [ref=f29e197] [cursor=pointer]
+          - generic [ref=f29e198]:
+            - heading "Settings" [level=3] [ref=f29e199]
+            - generic [ref=f29e200]:
+              - generic [ref=f29e201]:
+                - checkbox "Enabled" [checked] [ref=f29e202]
+                - text: Enabled
+              - generic [ref=f29e203]:
+                - text: Global Volume
+                - slider "Global Volume 85%" [ref=f29e204]: "85"
+                - generic [ref=f29e205]: 85%
+              - generic [ref=f29e206]:
+                - text: Cooldown (sec)
+                - spinbutton "Cooldown (sec)" [ref=f29e207]: "5"
+              - generic [ref=f29e208]:
+                - text: Max Queue
+                - spinbutton "Max Queue" [ref=f29e209]: "200"
+          - generic [ref=f29e210]:
+            - generic [ref=f29e211]:
+              - heading "TTS Settings" [level=3] [ref=f29e212]
+              - link "View Alert Queue →" [ref=f29e213] [cursor=pointer]:
+                - /url: /preview-api/sounds/config#queue
+            - generic [ref=f29e214]:
+              - generic [ref=f29e215]:
+                - generic [ref=f29e216]:
+                  - generic [ref=f29e217]: Enabled
+                  - checkbox "Enabled" [checked] [ref=f29e218]
+                - generic [ref=f29e219]:
+                  - generic [ref=f29e220]: Bits Amount
+                  - combobox "Bits Amount" [ref=f29e221]:
+                    - option "50 Bits" [selected]
+                    - option "75 Bits"
+                    - option "100 Bits"
+                    - option "150 Bits"
+                    - option "200 Bits"
+                    - option "250 Bits"
+                    - option "300 Bits"
+                    - option "500 Bits"
+                    - option "1000 Bits"
+                    - option "1250 Bits"
+                    - option "1500 Bits"
+                    - option "1750 Bits"
+                    - option "2000 Bits"
+                    - option "2500 Bits"
+                    - option "3000 Bits"
+                    - option "4000 Bits"
+                    - option "5000 Bits"
+                    - option "7500 Bits"
+                    - option "10000 Bits"
+                - generic [ref=f29e222]:
+                  - generic [ref=f29e223]: Volume
+                  - slider "Volume 96%" [ref=f29e224]: "96"
+                  - generic [ref=f29e225]: 96%
+                - generic [ref=f29e226]:
+                  - generic [ref=f29e227]: Cooldown (sec)
+                  - spinbutton "Cooldown (sec)" [ref=f29e228]: "10"
+                - generic [ref=f29e229]:
+                  - generic [ref=f29e230]: Max Message Length
+                  - spinbutton "Max Message Length" [ref=f29e231]: "300"
+                - generic [ref=f29e232]:
+                  - generic [ref=f29e233]: Content Moderation
+                  - checkbox "Content Moderation" [checked] [ref=f29e234]
+                - button "Test TTS" [ref=f29e236] [cursor=pointer]
+              - generic [ref=f29e237]:
+                - generic [ref=f29e238]:
+                  - generic [ref=f29e239]: Available Voices
+                  - generic [ref=f29e240]:
+                    - generic [ref=f29e241]:
+                      - checkbox "Nikhil ▶" [ref=f29e242]
+                      - text: Nikhil
+                      - button "▶" [ref=f29e243] [cursor=pointer]
+                    - generic [ref=f29e244]:
+                      - checkbox "Hades ▶" [checked] [ref=f29e245]
+                      - text: Hades
+                      - button "▶" [ref=f29e246] [cursor=pointer]
+                    - generic [ref=f29e247]:
+                      - checkbox "Trevor ▶" [ref=f29e248]
+                      - text: Trevor
+                      - button "▶" [ref=f29e249] [cursor=pointer]
+                    - generic [ref=f29e250]:
+                      - checkbox "Pixie ▶" [checked] [ref=f29e251]
+                      - text: Pixie
+                      - button "▶" [ref=f29e252] [cursor=pointer]
+                    - generic [ref=f29e253]:
+                      - checkbox "Joy ▶" [ref=f29e254]
+                      - text: Joy
+                      - button "▶" [ref=f29e255] [cursor=pointer]
+                    - generic [ref=f29e256]:
+                      - checkbox "Claire ▶" [ref=f29e257]
+                      - text: Claire
+                      - button "▶" [ref=f29e258] [cursor=pointer]
+                    - generic [ref=f29e259]:
+                      - checkbox "Edward ▶" [ref=f29e260]
+                      - text: Edward
+                      - button "▶" [ref=f29e261] [cursor=pointer]
+                    - generic [ref=f29e262]:
+                      - checkbox "Ashley ▶" [checked] [ref=f29e263]
+                      - text: Ashley
+                      - button "▶" [ref=f29e264] [cursor=pointer]
+                    - generic [ref=f29e265]:
+                      - checkbox "Tristan ▶" [ref=f29e266]
+                      - text: Tristan
+                      - button "▶" [ref=f29e267] [cursor=pointer]
+                    - generic [ref=f29e268]:
+                      - checkbox "Priya ▶" [ref=f29e269]
+                      - text: Priya
+                      - button "▶" [ref=f29e270] [cursor=pointer]
+                    - generic [ref=f29e271]:
+                      - checkbox "Deborah ▶" [ref=f29e272]
+                      - text: Deborah
+                      - button "▶" [ref=f29e273] [cursor=pointer]
+                    - generic [ref=f29e274]:
+                      - checkbox "Vikram ▶" [ref=f29e275]
+                      - text: Vikram
+                      - button "▶" [ref=f29e276] [cursor=pointer]
+                    - generic [ref=f29e277]:
+                      - checkbox "Celeste ▶" [ref=f29e278]
+                      - text: Celeste
+                      - button "▶" [ref=f29e279] [cursor=pointer]
+                    - generic [ref=f29e280]:
+                      - checkbox "Cedric ▶" [ref=f29e281]
+                      - text: Cedric
+                      - button "▶" [ref=f29e282] [cursor=pointer]
+                    - generic [ref=f29e283]:
+                      - checkbox "Gareth ▶" [ref=f29e284]
+                      - text: Gareth
+                      - button "▶" [ref=f29e285] [cursor=pointer]
+                    - generic [ref=f29e286]:
+                      - checkbox "Alex ▶" [checked] [ref=f29e287]
+                      - text: Alex
+                      - button "▶" [ref=f29e288] [cursor=pointer]
+                    - generic [ref=f29e289]:
+                      - checkbox "Sophie ▶" [ref=f29e290]
+                      - text: Sophie
+                      - button "▶" [ref=f29e291] [cursor=pointer]
+                    - generic [ref=f29e292]:
+                      - checkbox "Dennis ▶" [ref=f29e293]
+                      - text: Dennis
+                      - button "▶" [ref=f29e294] [cursor=pointer]
+                    - generic [ref=f29e295]:
+                      - checkbox "Ethan ▶" [checked] [ref=f29e296]
+                      - text: Ethan
+                      - button "▶" [ref=f29e297] [cursor=pointer]
+                    - generic [ref=f29e298]:
+                      - checkbox "Darlene ▶" [ref=f29e299]
+                      - text: Darlene
+                      - button "▶" [ref=f29e300] [cursor=pointer]
+                    - generic [ref=f29e301]:
+                      - checkbox "Banjo ▶" [ref=f29e302]
+                      - text: Banjo
+                      - button "▶" [ref=f29e303] [cursor=pointer]
+                    - generic [ref=f29e304]:
+                      - checkbox "Kermit ▶" [ref=f29e305]
+                      - text: Kermit
+                      - button "▶" [ref=f29e306] [cursor=pointer]
+                    - generic [ref=f29e307]:
+                      - checkbox "Freddie ▶" [ref=f29e308]
+                      - text: Freddie
+                      - button "▶" [ref=f29e309] [cursor=pointer]
+                    - generic [ref=f29e310]:
+                      - checkbox "Hank ▶" [ref=f29e311]
+                      - text: Hank
+                      - button "▶" [ref=f29e312] [cursor=pointer]
+                - generic [ref=f29e313]:
+                  - generic [ref=f29e314]: Banned Words (one per line)
+                  - textbox "Banned Words (one per line)" [ref=f29e315]:
+                    - /placeholder: "badword1\nbadword2"
+                    - text: flipflops noodle echolocate
+    - generic [ref=f28e9]:
+      - generic [ref=f28e10]: Panel / Mobile
+      - iframe [ref=f28e11]:
+        - generic [ref=f30e4]:
+          - generic [ref=f30e13]:
+            - button "Sounds" [ref=f30e14] [cursor=pointer]
+            - button "TTS" [ref=f30e15] [cursor=pointer]
+          - generic [ref=f30e6]: Sound Alerts
+          - generic [ref=f30e17]: The streamer's alert overlay is not currently active. Alerts may not play right now.
+          - button "Check your Bits balance" [ref=f30e18] [cursor=pointer]
+          - generic [ref=f30e19]:
+            - generic [ref=f30e20] [cursor=pointer]:
+              - img "Runaway" [ref=f30e23]
+              - generic [ref=f30e24]: Runaway
+              - generic [ref=f30e25]: "100"
+            - generic [ref=f30e27] [cursor=pointer]:
+              - img "Scary Alarm" [ref=f30e30]
+              - generic [ref=f30e31]: Scary Alarm
+              - generic [ref=f30e32]: "100"
+            - generic [ref=f30e34] [cursor=pointer]:
+              - img "Cows Mooing" [ref=f30e37]
+              - generic [ref=f30e38]: Cows Mooing
+              - generic [ref=f30e39]: "100"
+            - generic [ref=f30e41] [cursor=pointer]:
+              - generic [ref=f30e44]: M16 Gun Burst
+              - generic [ref=f30e45]: "100"
+            - generic [ref=f30e47] [cursor=pointer]:
+              - generic [ref=f30e50]: Military Alarm
+              - generic [ref=f30e51]: "100"
+            - generic [ref=f30e53] [cursor=pointer]:
+              - generic [ref=f30e56]: Bell Arpeggio
+              - generic [ref=f30e57]: "100"
+            - generic [ref=f30e59] [cursor=pointer]:
+              - generic [ref=f30e62]: Old Modem Dial
+              - generic [ref=f30e63]: "100"
+            - generic [ref=f30e65] [cursor=pointer]:
+              - generic [ref=f30e68]: Rifle Shots
+              - generic [ref=f30e69]: "100"
+            - generic [ref=f30e71] [cursor=pointer]:
+              - generic [ref=f30e74]: Crowd Cheering
+              - generic [ref=f30e75]: "100"
+    - generic [ref=f28e12]:
+      - generic [ref=f28e13]: Component (overlay)
+      - iframe [ref=f28e15]:
+        - generic [ref=f31e4]:
+          - generic [ref=f31e5]:
+            - generic [ref=f31e6]: Sound Alerts
+            - generic [ref=f31e7]:
+              - button "Scroll up" [disabled] [ref=f31e8]
+              - button "Scroll down" [ref=f31e11] [cursor=pointer]
+          - generic [ref=f31e14]:
+            - button "Sounds" [ref=f31e15] [cursor=pointer]
+            - button "TTS" [ref=f31e16] [cursor=pointer]
+          - generic [ref=f31e17]: The streamer's alert overlay is not currently active. Alerts may not play right now.
+          - generic [ref=f31e19]:
+            - generic [ref=f31e20] [cursor=pointer]:
+              - img "Runaway" [ref=f31e23]
+              - generic [ref=f31e24]: Runaway
+              - generic [ref=f31e25]: "100"
+            - generic [ref=f31e27] [cursor=pointer]:
+              - img "Scary Alarm" [ref=f31e30]
+              - generic [ref=f31e31]: Scary Alarm
+              - generic [ref=f31e32]: "100"
+            - generic [ref=f31e34] [cursor=pointer]:
+              - generic [ref=f31e35]:
+                - img "Cows Mooing" [ref=f31e37]
+                - generic [ref=f31e38]:
+                  - generic [ref=f31e39]: ▶
+                  - generic [ref=f31e40]: Sample
+              - generic [ref=f31e41]: Cows Mooing
+              - generic [ref=f31e42]: "100"
+            - generic [ref=f31e44] [cursor=pointer]:
+              - generic [ref=f31e47]: M16 Gun Burst
+              - generic [ref=f31e48]: "100"
+            - generic [ref=f31e50] [cursor=pointer]:
+              - generic [ref=f31e53]: Military Alarm
+              - generic [ref=f31e54]: "100"
+            - generic [ref=f31e56] [cursor=pointer]:
+              - generic [ref=f31e59]: Bell Arpeggio
+              - generic [ref=f31e60]: "100"
+            - generic [ref=f31e62] [cursor=pointer]:
+              - generic [ref=f31e65]: Old Modem Dial
+              - generic [ref=f31e66]: "100"
+            - generic [ref=f31e68] [cursor=pointer]:
+              - generic [ref=f31e71]: Rifle Shots
+              - generic [ref=f31e72]: "100"
+            - generic [ref=f31e74] [cursor=pointer]:
+              - generic [ref=f31e77]: Crowd Cheering
+              - generic [ref=f31e78]: "100"

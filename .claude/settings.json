@@ -60,7 +60,8 @@
       "mcp__plugin_chrome-devtools-mcp_chrome-devtools__resize_page",
       "mcp__plugin_chrome-devtools-mcp_chrome-devtools__take_screenshot",
       "WebFetch(domain:developers.google.com)",
-      "WebFetch(domain:help.twitch.tv)"
+      "WebFetch(domain:help.twitch.tv)",
+      "mcp__plugin_playwright_playwright__browser_console_messages"
     ],
     "additionalDirectories": [
       "/tmp"

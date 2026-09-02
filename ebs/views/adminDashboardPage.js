@@ -1214,6 +1214,13 @@ export function renderAdminDashboardPage(options = {}) {
         // ===== Library Moderation =====
         var libraryModerationListEl = document.getElementById('libraryModerationList');
         var libraryModerationCountEl = document.getElementById('libraryModerationCount');
+        var modAudio = null;
+        var modPreviewBtn = null;
+
+        function stopModPreview() {
+          if (modAudio) { modAudio.pause(); modAudio = null; }
+          if (modPreviewBtn) { modPreviewBtn.textContent = '\\u25B6 Preview'; modPreviewBtn = null; }
+        }
 
         function fetchLibraryModeration() {
           fetch('/api/admin/library/pending', { credentials: 'same-origin' })
@@ -1227,6 +1234,7 @@ export function renderAdminDashboardPage(options = {}) {
 
         function renderLibraryModerationList(sounds) {
           if (!libraryModerationListEl) return;
+          stopModPreview();
           if (libraryModerationCountEl) {
             libraryModerationCountEl.textContent = sounds.length ? '(' + sounds.length + ' pending)' : '';
           }
@@ -1242,6 +1250,15 @@ export function renderAdminDashboardPage(options = {}) {
             var card = document.createElement('div');
             card.style.cssText = 'display:flex; align-items:center; gap:10px; padding:10px; background:var(--surface-muted); border-radius:8px; margin-bottom:8px;';
 
+            var thumbImg = document.createElement('img');
+            thumbImg.style.cssText = 'width:40px; height:40px; border-radius:6px; object-fit:cover; flex-shrink:0; background:var(--surface-color);';
+            thumbImg.alt = '';
+            thumbImg.src = s.hasImage
+              ? '/api/sounds/library/' + encodeURIComponent(s.ownerUserId) + '/' + encodeURIComponent(s.id) + '/image'
+              : '/assets/icons/megaphone.png';
+            thumbImg.onerror = function() { this.src = '/assets/icons/megaphone.png'; };
+            card.appendChild(thumbImg);
+
             var info = document.createElement('div');
             info.style.cssText = 'flex:1; min-width:0;';
             var nameDiv = document.createElement('div');
@@ -1253,6 +1270,25 @@ export function renderAdminDashboardPage(options = {}) {
             info.appendChild(nameDiv);
             info.appendChild(metaDiv);
             card.appendChild(info);
+
+            var previewBtn = document.createElement('button');
+            previewBtn.className = 'secondary';
+            previewBtn.textContent = '\\u25B6 Preview';
+            previewBtn.addEventListener('click', function() {
+              var isPlaying = modPreviewBtn === previewBtn;
+              stopModPreview();
+              if (isPlaying) return;
+              // Same endpoint the broadcaster-facing library browser uses to
+              // preview shared sounds — works here too since it only checks
+              // sound.shared (true for pending sounds), not moderationStatus.
+              modAudio = new Audio('/api/sounds/library/' + encodeURIComponent(s.ownerUserId) + '/' + encodeURIComponent(s.id) + '/preview');
+              modPreviewBtn = previewBtn;
+              previewBtn.textContent = '\\u25A0 Stop';
+              modAudio.onended = stopModPreview;
+              modAudio.onerror = stopModPreview;
+              modAudio.play().catch(stopModPreview);
+            });
+            card.appendChild(previewBtn);
 
             var approveBtn = document.createElement('button');
             approveBtn.className = 'btn-unban';

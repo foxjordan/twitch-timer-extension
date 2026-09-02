@@ -112,10 +112,16 @@ function SoundCard({
     <div
       onClick={() => {
         if (disabled) return;
-        if (showSendPrompt) { onDismissSample(); return; }
+        if (showSendPrompt) {
+          onDismissSample();
+          return;
+        }
         onRedeem(sound);
       }}
-      onMouseEnter={() => { setHovered(true); onHover?.(sound); }}
+      onMouseEnter={() => {
+        setHovered(true);
+        onHover?.(sound);
+      }}
       onMouseLeave={() => setHovered(false)}
       style={{
         display: "flex",
@@ -170,45 +176,72 @@ function SoundCard({
             <img
               src="./camera_icon.png"
               alt=""
-              style={{ width: "60%", height: "60%", objectFit: "contain", opacity: 0.6 }}
+              style={{
+                width: "60%",
+                height: "60%",
+                objectFit: "contain",
+                opacity: 0.6,
+              }}
             />
           ) : (
             <img
               src="./megaphone.png"
               alt=""
-              style={{ width: "60%", height: "60%", objectFit: "contain", opacity: 0.6 }}
+              style={{
+                width: "60%",
+                height: "60%",
+                objectFit: "contain",
+                opacity: 0.6,
+              }}
             />
           )}
         </div>
         {/* Preview overlay \u2014 visible on hover or while sampling */}
-        {(hovered || isPreviewPlaying) && !disabled && !showSendPrompt && !["clip","video"].includes(sound.type || "sound") && (
-          <div
-            data-preview="true"
-            onClick={(e) => {
-              e.stopPropagation();
-              onPreview(e, sound);
-            }}
-            style={{
-              position: "absolute",
-              inset: 0,
-              display: "flex",
-              flexDirection: "column",
-              alignItems: "center",
-              justifyContent: "center",
-              gap: 3,
-              background: "rgba(0,0,0,0.55)",
-              borderRadius: 8,
-              cursor: "pointer",
-            }}
-          >
-            <span style={{ fontSize: "clamp(14px, 4vw, 22px)", color: "#fff", lineHeight: 1 }}>
-              {isPreviewPlaying ? "\u25A0" : "\u25B6"}
-            </span>
-            <span style={{ fontSize: "clamp(9px, 2.5vw, 11px)", color: "#fff", fontWeight: 600, opacity: 0.9, letterSpacing: "0.02em" }}>
-              {isPreviewPlaying ? "Sampling\u2026" : "Sample"}
-            </span>
-          </div>
-        )}
+        {(hovered || isPreviewPlaying) &&
+          !disabled &&
+          !showSendPrompt &&
+          !["clip", "video"].includes(sound.type || "sound") && (
+            <div
+              data-preview="true"
+              onClick={(e) => {
+                e.stopPropagation();
+                onPreview(e, sound);
+              }}
+              style={{
+                position: "absolute",
+                inset: 0,
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: 3,
+                background: "rgba(0,0,0,0.55)",
+                borderRadius: 8,
+                cursor: "pointer",
+              }}
+            >
+              <span
+                style={{
+                  fontSize: "clamp(14px, 4vw, 22px)",
+                  color: "#fff",
+                  lineHeight: 1,
+                }}
+              >
+                {isPreviewPlaying ? "\u25A0" : "\u25B6"}
+              </span>
+              <span
+                style={{
+                  fontSize: "clamp(9px, 2.5vw, 11px)",
+                  color: "#fff",
+                  fontWeight: 600,
+                  opacity: 0.9,
+                  letterSpacing: "0.02em",
+                }}
+              >
+                {isPreviewPlaying ? "Sampling\u2026" : "Sample"}
+              </span>
+            </div>
+          )}
         {/* Send-alert prompt after sample finishes */}
         {showSendPrompt && !isPreviewPlaying && (
           <div
@@ -226,9 +259,21 @@ function SoundCard({
               padding: 4,
             }}
           >
-            <span style={{ fontSize: "clamp(9px, 2.5vw, 11px)", color: "#bf94ff", fontWeight: 700 }}>Like it?</span>
+            <span
+              style={{
+                fontSize: "clamp(9px, 2.5vw, 11px)",
+                color: "#bf94ff",
+                fontWeight: 700,
+              }}
+            >
+              Like it?
+            </span>
             <button
-              onClick={(e) => { e.stopPropagation(); onRedeem(sound); onDismissSample(); }}
+              onClick={(e) => {
+                e.stopPropagation();
+                onRedeem(sound);
+                onDismissSample();
+              }}
               style={{
                 background: "#9146FF",
                 color: "#fff",
@@ -244,7 +289,10 @@ function SoundCard({
               Use {getCost(sound.tier)} Bits
             </button>
             <button
-              onClick={(e) => { e.stopPropagation(); onDismissSample(); }}
+              onClick={(e) => {
+                e.stopPropagation();
+                onDismissSample();
+              }}
               style={{
                 background: "transparent",
                 color: "rgba(255,255,255,0.5)",
@@ -329,7 +377,9 @@ function ComponentApp() {
   const [ttsCooldown, setTtsCooldown] = useState(false);
   const [previewingVoice, setPreviewingVoice] = useState(null);
   const [overlayConnected, setOverlayConnected] = useState(null);
-  const [extConfig, setExtConfig] = useState({ features: { tts: true, videoClips: true, communityLibrary: true } });
+  const [extConfig, setExtConfig] = useState({
+    features: { tts: true, videoClips: true, communityLibrary: true },
+  });
   const gridRef = useRef(null);
   const [canScrollUp, setCanScrollUp] = useState(false);
   const [canScrollDown, setCanScrollDown] = useState(false);
@@ -403,7 +453,9 @@ function ComponentApp() {
         headers: { Authorization: `Bearer ${authData.token}` },
       })
         .then((r) => r.json())
-        .then((data) => { if (data.features) setExtConfig(data); })
+        .then((data) => {
+          if (data.features) setExtConfig(data);
+        })
         .catch(() => {});
 
       // Check overlay connection status
@@ -443,7 +495,10 @@ function ComponentApp() {
             setLastPlayed("TTS Message");
             setTimeout(() => setLastPlayed(null), 3000);
             setTtsCooldown(true);
-            setTimeout(() => setTtsCooldown(false), pending.cooldownMs || 10000);
+            setTimeout(
+              () => setTtsCooldown(false),
+              pending.cooldownMs || 10000,
+            );
           })
           .catch((err) => setTtsError(err?.message || "TTS redemption failed"));
       } else {
@@ -568,12 +623,16 @@ function ComponentApp() {
 
   function prefetchPreviewAudio(sound) {
     const currentAuth = authRef.current;
-    if (!currentAuth || ["clip","video"].includes(sound.type || "sound")) return;
+    if (!currentAuth || ["clip", "video"].includes(sound.type || "sound"))
+      return;
     if (previewBlobsRef.current[sound.id]) return;
-    fetch(`${EBS_BASE}/api/sounds/preview/${sound.id}?channelId=${currentAuth.channelId}`, {
-      headers: { Authorization: `Bearer ${currentAuth.token}` },
-    })
-      .then((r) => r.ok ? r.blob() : Promise.reject(r.status))
+    fetch(
+      `${EBS_BASE}/api/sounds/preview/${sound.id}?channelId=${currentAuth.channelId}`,
+      {
+        headers: { Authorization: `Bearer ${currentAuth.token}` },
+      },
+    )
+      .then((r) => (r.ok ? r.blob() : Promise.reject(r.status)))
       .then((blob) => {
         previewBlobsRef.current[sound.id] = URL.createObjectURL(blob);
         console.log("[preview] blob ready for", sound.id);
@@ -585,7 +644,7 @@ function ComponentApp() {
     e.stopPropagation();
     const currentAuth = authRef.current;
     if (!currentAuth) return;
-    if (["clip","video"].includes(sound.type || "sound")) return;
+    if (["clip", "video"].includes(sound.type || "sound")) return;
 
     if (previewAudioRef.current) {
       previewAudioRef.current.pause();
@@ -613,7 +672,10 @@ function ComponentApp() {
       setPreviewing(null);
       previewAudioRef.current = null;
       setJustSampled(sound.id);
-      setTimeout(() => setJustSampled((prev) => (prev === sound.id ? null : prev)), 6000);
+      setTimeout(
+        () => setJustSampled((prev) => (prev === sound.id ? null : prev)),
+        6000,
+      );
     };
     audio.onerror = (e) => {
       console.error("[preview] audio error", e, audio.error);
@@ -646,14 +708,24 @@ function ComponentApp() {
     fetch(`${EBS_BASE}/api/tts/preview/${encodeURIComponent(voiceId)}`, {
       headers: { Authorization: `Bearer ${currentAuth.token}` },
     })
-      .then((r) => { if (!r.ok) throw new Error(); return r.blob(); })
+      .then((r) => {
+        if (!r.ok) throw new Error();
+        return r.blob();
+      })
       .then((blob) => {
         const url = URL.createObjectURL(blob);
         audio.src = url;
-        audio.onended = () => { setPreviewingVoice(null); previewAudioRef.current = null; URL.revokeObjectURL(url); };
+        audio.onended = () => {
+          setPreviewingVoice(null);
+          previewAudioRef.current = null;
+          URL.revokeObjectURL(url);
+        };
         return audio.play();
       })
-      .catch(() => { setPreviewingVoice(null); previewAudioRef.current = null; });
+      .catch(() => {
+        setPreviewingVoice(null);
+        previewAudioRef.current = null;
+      });
   }
 
   function getCost(tier) {
@@ -668,7 +740,14 @@ function ComponentApp() {
       <div style={containerStyle}>
         <div style={contentStyle}>
           <div style={headerStyle}>
-            <span style={{ display: "flex", alignItems: "center", gap: 6 }}><img src="./alert_wave.png" alt="" style={{ height: 18, width: 18 }} />Sound Alerts</span>
+            <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
+              <img
+                src="./alert_wave.png"
+                alt=""
+                style={{ height: 18, width: 18 }}
+              />
+              Sound Alerts
+            </span>
           </div>
           <CompactPulse text="Loading your sounds…" />
         </div>
@@ -685,7 +764,14 @@ function ComponentApp() {
       <div style={containerStyle}>
         <div style={contentStyle}>
           <div style={headerStyle}>
-            <span style={{ display: "flex", alignItems: "center", gap: 6 }}><img src="./alert_wave.png" alt="" style={{ height: 18, width: 18 }} />Sound Alerts</span>
+            <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
+              <img
+                src="./alert_wave.png"
+                alt=""
+                style={{ height: 18, width: 18 }}
+              />
+              Sound Alerts
+            </span>
           </div>
           <div style={{ padding: 12, textAlign: "center", opacity: 0.5 }}>
             No alerts available
@@ -698,214 +784,312 @@ function ComponentApp() {
   return (
     <div style={containerStyle}>
       <div style={contentStyle}>
-      {/* Header with scroll buttons */}
-      <div style={headerStyle}>
-        <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
-          <img src="./alert_wave.png" alt="" style={{ height: 18, width: 18 }} />
-          {(hasTts && (!hasSounds || activeTab === "tts")) ? "Text-to-Speech" : "Sound Alerts"}
-        </span>
-        {/* Only show scroll buttons on sounds tab */}
-        {(!hasTts || activeTab === "sounds") && (
-          <div style={{ display: "flex", gap: 2 }}>
+        {/* Header with scroll buttons */}
+        <div style={headerStyle}>
+          <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
+            <img
+              src="./alert_wave.png"
+              alt=""
+              style={{ height: 18, width: 18 }}
+            />
+            {hasTts && (!hasSounds || activeTab === "tts")
+              ? "Text-to-Speech"
+              : "Sound Alerts"}
+          </span>
+          {/* Only show scroll buttons on sounds tab */}
+          {(!hasTts || activeTab === "sounds") && (
+            <div style={{ display: "flex", gap: 2 }}>
+              <button
+                onClick={() => scrollBy(-150)}
+                disabled={!canScrollUp}
+                style={{
+                  ...scrollBtnStyle,
+                  opacity: canScrollUp ? 0.8 : 0.2,
+                  cursor: canScrollUp ? "pointer" : "default",
+                }}
+                aria-label="Scroll up"
+              >
+                <ChevronUp />
+              </button>
+              <button
+                onClick={() => scrollBy(150)}
+                disabled={!canScrollDown}
+                style={{
+                  ...scrollBtnStyle,
+                  opacity: canScrollDown ? 0.8 : 0.2,
+                  cursor: canScrollDown ? "pointer" : "default",
+                }}
+                aria-label="Scroll down"
+              >
+                <ChevronDown />
+              </button>
+            </div>
+          )}
+        </div>
+
+        {/* Tab bar (only show if both sounds and TTS are available) */}
+        {hasSounds && hasTts && (
+          <div style={{ display: "flex", gap: 4, margin: "0 10px 6px" }}>
             <button
-              onClick={() => scrollBy(-150)}
-              disabled={!canScrollUp}
+              onClick={() => setActiveTab("sounds")}
               style={{
-                ...scrollBtnStyle,
-                opacity: canScrollUp ? 0.8 : 0.2,
-                cursor: canScrollUp ? "pointer" : "default",
+                flex: 1,
+                padding: "4px 0",
+                borderRadius: 6,
+                border: "none",
+                fontSize: "clamp(10px, 2.6vw, 13px)",
+                fontWeight: 600,
+                cursor: "pointer",
+                background:
+                  activeTab === "sounds" ? "#9146FF" : "rgba(48,48,56,0.8)",
+                color: "#fff",
+                opacity: activeTab === "sounds" ? 1 : 0.7,
               }}
-              aria-label="Scroll up"
             >
-              <ChevronUp />
+              Sounds
             </button>
             <button
-              onClick={() => scrollBy(150)}
-              disabled={!canScrollDown}
+              onClick={() => setActiveTab("tts")}
               style={{
-                ...scrollBtnStyle,
-                opacity: canScrollDown ? 0.8 : 0.2,
-                cursor: canScrollDown ? "pointer" : "default",
+                flex: 1,
+                padding: "4px 0",
+                borderRadius: 6,
+                border: "none",
+                fontSize: "clamp(10px, 2.6vw, 13px)",
+                fontWeight: 600,
+                cursor: "pointer",
+                background:
+                  activeTab === "tts" ? "#9146FF" : "rgba(48,48,56,0.8)",
+                color: "#fff",
+                opacity: activeTab === "tts" ? 1 : 0.7,
               }}
-              aria-label="Scroll down"
             >
-              <ChevronDown />
+              TTS
             </button>
           </div>
         )}
-      </div>
 
-      {/* Tab bar (only show if both sounds and TTS are available) */}
-      {hasSounds && hasTts && (
-        <div style={{ display: "flex", gap: 4, margin: "0 10px 6px" }}>
-          <button
-            onClick={() => setActiveTab("sounds")}
-            style={{
-              flex: 1,
-              padding: "4px 0",
-              borderRadius: 6,
-              border: "none",
-              fontSize: "clamp(10px, 2.6vw, 13px)",
-              fontWeight: 600,
-              cursor: "pointer",
-              background: activeTab === "sounds" ? "#9146FF" : "rgba(48,48,56,0.8)",
-              color: "#fff",
-              opacity: activeTab === "sounds" ? 1 : 0.7,
-            }}
-          >
-            Sounds
-          </button>
-          <button
-            onClick={() => setActiveTab("tts")}
-            style={{
-              flex: 1,
-              padding: "4px 0",
-              borderRadius: 6,
-              border: "none",
-              fontSize: "clamp(10px, 2.6vw, 13px)",
-              fontWeight: 600,
-              cursor: "pointer",
-              background: activeTab === "tts" ? "#9146FF" : "rgba(48,48,56,0.8)",
-              color: "#fff",
-              opacity: activeTab === "tts" ? 1 : 0.7,
-            }}
-          >
-            TTS
-          </button>
-        </div>
-      )}
-
-      {/* Overlay disconnected warning */}
-      {overlayConnected === false && (
-        <div
-          style={{
-            padding: "4px 10px",
-            background: "#ef444422",
-            border: "1px solid #ef444444",
-            borderRadius: 6,
-            textAlign: "center",
-            margin: "0 10px 6px",
-            fontSize: 11,
-            color: "#fca5a5",
-          }}
-        >
-          The streamer's alert overlay is not currently active. Alerts may not play right now.
-        </div>
-      )}
-
-      {/* Now playing banner */}
-      {lastPlayed && (
-        <div
-          style={{
-            padding: "4px 10px",
-            background: "#9146FF22",
-            border: "1px solid #9146FF44",
-            borderRadius: 6,
-            textAlign: "center",
-            margin: "0 10px 6px",
-          }}
-        >
-          Now playing: {lastPlayed}
-        </div>
-      )}
-
-      {!bitsEnabled && (
-        <div
-          style={{ opacity: 0.5, padding: "0 10px 6px", textAlign: "center" }}
-        >
-          Bits are not available on this channel.
-        </div>
-      )}
-
-      {/* Sounds tab — scrollable card grid */}
-      {hasSounds && (!hasTts || activeTab === "sounds") && (
-        <div
-          ref={gridRef}
-          onScroll={checkScroll}
-          onLoad={checkScroll}
-          style={{
-            flex: 1,
-            overflowY: "auto",
-            overflowX: "hidden",
-            padding: "0 10px 0",
-            scrollbarWidth: "none",
-            msOverflowStyle: "none",
-            display: "flex",
-            flexDirection: "column",
-          }}
-        >
+        {/* Overlay disconnected warning */}
+        {overlayConnected === false && (
           <div
             style={{
-              display: "grid",
-              gridTemplateColumns:
-                "repeat(auto-fill, minmax(min(80px, 30%), 1fr))",
-              gap: "clamp(4px, 1.5vw, 8px)",
+              padding: "4px 10px",
+              background: "#ef444422",
+              border: "1px solid #ef444444",
+              borderRadius: 6,
+              textAlign: "center",
+              margin: "0 10px 6px",
+              fontSize: 11,
+              color: "#fca5a5",
             }}
           >
-            {sounds.map((sound) => {
-              const onCooldown =
-                cooldowns[sound.id] && Date.now() < cooldowns[sound.id];
-              const disabled = !bitsEnabled || onCooldown;
-              return (
-                <SoundCard
-                  key={sound.id}
-                  sound={sound}
-                  auth={auth}
-                  disabled={disabled}
-                  onRedeem={handleSoundClick}
-                  onPreview={handlePreview}
-                  onHover={prefetchPreviewAudio}
-                  isPreviewPlaying={previewing === sound.id}
-                  showSendPrompt={justSampled === sound.id}
-                  onDismissSample={() => setJustSampled(null)}
-                  getCost={getCost}
-                />
-              );
-            })}
+            The streamer's alert overlay is not currently active. Alerts may not
+            play right now.
           </div>
-          {/* Sentinel to trigger initial scroll check */}
-          <div
-            ref={(el) => {
-              if (el) setTimeout(checkScroll, 100);
-            }}
-          />
-          {/* Spacer pushes footer to bottom when few alerts are shown */}
-          <div style={{ flex: 1 }} />
-          <BrandedFooter />
-        </div>
-      )}
+        )}
 
-      {/* TTS tab */}
-      {hasTts && (!hasSounds || activeTab === "tts") && (
-        <div style={{ flex: 1, display: "flex", flexDirection: "column", padding: "0 10px 10px", overflow: "hidden" }}>
-          {ttsError && (
+        {/* Now playing banner */}
+        {lastPlayed && (
+          <div
+            style={{
+              padding: "4px 10px",
+              background: "#9146FF22",
+              border: "1px solid #9146FF44",
+              borderRadius: 6,
+              textAlign: "center",
+              margin: "0 10px 6px",
+            }}
+          >
+            Now playing: {lastPlayed}
+          </div>
+        )}
+
+        {!bitsEnabled && (
+          <div
+            style={{ opacity: 0.5, padding: "0 10px 6px", textAlign: "center" }}
+          >
+            Bits are not available on this channel.
+          </div>
+        )}
+
+        {/* Sounds tab — scrollable card grid */}
+        {hasSounds && (!hasTts || activeTab === "sounds") && (
+          <div
+            ref={gridRef}
+            onScroll={checkScroll}
+            onLoad={checkScroll}
+            style={{
+              flex: 1,
+              overflowY: "auto",
+              overflowX: "hidden",
+              padding: "0 10px 0",
+              scrollbarWidth: "none",
+              msOverflowStyle: "none",
+              display: "flex",
+              flexDirection: "column",
+            }}
+          >
             <div
               style={{
-                padding: "4px 8px",
-                borderRadius: 6,
-                background: "#c0392b22",
-                border: "1px solid #c0392b44",
-                fontSize: "clamp(9px, 2.4vw, 12px)",
-                marginBottom: 6,
-                color: "#e74c3c",
-                flexShrink: 0,
+                display: "grid",
+                gridTemplateColumns:
+                  "repeat(auto-fill, minmax(min(80px, 30%), 1fr))",
+                gap: "clamp(4px, 1.5vw, 8px)",
               }}
             >
-              {ttsError}
+              {sounds.map((sound) => {
+                const onCooldown =
+                  cooldowns[sound.id] && Date.now() < cooldowns[sound.id];
+                const disabled = !bitsEnabled || onCooldown;
+                return (
+                  <SoundCard
+                    key={sound.id}
+                    sound={sound}
+                    auth={auth}
+                    disabled={disabled}
+                    onRedeem={handleSoundClick}
+                    onPreview={handlePreview}
+                    onHover={prefetchPreviewAudio}
+                    isPreviewPlaying={previewing === sound.id}
+                    showSendPrompt={justSampled === sound.id}
+                    onDismissSample={() => setJustSampled(null)}
+                    getCost={getCost}
+                  />
+                );
+              })}
             </div>
-          )}
+            {/* Sentinel to trigger initial scroll check */}
+            <div
+              ref={(el) => {
+                if (el) setTimeout(checkScroll, 100);
+              }}
+            />
+            {/* Spacer pushes footer to bottom when few alerts are shown */}
+            <div style={{ flex: 1 }} />
+            <BrandedFooter />
+          </div>
+        )}
 
-          {/* Voice selector */}
-          <div style={{ marginBottom: 6, flexShrink: 0 }}>
-            <label style={{ fontSize: "clamp(9px, 2.4vw, 11px)", opacity: 0.7, display: "block", marginBottom: 2 }}>
-              Voice
-            </label>
-            <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
-              <select
-                value={ttsVoice}
-                onChange={(e) => setTtsVoice(e.target.value)}
+        {/* TTS tab */}
+        {hasTts && (!hasSounds || activeTab === "tts") && (
+          <div
+            style={{
+              flex: 1,
+              display: "flex",
+              flexDirection: "column",
+              padding: "0 10px 10px",
+              overflow: "hidden",
+            }}
+          >
+            {ttsError && (
+              <div
                 style={{
+                  padding: "4px 8px",
+                  borderRadius: 6,
+                  background: "#c0392b22",
+                  border: "1px solid #c0392b44",
+                  fontSize: "clamp(9px, 2.4vw, 12px)",
+                  marginBottom: 6,
+                  color: "#e74c3c",
+                  flexShrink: 0,
+                }}
+              >
+                {ttsError}
+              </div>
+            )}
+
+            {/* Voice selector */}
+            <div style={{ marginBottom: 6, flexShrink: 0 }}>
+              <label
+                style={{
+                  fontSize: "clamp(9px, 2.4vw, 11px)",
+                  opacity: 0.7,
+                  display: "block",
+                  marginBottom: 2,
+                }}
+              >
+                Voice
+              </label>
+              <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
+                <select
+                  value={ttsVoice}
+                  onChange={(e) => setTtsVoice(e.target.value)}
+                  style={{
+                    flex: 1,
+                    padding: "4px 8px",
+                    borderRadius: 6,
+                    border: "1px solid rgba(48,48,56,0.6)",
+                    background: "rgba(14,14,16,0.5)",
+                    color: "#efeff1",
+                    fontSize: "clamp(10px, 2.6vw, 13px)",
+                    outline: "none",
+                  }}
+                >
+                  {(ttsConfig.voices || []).map((v) => (
+                    <option key={v.id} value={v.id}>
+                      {v.name}
+                    </option>
+                  ))}
+                </select>
+                <button
+                  type="button"
+                  onClick={() => ttsVoice && playVoicePreview(ttsVoice)}
+                  style={{
+                    background: "none",
+                    border: "1px solid rgba(48,48,56,0.6)",
+                    borderRadius: 6,
+                    padding: "3px 6px",
+                    fontSize: 11,
+                    cursor: "pointer",
+                    color: previewingVoice === ttsVoice ? "#9146ff" : "#aaa",
+                    lineHeight: 1,
+                  }}
+                  title="Preview voice"
+                >
+                  {previewingVoice === ttsVoice ? "\u23F9" : "\u25B6"}
+                </button>
+              </div>
+            </div>
+
+            {/* Message input */}
+            <div
+              style={{
+                marginBottom: 6,
+                flex: 1,
+                display: "flex",
+                flexDirection: "column",
+                minHeight: 0,
+              }}
+            >
+              <label
+                style={{
+                  fontSize: "clamp(9px, 2.4vw, 11px)",
+                  opacity: 0.7,
+                  display: "block",
+                  marginBottom: 2,
+                  flexShrink: 0,
+                }}
+              >
+                Message ({ttsMessage.length}/{ttsConfig.maxMessageLength || 300}
+                )
+              </label>
+              <textarea
+                value={ttsMessage}
+                onChange={(e) => {
+                  setTtsMessage(
+                    e.target.value.slice(0, ttsConfig.maxMessageLength || 300),
+                  );
+                  if (ttsApproved) {
+                    setTtsApproved(false);
+                    ttsApprovalRef.current = null;
+                  }
+                }}
+                maxLength={ttsConfig.maxMessageLength || 300}
+                placeholder="Type your message..."
+                style={{
+                  width: "100%",
                   flex: 1,
+                  minHeight: 40,
                   padding: "4px 8px",
                   borderRadius: 6,
                   border: "1px solid rgba(48,48,56,0.6)",
@@ -913,112 +1097,73 @@ function ComponentApp() {
                   color: "#efeff1",
                   fontSize: "clamp(10px, 2.6vw, 13px)",
                   outline: "none",
+                  resize: "none",
+                  fontFamily: "inherit",
+                  boxSizing: "border-box",
                 }}
-              >
-                {(ttsConfig.voices || []).map((v) => (
-                  <option key={v.id} value={v.id}>
-                    {v.name}
-                  </option>
-                ))}
-              </select>
-              <button
-                type="button"
-                onClick={() => ttsVoice && playVoicePreview(ttsVoice)}
-                style={{
-                  background: "none",
-                  border: "1px solid rgba(48,48,56,0.6)",
-                  borderRadius: 6,
-                  padding: "3px 6px",
-                  fontSize: 11,
-                  cursor: "pointer",
-                  color: previewingVoice === ttsVoice ? "#9146ff" : "#aaa",
-                  lineHeight: 1,
-                }}
-                title="Preview voice"
-              >
-                {previewingVoice === ttsVoice ? "\u23F9" : "\u25B6"}
-              </button>
+              />
             </div>
-          </div>
 
-          {/* Message input */}
-          <div style={{ marginBottom: 6, flex: 1, display: "flex", flexDirection: "column", minHeight: 0 }}>
-            <label style={{ fontSize: "clamp(9px, 2.4vw, 11px)", opacity: 0.7, display: "block", marginBottom: 2, flexShrink: 0 }}>
-              Message ({ttsMessage.length}/{ttsConfig.maxMessageLength || 300})
-            </label>
-            <textarea
-              value={ttsMessage}
-              onChange={(e) => {
-                setTtsMessage(e.target.value.slice(0, (ttsConfig.maxMessageLength || 300)));
-                if (ttsApproved) { setTtsApproved(false); ttsApprovalRef.current = null; }
-              }}
-              maxLength={ttsConfig.maxMessageLength || 300}
-              placeholder="Type your message..."
+            {/* Submit button — two-step: validate first, then pay synchronously */}
+            <button
+              onClick={ttsApproved ? handleTtsPay : handleTtsValidate}
+              disabled={
+                !bitsEnabled ||
+                ttsValidating ||
+                ttsCooldown ||
+                !ttsMessage.trim()
+              }
               style={{
                 width: "100%",
-                flex: 1,
-                minHeight: 40,
-                padding: "4px 8px",
+                padding: "6px 0",
                 borderRadius: 6,
-                border: "1px solid rgba(48,48,56,0.6)",
-                background: "rgba(14,14,16,0.5)",
-                color: "#efeff1",
-                fontSize: "clamp(10px, 2.6vw, 13px)",
-                outline: "none",
-                resize: "none",
-                fontFamily: "inherit",
-                boxSizing: "border-box",
-              }}
-            />
-          </div>
-
-          {/* Submit button — two-step: validate first, then pay synchronously */}
-          <button
-            onClick={ttsApproved ? handleTtsPay : handleTtsValidate}
-            disabled={!bitsEnabled || ttsValidating || ttsCooldown || !ttsMessage.trim()}
-            style={{
-              width: "100%",
-              padding: "6px 0",
-              borderRadius: 6,
-              border: "none",
-              background: ttsValidating || ttsCooldown ? "#555" : ttsApproved ? "#10B981" : "#9146FF",
-              color: "#fff",
-              fontSize: "clamp(10px, 2.8vw, 14px)",
-              fontWeight: 600,
-              cursor: ttsValidating || ttsCooldown ? "not-allowed" : "pointer",
-              opacity: !bitsEnabled || !ttsMessage.trim() ? 0.5 : 1,
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              gap: 4,
-              flexShrink: 0,
-            }}
-          >
-            <span
-              style={{
-                width: "clamp(6px, 2vw, 10px)",
-                height: "clamp(6px, 2vw, 10px)",
-                borderRadius: "50%",
-                background: ttsApproved ? "#fff" : "linear-gradient(135deg, #9146FF, #772CE8)",
-                border: "1px solid rgba(255,255,255,0.3)",
-                display: "inline-block",
+                border: "none",
+                background:
+                  ttsValidating || ttsCooldown
+                    ? "#555"
+                    : ttsApproved
+                      ? "#10B981"
+                      : "#9146FF",
+                color: "#fff",
+                fontSize: "clamp(10px, 2.8vw, 14px)",
+                fontWeight: 600,
+                cursor:
+                  ttsValidating || ttsCooldown ? "not-allowed" : "pointer",
+                opacity: !bitsEnabled || !ttsMessage.trim() ? 0.5 : 1,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: 4,
                 flexShrink: 0,
               }}
-            />
-            {ttsValidating
-              ? "Checking..."
-              : ttsCooldown
-                ? "Cooldown..."
-                : ttsApproved
-                  ? `Approved ✓ — Confirm ${getCost(ttsConfig.tier)} Bits`
-                  : `Send TTS — ${getCost(ttsConfig.tier)} Bits`}
-          </button>
-          <div style={{ flex: 1 }} />
-          <BrandedFooter />
-        </div>
-      )}
+            >
+              <span
+                style={{
+                  width: "clamp(6px, 2vw, 10px)",
+                  height: "clamp(6px, 2vw, 10px)",
+                  borderRadius: "50%",
+                  background: ttsApproved
+                    ? "#fff"
+                    : "linear-gradient(135deg, #9146FF, #772CE8)",
+                  border: "1px solid rgba(255,255,255,0.3)",
+                  display: "inline-block",
+                  flexShrink: 0,
+                }}
+              />
+              {ttsValidating
+                ? "Checking..."
+                : ttsCooldown
+                  ? "Cooldown..."
+                  : ttsApproved
+                    ? `Approved ✓ — Confirm ${getCost(ttsConfig.tier)} Bits`
+                    : `Send TTS — ${getCost(ttsConfig.tier)} Bits`}
+            </button>
+            <div style={{ flex: 1 }} />
+            <BrandedFooter />
+          </div>
+        )}
 
-      <style>{`::-webkit-scrollbar { display: none; }`}</style>
+        <style>{`::-webkit-scrollbar { display: none; }`}</style>
       </div>
     </div>
   );

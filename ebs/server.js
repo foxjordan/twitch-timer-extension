@@ -328,6 +328,16 @@ loadVoices().catch(() => {});
 loadTokens().catch(() => {});
 loadBannerConfig().catch(() => {});
 
+// One-time, idempotent — keeps the feature-usage aggregate cheap as client_events grows.
+(async () => {
+  try {
+    await db.query("CREATE INDEX IF NOT EXISTS client_events_name_created_idx ON client_events (event_name, created_at)");
+    await db.query("CREATE INDEX IF NOT EXISTS client_events_feature_idx ON client_events ((params ->> 'feature')) WHERE (params ->> 'feature') IS NOT NULL");
+  } catch (err) {
+    logger.error("client_events_index_ensure_failed", { message: err?.message });
+  }
+})();
+
 // ===== Per-user settings (persisted) =====
 const DATA_DIR = process.env.DATA_DIR || process.cwd();
 const SETTINGS_PATH = path.resolve(DATA_DIR, "overlay-user-settings.json");
@@ -428,6 +438,16 @@ setInterval(async () => {
   }
   subDedup.sweep(now); // tiny map (one entry per recent subscriber) — no batching needed
 }, 10 * 60 * 1000);
+
+// client_events retention: 12 months (spec). Low volume — a single DELETE daily.
+setInterval(async () => {
+  try {
+    const r = await db.query("DELETE FROM client_events WHERE created_at < now() - interval '12 months'");
+    if (r.rowCount > 0) logger.info("client_events_pruned", { rows: r.rowCount });
+  } catch (err) {
+    logger.error("client_events_prune_failed", { message: err?.message });
+  }
+}, 24 * 60 * 60 * 1000);
 
 // Per-channel pending alert queue: channelId -> [{ alertId, type, soundName, viewerUserId, viewerDisplayName, bitsAmount, enqueuedAt, expiresAt }]
 export const pendingAlerts = new Map();

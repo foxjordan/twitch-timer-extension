@@ -15,6 +15,7 @@ import { deleteAllUserData } from "./user_data_deletion.js";
 import { getVoices, isValidVoice } from "./tts_voices.js";
 import { synthesizeSpeech } from "./tts_provider.js";
 import { VALID_TIERS, TIER_LABELS, TIER_COSTS } from "./tiers.js";
+import { shapeFeatureUsage } from "./feature_usage.js";
 import crypto from "crypto";
 import path from "path";
 import { readFile, writeFile, mkdir } from "fs/promises";
@@ -617,6 +618,74 @@ export function mountAdminRoutes(app, ctx) {
       }
       const rows = Array.from(byLanguage.values()).sort((a, b) => b.opened - a.opened);
       res.json({ rows });
+    } catch (err) {
+      res.status(500).json({ error: err?.message || "Query failed" });
+    }
+  });
+
+  // Feature usage on the web dashboard: for each feature area, how many distinct
+  // streamers reached it (feature_view), how many used it for real (feature_use),
+  // total feature_use events, and the trend vs. the previous equal-length window.
+  app.get("/api/admin/analytics/feature-usage", async (req, res) => {
+    if (!req.session?.isAdmin || !isSuperAdmin(req)) {
+      return res.status(403).json({ error: "Access denied" });
+    }
+    try {
+      const { from, to } = parseDateRange(req);
+      // Previous window = the same-length span immediately before [from, to).
+      // When `to` is open (the 24h/7d/30d/thisMonth presets send only `from`),
+      // treat the current window as ending "now" so the trend arrow still works;
+      // only skip the comparison entirely when `from` is also open (All Time).
+      let prevFrom = null;
+      let prevTo = null;
+      if (from) {
+        const effectiveTo = to || new Date().toISOString();
+        const span = new Date(effectiveTo).getTime() - new Date(from).getTime();
+        prevTo = from;
+        prevFrom = new Date(new Date(from).getTime() - span).toISOString();
+      }
+
+      // `params` is a jsonb column: `->> 'feature'` extracts the key directly and
+      // yields NULL for a SQL NULL, a JSON null/scalar/array, or an object with
+      // no `feature` key — so the one IS NOT NULL check is the whole guard.
+      const aggSql = `
+        SELECT params ->> 'feature' AS feature,
+               event_name,
+               COUNT(DISTINCT channel_id)::int AS distinct_channels,
+               COUNT(*)::int AS event_count
+          FROM client_events
+         WHERE event_name IN ('feature_view', 'feature_use')
+           AND params ->> 'feature' IS NOT NULL
+           AND ($1::timestamptz IS NULL OR created_at >= $1)
+           AND ($2::timestamptz IS NULL OR created_at < $2)
+         GROUP BY 1, 2`;
+
+      const [curRes, prevRes, activeRes] = await Promise.all([
+        db.query(aggSql, [from, to]),
+        prevFrom ? db.query(aggSql, [prevFrom, prevTo]) : Promise.resolve({ rows: [] }),
+        db.query(
+          `SELECT COUNT(DISTINCT channel_id)::int AS n
+             FROM client_events
+            WHERE event_name IN ('page_view', 'feature_view', 'feature_use')
+              AND ($1::timestamptz IS NULL OR created_at >= $1)
+              AND ($2::timestamptz IS NULL OR created_at < $2)`,
+          [from, to],
+        ),
+      ]);
+
+      let registeredTotal = null;
+      try {
+        registeredTotal = getAllUserIds().length;
+      } catch { /* leave null; UI shows "— active" */ }
+
+      res.json(
+        shapeFeatureUsage({
+          currentRows: curRes.rows,
+          prevRows: prevRes.rows,
+          activeStreamers: activeRes.rows?.[0]?.n || 0,
+          registeredTotal,
+        }),
+      );
     } catch (err) {
       res.status(500).json({ error: err?.message || "Query failed" });
     }

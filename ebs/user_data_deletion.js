@@ -14,6 +14,7 @@ import { deleteTimerState } from "./state.js";
 import { deleteUserAccessToken } from "./twitch_tokens.js";
 import { clearLogEntries } from "./event_log.js";
 import { logger } from "./logger.js";
+import { db } from "./db.js";
 
 /**
  * Delete all data associated with a user across every store.
@@ -73,6 +74,14 @@ export async function deleteAllUserData(userId, ctx = {}) {
 
   // 8b. Plinko board config
   if (deletePlinkoConfig(uid)) deleted.push("plinko");
+
+  // Analytics events (first-party client_events table)
+  try {
+    const r = await db.query("DELETE FROM client_events WHERE channel_id = $1", [uid]);
+    if (r.rowCount > 0) deleted.push("clientEvents");
+  } catch (err) {
+    logger.error("delete_client_events_failed", { userId: uid, message: err?.message });
+  }
 
   // 9. Overlay styles
   if (deleteStyle(uid)) deleted.push("styles");

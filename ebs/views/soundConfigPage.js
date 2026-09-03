@@ -5,6 +5,7 @@ import {
 } from "./theme.js";
 import { GLOBAL_HEADER_STYLES, renderGlobalHeader } from "./globalHeader.js";
 import { renderFirebaseScript } from "./firebase.js";
+import { renderAnalyticsScript } from "./analyticsScript.js";
 import { VALID_TIERS, TIER_LABELS, DEFAULT_TIER } from "../tiers.js";
 
 export function renderSoundConfigPage(options = {}) {
@@ -40,6 +41,7 @@ export function renderSoundConfigPage(options = {}) {
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/driver.js@1.3.1/dist/driver.css"/>
     ${renderThemeBootstrapScript()}
     ${renderFirebaseScript()}
+    ${renderAnalyticsScript({ page: "sound-config" })}
     <style>
       ${THEME_CSS_VARS}
       body { margin: 0; font-family: Inter, system-ui, Arial, sans-serif; background: var(--page-bg); color: var(--text-color); min-height: 100vh; display: flex; flex-direction: column; }
@@ -598,6 +600,16 @@ export function renderSoundConfigPage(options = {}) {
           } catch (e) {}
         }
 
+        // One-shot guard so the TTS feature_view fires at most once per page
+        // load no matter how many times the user toggles back to the section.
+        var ttsFeatureViewed = false;
+        function markTtsViewed() {
+          if (!ttsFeatureViewed) {
+            ttsFeatureViewed = true;
+            logDashboardEvent('feature_view', { feature: 'tts' });
+          }
+        }
+
         var TIER_LABELS = ${JSON.stringify(TIER_LABELS)};
 
         var soundListEl = document.getElementById('soundList');
@@ -643,7 +655,7 @@ export function renderSoundConfigPage(options = {}) {
             flashButton(copySoundBtn);
             var url = soundUrlEl ? soundUrlEl.textContent : '';
             var old = copySoundBtn.textContent;
-            try { await navigator.clipboard.writeText(url); copySoundBtn.textContent = 'Copied!'; } catch(e) { copySoundBtn.textContent = 'Copy failed'; }
+            try { await navigator.clipboard.writeText(url); copySoundBtn.textContent = 'Copied!'; logDashboardEvent('feature_use', { feature: 'sounds', action: 'copy_overlay_link' }); } catch(e) { copySoundBtn.textContent = 'Copy failed'; }
             setTimeout(function() { copySoundBtn.textContent = old; }, 900);
           });
         }
@@ -664,6 +676,7 @@ export function renderSoundConfigPage(options = {}) {
         document.querySelectorAll('.sidebar-nav-item').forEach(function(btn) {
           btn.addEventListener('click', function() {
             switchSection(btn.getAttribute('data-section'));
+            if (btn.getAttribute('data-section') === 'tts') markTtsViewed();
             history.replaceState(null, '', '#' + btn.getAttribute('data-section'));
           });
         });
@@ -678,6 +691,7 @@ export function renderSoundConfigPage(options = {}) {
           );
           if (requested && validSections.indexOf(requested) !== -1) {
             switchSection(requested);
+            if (requested === 'tts') markTtsViewed();
           }
         })();
 
@@ -1377,6 +1391,7 @@ export function renderSoundConfigPage(options = {}) {
               // someone who only ever adds from the library, never uploads
               // their own file, should still read as having completed setup.
               logDashboardEvent('sound_added_from_library', {});
+              logDashboardEvent('feature_use', { feature: 'sounds', action: 'sound_from_library' });
               await fetchSoundsAdmin();
               renderAddFromLibrarySuccessStep(data.sound);
             } catch (err) {
@@ -1736,6 +1751,7 @@ export function renderSoundConfigPage(options = {}) {
               var body = await r.json().catch(function() { return {}; });
               if (!r.ok) throw new Error(body.error || 'Failed to update Channel Points');
               s.channelPointsEnabled = Boolean(body.sound && body.sound.channelPointsEnabled);
+              if (s.channelPointsEnabled) logDashboardEvent('feature_use', { feature: 'sounds', action: 'channel_points_enabled' });
               cpCostInput.disabled = !s.channelPointsEnabled;
               cpCdInput.disabled = !s.channelPointsEnabled;
               cpUpdateBtn.style.display = s.channelPointsEnabled ? 'inline-block' : 'none';
@@ -2748,6 +2764,7 @@ export function renderSoundConfigPage(options = {}) {
               thumbnailSource: wizard.thumbnailSource || 'none',
               isYoutube: wizard.type === 'clip' ? isYoutubeClipUrl(wizard.clipUrl) : undefined,
             });
+            logDashboardEvent('feature_use', { feature: 'sounds', action: (wizard.type === 'clip' ? 'clip_created' : 'sound_uploaded') });
 
             var soundId = wizard.createdSound.id;
             closeWizard();
@@ -3011,6 +3028,7 @@ export function renderSoundConfigPage(options = {}) {
                 body: JSON.stringify(payload)
               });
               if (!r.ok) { var body = await r.json().catch(function() { return {}; }); throw new Error(body.error || 'Save failed'); }
+              logDashboardEvent('feature_use', { feature: 'tts', action: 'tts_config_saved' });
               if (ttsSettingsHintEl2) {
                 ttsSettingsHintEl2.textContent = 'TTS settings saved!';
                 setTimeout(function() { ttsSettingsHintEl2.textContent = ''; }, 2500);
@@ -3332,6 +3350,7 @@ export function renderSoundConfigPage(options = {}) {
 
         // Initial load
         logDashboardEvent('config_loaded');
+        logDashboardEvent('feature_view', { feature: 'sounds' });
         fetchSoundsAdmin();
         fetchLibrary();
         fetchTtsSettings();

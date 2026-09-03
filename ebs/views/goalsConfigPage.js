@@ -5,6 +5,7 @@ import {
 } from "./theme.js";
 import { GLOBAL_HEADER_STYLES, renderGlobalHeader } from "./globalHeader.js";
 import { renderFirebaseScript } from "./firebase.js";
+import { renderAnalyticsScript } from "./analyticsScript.js";
 
 const FONT_OPTIONS = [
   { value: "", label: "Default (Inter)" },
@@ -80,6 +81,7 @@ export function renderGoalsConfigPage(options = {}) {
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/driver.js@1.3.1/dist/driver.css"/>
     ${renderThemeBootstrapScript()}
     ${renderFirebaseScript()}
+    ${renderAnalyticsScript({ page: "goals-config" })}
     <style>
       ${THEME_CSS_VARS}
       body { margin: 0; font-family: Inter, system-ui, Arial, sans-serif; background: var(--page-bg); color: var(--text-color); min-height: 100vh; display: flex; flex-direction: column; }
@@ -870,6 +872,7 @@ export function renderGoalsConfigPage(options = {}) {
         setBusy(btn, true);
         try {
           await fetch('/api/goals', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title: 'New Goal' }) });
+          if (window.lsh) lsh.use('goals', 'goal_created');
           await fetchGoalsAdmin();
         } catch (err) {}
         setBusy(btn, false);
@@ -896,6 +899,7 @@ export function renderGoalsConfigPage(options = {}) {
             const msg = await res.text();
             alert('Unable to create subscriber goal. ' + msg);
           } else {
+            if (window.lsh) lsh.use('goals', 'goal_created');
             await fetchGoalsAdmin();
           }
         } catch (err) {}
@@ -943,6 +947,7 @@ export function renderGoalsConfigPage(options = {}) {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload)
           });
+          if (window.lsh) lsh.use('goals', 'goal_style_saved');
           await fetchGoalsAdmin();
         } catch (err) {}
         setBusy(btn, false);
@@ -1003,6 +1008,7 @@ export function renderGoalsConfigPage(options = {}) {
         try {
           await navigator.clipboard.writeText(url);
           btn.textContent = 'Copied!';
+          if (window.lsh) lsh.use('goals', 'copy_overlay_link');
         } catch (err) {
           btn.textContent = 'Copy failed';
         }
@@ -1095,6 +1101,7 @@ export function renderGoalsConfigPage(options = {}) {
 
       // Initial load
       fetchGoalsAdmin();
+      if (window.lsh) lsh.feature('goals');
     </script>
     <script src="https://cdn.jsdelivr.net/npm/driver.js@1.3.1/dist/driver.js.iife.js"></script>
     <script>

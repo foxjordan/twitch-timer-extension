@@ -5,6 +5,7 @@ import {
 } from "./theme.js";
 import { GLOBAL_HEADER_STYLES, renderGlobalHeader } from "./globalHeader.js";
 import { renderFirebaseScript } from "./firebase.js";
+import { renderAnalyticsScript } from "./analyticsScript.js";
 import { FONT_OPTIONS } from "./goalsConfigPage.js";
 
 export function renderOverlayConfigPage(options = {}) {
@@ -78,6 +79,7 @@ export function renderOverlayConfigPage(options = {}) {
     <script id="Cookiebot" src="https://consent.cookiebot.com/uc.js" data-cbid="6770198d-2c1f-46f8-af4b-694edc70484c" type="text/javascript"></script>
     ${renderThemeBootstrapScript()}
     ${renderFirebaseScript()}
+    ${renderAnalyticsScript({ page: "timer-config" })}
     <style>
       ${THEME_CSS_VARS}
       body { margin: 0; font-family: Inter, system-ui, Arial, sans-serif; background: var(--page-bg); color: var(--text-color); min-height: 100vh; display: flex; flex-direction: column; }
@@ -964,7 +966,7 @@ export function renderOverlayConfigPage(options = {}) {
           flashButton(copyBtn);
           const url = document.getElementById('url').textContent;
           const old = copyBtn.textContent;
-          try { await navigator.clipboard.writeText(url); copyBtn.textContent = 'Copied!'; } catch(e) { copyBtn.textContent = 'Copy failed'; }
+          try { await navigator.clipboard.writeText(url); copyBtn.textContent = 'Copied!'; if (window.lsh) lsh.use('timer', 'copy_overlay_link'); } catch(e) { copyBtn.textContent = 'Copy failed'; }
           setTimeout(() => { copyBtn.textContent = old; }, 900);
         });
         const rotateBtn = document.getElementById('rotateKey');
@@ -1428,7 +1430,7 @@ export function renderOverlayConfigPage(options = {}) {
             bonusTime: { multiplier: Number(document.getElementById('r_bonus')?.value||2), stackWithHype: Boolean(document.getElementById('r_bonus_stack')?.checked) }
           };
           window.DEV_RULES = body;
-          try { await fetch('/api/rules', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }); } catch(e) {}
+          try { await fetch('/api/rules', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }); if (window.lsh) lsh.use('timer', 'rules_saved'); } catch(e) {}
         });
 
         // ---- Chat command UI ----
@@ -1572,6 +1574,9 @@ export function renderOverlayConfigPage(options = {}) {
           var seDisconnectBtn = document.getElementById('seDisconnect');
           var seStatusEl = document.getElementById('seStatus');
           if (!seTokenInput) return;
+          // Fires on page load: the SE card is always-visible inside the Rules section
+          // with no dedicated nav event to hook — so "reached" ~= timer-config visitors.
+          if (window.lsh) lsh.feature('streamelements');
 
           // Toggle show/hide token
           if (seToggle) seToggle.addEventListener('click', function() {
@@ -1615,6 +1620,7 @@ export function renderOverlayConfigPage(options = {}) {
               var r = await fetch('/api/streamelements/connect', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ jwtToken: token }) });
               var j = await r.json();
               if (j.ok) {
+                if (window.lsh) lsh.use('streamelements', 'connected');
                 updateSeStatusUI({ status: 'connecting' });
                 // Poll status after a short delay for auth result
                 setTimeout(function() {
@@ -1706,6 +1712,7 @@ export function renderOverlayConfigPage(options = {}) {
       bind();
       refresh();
       saveStyle();
+      if (window.lsh) lsh.feature('timer');
 
       (function() {
         var STORAGE_KEY = 'saNudgeDismissedAt';
@@ -1742,6 +1749,7 @@ export function renderOverlayConfigPage(options = {}) {
         var delegateLoginInput = document.getElementById('delegateLoginInput');
         var delegateAddStatus = document.getElementById('delegateAddStatus');
         if (!delegateListEl) return;
+        var delegatesFeatureViewed = false;
 
         function makeEmptyState(msg) {
           var d = document.createElement('div'); d.style.cssText = 'color:var(--text-muted);font-size:13px;'; d.textContent = msg; return d;
@@ -1804,6 +1812,7 @@ export function renderOverlayConfigPage(options = {}) {
                   delegateLoginInput.value = '';
                   delegateAddStatus.style.color = '#22c55e';
                   delegateAddStatus.textContent = (data.displayName || login) + ' added.';
+                  if (window.lsh) lsh.use('delegates', 'delegate_added');
                   fetchDelegates();
                 }
               })
@@ -1817,7 +1826,10 @@ export function renderOverlayConfigPage(options = {}) {
 
         document.querySelectorAll('.sidebar-nav-item').forEach(function(btn) {
           btn.addEventListener('click', function() {
-            if (btn.getAttribute('data-section') === 'delegates') fetchDelegates();
+            if (btn.getAttribute('data-section') === 'delegates') {
+              fetchDelegates();
+              if (!delegatesFeatureViewed && window.lsh) { delegatesFeatureViewed = true; lsh.feature('delegates'); }
+            }
           });
         });
       })();

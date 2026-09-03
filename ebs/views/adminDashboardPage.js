@@ -449,6 +449,11 @@ export function renderAdminDashboardPage(options = {}) {
         </div>
       </div>
       <div class="table-card" style="margin-bottom:20px;">
+        <h2>Feature Usage <span class="refresh-info" id="featureUsageActive"></span></h2>
+        <div style="font-size:12px; color:var(--text-muted); margin-bottom:10px;">Web-dashboard features: distinct streamers who reached each area vs. who used it for real, and how the "used" count compares to the previous equal-length window.</div>
+        <div id="featureUsageContainer"><div class="empty-state">Loading...</div></div>
+      </div>
+      <div class="table-card" style="margin-bottom:20px;">
         <h2>Setup Funnel by Language</h2>
         <div style="font-size:12px; color:var(--text-muted); margin-bottom:10px;">Distinct broadcasters who opened the config panel vs. who went on to create at least one alert, grouped by each channel's declared stream language on Twitch.</div>
         <div id="analyticsFunnelContainer"><div class="empty-state">Loading...</div></div>
@@ -2590,6 +2595,68 @@ export function renderAdminDashboardPage(options = {}) {
             });
         }
 
+        function loadFeatureUsage() {
+          var container = document.getElementById('featureUsageContainer');
+          if (!container) return;
+          fetch('/api/admin/analytics/feature-usage' + rangeQueryString(), { credentials: 'same-origin' })
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+              if (data.error) {
+                var activeElErr = document.getElementById('featureUsageActive');
+                if (activeElErr) activeElErr.textContent = '';
+                container.textContent = '';
+                container.appendChild(makeEmptyState('Failed to load feature usage.'));
+                return;
+              }
+              var activeEl = document.getElementById('featureUsageActive');
+              if (activeEl) {
+                activeEl.textContent = data.registeredTotal == null
+                  ? (data.activeStreamers || 0) + ' active'
+                  : (data.activeStreamers || 0) + ' of ' + data.registeredTotal + ' streamers active';
+              }
+              container.textContent = '';
+              if (!data.features || !data.features.length) {
+                container.appendChild(makeEmptyState('No feature-usage events recorded yet.'));
+                return;
+              }
+              var columnLabels = ['Feature', 'Reached', 'Used', 'Use Rate', 'Events', 'Trend'];
+              var arrow = { up: '▲', down: '▼', flat: '–' };
+              var table = document.createElement('table');
+              table.className = 'responsive-table';
+              var thead = document.createElement('thead');
+              var hr = document.createElement('tr');
+              columnLabels.forEach(function(label) { var th = document.createElement('th'); th.textContent = label; hr.appendChild(th); });
+              thead.appendChild(hr);
+              table.appendChild(thead);
+              var tbody = document.createElement('tbody');
+              data.features.forEach(function(f) {
+                var tr = document.createElement('tr');
+                [
+                  f.label,
+                  String(f.reached),
+                  String(f.used),
+                  f.reached ? Math.round(f.useRate * 100) + '%' : '–',
+                  String(f.useEvents),
+                  arrow[f.trend] || '–',
+                ].forEach(function(text, i) {
+                  var td = document.createElement('td');
+                  td.setAttribute('data-label', columnLabels[i]);
+                  td.textContent = text;
+                  tr.appendChild(td);
+                });
+                tbody.appendChild(tr);
+              });
+              table.appendChild(tbody);
+              container.appendChild(table);
+            })
+            .catch(function() {
+              var activeElErr = document.getElementById('featureUsageActive');
+              if (activeElErr) activeElErr.textContent = '';
+              container.textContent = '';
+              container.appendChild(makeEmptyState('Failed to load feature usage.'));
+            });
+        }
+
         function fetchAnalytics() {
           fetch('/api/admin/analytics' + rangeQueryString(), { credentials: 'same-origin' })
             .then(function(r) { return r.json(); })
@@ -2610,6 +2677,7 @@ export function renderAdminDashboardPage(options = {}) {
               document.getElementById('analyticsRefreshInfo').textContent = 'Load failed';
             });
           fetchAnalyticsFunnel();
+          loadFeatureUsage();
         }
 
         document.querySelectorAll('.sidebar-nav-item').forEach(function(btn) {

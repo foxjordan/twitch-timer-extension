@@ -5,6 +5,7 @@ import {
 } from "./theme.js";
 import { GLOBAL_HEADER_STYLES, renderGlobalHeader } from "./globalHeader.js";
 import { renderFirebaseScript } from "./firebase.js";
+import { renderAnalyticsScript } from "./analyticsScript.js";
 
 export function renderUtilitiesPage(options = {}) {
   const base = String(options.base || "");
@@ -37,6 +38,7 @@ export function renderUtilitiesPage(options = {}) {
     <script id="Cookiebot" src="https://consent.cookiebot.com/uc.js" data-cbid="6770198d-2c1f-46f8-af4b-694edc70484c" type="text/javascript"></script>
     ${renderThemeBootstrapScript()}
     ${renderFirebaseScript()}
+    ${renderAnalyticsScript({ page: "extras" })}
     <style>
       ${THEME_CSS_VARS}
       body { margin: 0; font-family: Inter, system-ui, Arial, sans-serif; background: var(--page-bg); color: var(--text-color); min-height: 100vh; display:flex; flex-direction: column; }
@@ -377,6 +379,7 @@ export function renderUtilitiesPage(options = {}) {
           document.querySelectorAll('.sidebar-nav-item').forEach(function(el) {
             el.classList.toggle('active', el.getAttribute('data-section') === sectionId);
           });
+          lshFeatureOnce({ wheels: 'wheel', prompts: 'prompts', plinko: 'plinko' }[sectionId]);
         }
         document.querySelectorAll('.sidebar-nav-item').forEach(function(btn) {
           btn.addEventListener('click', function() {
@@ -384,6 +387,12 @@ export function renderUtilitiesPage(options = {}) {
             history.replaceState(null, '', '#' + btn.getAttribute('data-section'));
           });
         });
+        var lshViewed = {};
+        function lshFeatureOnce(key) {
+          if (key && !lshViewed[key] && window.lsh) { lshViewed[key] = true; lsh.feature(key); }
+        }
+        lshFeatureOnce('extras');
+        lshFeatureOnce('wheel'); // 'wheels' section is the default-active one on load
         (function() {
           var requested = String(window.location.hash || '').replace('#', '');
           var validSections = Array.prototype.map.call(
@@ -841,6 +850,7 @@ export function renderUtilitiesPage(options = {}) {
               return resp.json();
             }).then(function(payload) {
               handleSpinPayload(payload);
+              if (window.lsh) lsh.use('wheel', 'wheel_spun');
             }).catch(function() {
               resultEl.textContent = 'Spin failed';
               setTimeout(function() { announceWinner(); }, 2500);
@@ -886,6 +896,7 @@ export function renderUtilitiesPage(options = {}) {
               if (!resp.ok) throw new Error('Request failed');
               return resp.json();
             }).then(function(payload) {
+              if (window.lsh) lsh.use('wheel', 'wheel_spun');
               var winnerIndex = payload.winnerIndex || 0;
               var slice = TWO_PI / inst.segments.length;
               var targetAngle = ((POINTER_ANGLE - (winnerIndex * slice + slice / 2)) % TWO_PI + TWO_PI) % TWO_PI;
@@ -979,6 +990,7 @@ export function renderUtilitiesPage(options = {}) {
             var shareUrl = /^https?:/i.test(wheelOverlayBase) ? wheelRel : window.location.origin + wheelRel;
             navigator.clipboard.writeText(shareUrl).then(function() {
               copyStatus.textContent = 'Copied!';
+              if (window.lsh) lsh.use('wheel', 'copy_overlay_link');
             }).catch(function() {
               copyStatus.textContent = 'Copy failed';
             });
@@ -1006,6 +1018,7 @@ export function renderUtilitiesPage(options = {}) {
             wheelInstances.push(createWheelInstance(cfg));
             updateDeleteButtons();
             saveAllWheels();
+            if (window.lsh) lsh.use('wheel', 'wheel_created');
           });
         }
 
@@ -1083,6 +1096,7 @@ export function renderUtilitiesPage(options = {}) {
           }).then(function() {
             setPromptCurrentDisplay(text);
             if (text) lastShownPrompt = text;
+            if (text && window.lsh) lsh.use('prompts', 'prompt_shown');
           }).catch(function() {
             if (promptCurrent) promptCurrent.textContent = 'Failed to update overlay';
           });
@@ -1113,6 +1127,7 @@ export function renderUtilitiesPage(options = {}) {
             var shareUrl = /^https?:/i.test(promptOverlayBase) ? promptRel : window.location.origin + promptRel;
             navigator.clipboard.writeText(shareUrl).then(function() {
               promptCopyStatus.textContent = 'Copied!';
+              if (window.lsh) lsh.use('prompts', 'copy_overlay_link');
             }).catch(function() {
               promptCopyStatus.textContent = 'Copy failed';
             });
@@ -1400,7 +1415,7 @@ export function renderUtilitiesPage(options = {}) {
               body: JSON.stringify(formPayload()),
             })
               .then(function (r) { return r.ok ? r.json() : Promise.reject(); })
-              .then(function (cfg) { applyConfig(cfg); saveStatus.textContent = 'Saved'; })
+              .then(function (cfg) { applyConfig(cfg); saveStatus.textContent = 'Saved'; if (window.lsh) lsh.use('plinko', 'board_saved'); })
               .catch(function () { saveStatus.textContent = 'Save failed'; });
             setTimeout(function () { saveStatus.textContent = ''; }, 2500);
           }
@@ -1421,7 +1436,7 @@ export function renderUtilitiesPage(options = {}) {
               body: JSON.stringify(body),
             })
               .then(function (r) { return r.ok ? r.json() : Promise.reject(r); })
-              .then(function () { busy = false; })
+              .then(function () { busy = false; if (!opts.test && window.lsh) lsh.use('plinko', 'dropped'); })
               .catch(function () { busy = false; dropStatus.textContent = 'Drop failed'; });
           }
 
@@ -1621,7 +1636,7 @@ export function renderUtilitiesPage(options = {}) {
             var rel = plinkoOverlayBase + '?' + params.toString();
             var full = /^https?:/i.test(plinkoOverlayBase) ? rel : window.location.origin + rel;
             navigator.clipboard.writeText(full)
-              .then(function () { copyStatus.textContent = 'Copied!'; })
+              .then(function () { copyStatus.textContent = 'Copied!'; if (window.lsh) lsh.use('plinko', 'copy_overlay_link'); })
               .catch(function () { copyStatus.textContent = 'Copy failed'; });
             setTimeout(function () { copyStatus.textContent = ''; }, 2500);
           });

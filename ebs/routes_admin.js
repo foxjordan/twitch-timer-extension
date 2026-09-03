@@ -307,7 +307,7 @@ export function mountAdminRoutes(app, ctx) {
   });
 
   // Fetch event log for a specific broadcaster
-  app.get("/api/admin/events/log/:userId", (req, res) => {
+  app.get("/api/admin/events/log/:userId", async (req, res) => {
     if (!req.session?.isAdmin || !isSuperAdmin(req)) {
       return res.status(403).json({ error: "Access denied" });
     }
@@ -315,7 +315,7 @@ export function mountAdminRoutes(app, ctx) {
     if (!/^\w+$/.test(uid)) {
       return res.status(400).json({ error: "Invalid userId" });
     }
-    res.json({ entries: getLogEntries(uid) });
+    res.json({ entries: await getLogEntries(uid) });
   });
 
   // Ban a user

@@ -96,8 +96,8 @@ export async function deleteAllUserData(userId, ctx = {}) {
   deleteUserAccessToken(uid);
   deleted.push("accessToken");
 
-  // 13. Event log entries (in-memory only)
-  clearLogEntries(uid);
+  // 13. Event log entries (persisted in Postgres)
+  await clearLogEntries(uid);
   deleted.push("eventLog");
 
   // 14. User settings (owned by server.js, passed via ctx)

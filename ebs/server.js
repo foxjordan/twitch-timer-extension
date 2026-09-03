@@ -334,13 +334,21 @@ loadVoices().catch(() => {});
 loadTokens().catch(() => {});
 loadBannerConfig().catch(() => {});
 
-// One-time, idempotent — keeps the feature-usage aggregate cheap as client_events grows.
+// One-time, idempotent DB bootstrap: analytics indexes + the persisted event log.
 (async () => {
   try {
     await db.query("CREATE INDEX IF NOT EXISTS client_events_name_created_idx ON client_events (event_name, created_at)");
     await db.query("CREATE INDEX IF NOT EXISTS client_events_feature_idx ON client_events ((params ->> 'feature')) WHERE (params ->> 'feature') IS NOT NULL");
+    await db.query(`CREATE TABLE IF NOT EXISTS event_log (
+      id text PRIMARY KEY,
+      user_id text NOT NULL,
+      ts bigint NOT NULL,
+      type text NOT NULL,
+      data jsonb NOT NULL DEFAULT '{}'::jsonb
+    )`);
+    await db.query("CREATE INDEX IF NOT EXISTS event_log_user_ts_idx ON event_log (user_id, ts DESC)");
   } catch (err) {
-    logger.error("client_events_index_ensure_failed", { message: err?.message });
+    logger.error("db_bootstrap_failed", { message: err?.message });
   }
 })();
 
@@ -455,6 +463,17 @@ setInterval(async () => {
   }
 }, 24 * 60 * 60 * 1000);
 
+// event_log retention: 90 days. Low volume — a single DELETE daily. ts is epoch ms.
+setInterval(async () => {
+  try {
+    const cutoff = Date.now() - 90 * 24 * 60 * 60 * 1000;
+    const r = await db.query("DELETE FROM event_log WHERE ts < $1", [cutoff]);
+    if (r.rowCount > 0) logger.info("event_log_pruned", { rows: r.rowCount });
+  } catch (err) {
+    logger.error("event_log_prune_failed", { message: err?.message });
+  }
+}, 24 * 60 * 60 * 1000);
+
 // Per-channel pending alert queue: channelId -> [{ alertId, type, soundName, viewerUserId, viewerDisplayName, bitsAmount, enqueuedAt, expiresAt }]
 export const pendingAlerts = new Map();
 const ALERT_QUEUE_TTL_MS = 10 * 60 * 1000; // items expire after 10 minutes
@@ -542,18 +561,18 @@ mountTimerRoutes(app, {
 });
 
 // Admin-only: event log for counted contributions (per-user)
-app.get("/api/events/log", (req, res) => {
+app.get("/api/events/log", async (req, res) => {
   if (!req?.session?.isAdmin)
     return res.status(401).json({ error: "Admin login required" });
   const uid = req.session?.twitchUser?.id;
-  res.json({ entries: getLogEntries(uid ? String(uid) : null) });
+  res.json({ entries: await getLogEntries(uid ? String(uid) : null) });
 });
 
-app.post("/api/events/log/clear", (req, res) => {
+app.post("/api/events/log/clear", async (req, res) => {
   if (!req?.session?.isAdmin)
     return res.status(401).json({ error: "Admin login required" });
   const uid = req.session?.twitchUser?.id;
-  clearLogEntries(uid ? String(uid) : null);
+  await clearLogEntries(uid ? String(uid) : null);
   res.json({ ok: true });
 });
 
@@ -578,7 +597,7 @@ app.post("/api/alerts/replay/:alertId", async (req, res) => {
   const uid = req.session?.twitchUser?.id;
   if (!uid) return res.status(401).json({ error: "Not authenticated" });
 
-  const entry = getLogEntryById(req.params.alertId);
+  const entry = await getLogEntryById(req.params.alertId);
   if (!entry) return res.status(404).json({ error: "Alert not found" });
   if (entry.userId !== String(uid)) return res.status(403).json({ error: "Not your alert" });
 

@@ -18,6 +18,7 @@ export function renderOverlayConfigPage(options = {}) {
     initialQuery = {},
     showAdminLink = false,
     delegateMode = false,
+    superAdminManaging = false,
     managedByName = '',
   } = options;
 
@@ -237,7 +238,7 @@ export function renderOverlayConfigPage(options = {}) {
           <button class="sidebar-nav-item" data-section="styles">Styles</button>
           <button class="sidebar-nav-item" data-section="rules">Rules</button>
           <button class="sidebar-nav-item" data-section="log-debug">Log & Debug</button>
-          ${!delegateMode ? `<button class="sidebar-nav-item" data-section="delegates">Delegates</button>` : ''}
+          ${(!delegateMode || superAdminManaging) ? `<button class="sidebar-nav-item" data-section="delegates">Delegates</button>` : ''}
         </div>
       </nav>
       <div class="content-area">
@@ -646,7 +647,7 @@ export function renderOverlayConfigPage(options = {}) {
       </div><!-- end debug panel -->
       </div><!-- end log-debug section-page -->
 
-      ${!delegateMode ? `
+      ${(!delegateMode || superAdminManaging) ? `
       <div class="section-page" data-section="delegates">
       <div class="panel">
         <div style="padding:12px; font-size:15px; font-weight:600;">Delegates</div>
@@ -1742,7 +1743,7 @@ export function renderOverlayConfigPage(options = {}) {
         });
       })();
     </script>
-    ${!delegateMode ? `<script>
+    ${(!delegateMode || superAdminManaging) ? `<script>
       (function() {
         var delegateListEl = document.getElementById('delegateList');
         var delegateAddBtn = document.getElementById('delegateAddBtn');

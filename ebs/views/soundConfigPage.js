@@ -21,6 +21,7 @@ export function renderSoundConfigPage(options = {}) {
   const isAdminMode = Boolean(options.isAdminMode);
   const managedUserName = String(options.managedUserName || "");
   const delegateMode = Boolean(options.delegateMode);
+  const superAdminManaging = Boolean(options.superAdminManaging);
   const managedByName = String(options.managedByName || "");
   const cameFromExtension = Boolean(options.cameFromExtension);
   const termsUrl = `${base}/terms`;
@@ -519,7 +520,7 @@ export function renderSoundConfigPage(options = {}) {
       </div>
       </div>
 
-      ${!delegateMode ? `
+      ${(!delegateMode || superAdminManaging) ? `
       <div class="section-page" data-section="delegates">
       <div class="card">
         <h2>Delegates</h2>
@@ -3359,7 +3360,7 @@ export function renderSoundConfigPage(options = {}) {
         fetchActivity();
       })();
     </script>
-    ${!delegateMode ? `<script>
+    ${(!delegateMode || superAdminManaging) ? `<script>
       (function() {
         var delegateListEl = document.getElementById('delegateList');
         var delegateAddBtn = document.getElementById('delegateAddBtn');

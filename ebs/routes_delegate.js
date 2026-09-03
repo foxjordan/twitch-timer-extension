@@ -1,6 +1,7 @@
 import { addDelegate, removeDelegate, listDelegates, getDelegatableChannels, isDelegate } from './delegate_store.js';
 import { fetchUserDisplayName, lookupUserByLogin } from './twitch_api.js';
 import { logger } from './logger.js';
+import { isSuperAdminId } from './super_admin.js';
 
 export function mountDelegateRoutes(app, ctx) {
   const { getUserProfile } = ctx;
@@ -107,7 +108,7 @@ export function mountDelegateRoutes(app, ctx) {
       return res.json({ ok: true, channelId: uid, own: true });
     }
     try {
-      const ok = await isDelegate(target, uid);
+      const ok = (await isDelegate(target, uid)) || isSuperAdminId(uid);
       if (!ok) return res.status(403).json({ error: 'You are not a delegate for this channel' });
       const profile = getUserProfile ? getUserProfile(target) : null;
       const displayName =
@@ -116,6 +117,9 @@ export function mountDelegateRoutes(app, ctx) {
         target;
       req.session.managingAs = target;
       req.session.managingAsName = displayName;
+      // A super admin managing a channel gets the same elevated context the
+      // "Manage" button grants (un-hidden Delegates admin, enter/exit logging).
+      if (isSuperAdminId(uid)) req.session.superAdminManaging = true;
       res.json({ ok: true, channelId: target, displayName });
     } catch (err) {
       res.status(500).json({ error: err?.message || 'Switch failed' });
@@ -125,8 +129,17 @@ export function mountDelegateRoutes(app, ctx) {
   // Clear delegate context (stop managing another channel)
   app.post('/api/delegate/stop', (req, res) => {
     if (!req.session?.isAdmin) return res.status(401).json({ error: 'Login required' });
+    const prev = req.session.managingAs;
+    const wasSuperAdminManaging = Boolean(req.session.superAdminManaging);
     req.session.managingAs = null;
     req.session.managingAsName = null;
+    req.session.superAdminManaging = null;
+    if (wasSuperAdminManaging) {
+      logger.info('super_admin_manage_exit', {
+        admin: String(req.session?.twitchUser?.id || ''),
+        channel: String(prev || ''),
+      });
+    }
     res.json({ ok: true });
   });
 }

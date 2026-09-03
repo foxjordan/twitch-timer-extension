@@ -1,5 +1,4 @@
 import { renderAdminDashboardPage } from "./views/adminDashboardPage.js";
-import { renderSoundConfigPage } from "./views/soundConfigPage.js";
 import { db } from "./db.js";
 import { r2Enabled, r2ObjectExists, putR2Object, r2SoundKey } from "./r2.js";
 import { SOUNDS_FILE_DIR } from "./sounds_store.js";
@@ -16,6 +15,8 @@ import { getVoices, isValidVoice } from "./tts_voices.js";
 import { synthesizeSpeech } from "./tts_provider.js";
 import { VALID_TIERS, TIER_LABELS, TIER_COSTS } from "./tiers.js";
 import { shapeFeatureUsage } from "./feature_usage.js";
+import { SUPER_ADMIN_IDS, isSuperAdminId } from "./super_admin.js";
+import { logger } from "./logger.js";
 import crypto from "crypto";
 import path from "path";
 import { readFile, writeFile, mkdir } from "fs/promises";
@@ -24,15 +25,9 @@ import { existsSync } from "fs";
 const DATA_DIR = process.env.DATA_DIR || process.cwd();
 const TTS_AUDIO_DIR = path.resolve(DATA_DIR, "tts_audio");
 
-const SUPER_ADMIN_IDS = (process.env.SUPER_ADMIN_IDS || "")
-  .split(",")
-  .map((s) => s.trim())
-  .filter(Boolean);
-
 export function isSuperAdmin(req) {
   if (!req.session?.isAdmin || !req.session?.twitchUser?.id) return false;
-  if (SUPER_ADMIN_IDS.length === 0) return false;
-  return SUPER_ADMIN_IDS.includes(String(req.session.twitchUser.id));
+  return isSuperAdminId(req.session.twitchUser.id);
 }
 
 // Parses ?from=&to= (ISO date/datetime strings) shared by the analytics
@@ -91,7 +86,14 @@ export function mountAdminRoutes(app, ctx) {
     res.send(html);
   });
 
-  // Admin broadcaster detail page (sound management)
+  // "Manage" in the broadcaster list. Rather than a sounds-only admin view, this
+  // drops the super admin into the same delegate context a real delegate gets
+  // (req.session.managingAs) so every broadcaster-scoped page — timer, rules,
+  // goals, sounds, extras — is theirs to see and edit. No delegate record is
+  // written, so the broadcaster never sees the super admin in their delegate
+  // list; the isDelegate() gates elsewhere are OR'd with isSuperAdminId() so the
+  // session survives the periodic re-verify. Exit via "Stop managing"
+  // (POST /api/delegate/stop).
   app.get("/admin/broadcaster/:userId", (req, res) => {
     if (!req.session?.isAdmin) {
       return res.redirect(`/auth/login?next=${encodeURIComponent(req.originalUrl)}`);
@@ -101,29 +103,19 @@ export function mountAdminRoutes(app, ctx) {
     }
 
     const uid = String(req.params.userId);
-    const adminName =
-      req.session?.twitchUser?.display_name ||
-      req.session?.twitchUser?.login ||
-      "Admin";
     const profile = getUserProfile ? getUserProfile(uid) : null;
     const conn = getBroadcasterConnection(uid);
     const managedUserName = conn?.broadcasterLogin || profile?.displayName || profile?.login || uid;
 
-    const html = renderSoundConfigPage({
-      base: "",
-      adminName,
-      userKey: "",
-      klipyEnabled: Boolean(process.env.KLIPY_API_KEY),
-      apiBase: `/api/admin/sounds/${uid}`,
-      ttsApiBase: `/api/admin/tts/settings/${uid}`,
-      isAdminMode: true,
-      managedUserName,
-      showAdminLink: true,
-      isSuperAdmin: true,
+    req.session.managingAs = uid;
+    req.session.managingAsName = managedUserName;
+    req.session.superAdminManaging = true;
+    req.session.delegateVerifiedAt = Date.now();
+    logger.info("super_admin_manage_enter", {
+      admin: String(req.session.twitchUser.id),
+      channel: uid,
     });
-    res.setHeader("Content-Type", "text/html; charset=utf-8");
-    res.setHeader("Cache-Control", "no-store");
-    res.send(html);
+    return res.redirect("/dashboard");
   });
 
   // The admin dashboard polls this every 10s (see adminDashboardPage.js).

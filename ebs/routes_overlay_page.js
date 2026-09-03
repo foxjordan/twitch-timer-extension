@@ -8,6 +8,7 @@ import { renderPromptOverlayPage } from "./views/promptOverlayPage.js";
 import { renderSoundAlertOverlayPage } from "./views/soundAlertOverlayPage.js";
 import { renderSoundConfigPage } from "./views/soundConfigPage.js";
 import { isSuperAdmin } from "./routes_admin.js";
+import { isSuperAdminId } from "./super_admin.js";
 import { isDelegate, getDelegatableChannels } from "./delegate_store.js";
 import { fetchUserDisplayName } from "./twitch_api.js";
 
@@ -141,7 +142,7 @@ ${channels.length === 0 ? '<p style="color:#adadb8;font-size:13px;">No one has a
       return res.redirect("/sounds/config");
     }
     try {
-      const ok = await isDelegate(target, selfId);
+      const ok = (await isDelegate(target, selfId)) || isSuperAdminId(selfId);
       if (!ok) return res.status(403).send("You are not a delegate for this channel.");
       const profile = getUserProfile ? getUserProfile(target) : null;
       const displayName =
@@ -150,6 +151,7 @@ ${channels.length === 0 ? '<p style="color:#adadb8;font-size:13px;">No one has a
         target;
       req.session.managingAs = target;
       req.session.managingAsName = displayName;
+      if (isSuperAdminId(selfId)) req.session.superAdminManaging = true;
       res.redirect("/sounds/config");
     } catch (err) {
       res.status(500).send("Error: " + (err?.message || "unknown"));
@@ -173,6 +175,7 @@ ${channels.length === 0 ? '<p style="color:#adadb8;font-size:13px;">No one has a
     );
     const userKey = String(req.session?.userOverlayKey || uid || "");
     const superAdmin = isSuperAdmin(req);
+    const superAdminManaging = Boolean(req.session?.superAdminManaging);
     const html = renderSoundConfigPage({
       base: "",
       adminName,
@@ -181,6 +184,7 @@ ${channels.length === 0 ? '<p style="color:#adadb8;font-size:13px;">No one has a
       showAdminLink: superAdmin,
       isSuperAdmin: superAdmin,
       delegateMode: isManagingOther,
+      superAdminManaging,
       managedByName: isManagingOther ? (req.session.managingAsName || req.session.managingAs) : null,
       // Arriving via the extension's own "Manage on Livestreamer Hub" link
       // (?ref=extension) is itself proof they already have the extension
@@ -237,6 +241,7 @@ ${channels.length === 0 ? '<p style="color:#adadb8;font-size:13px;">No one has a
       initialQuery,
       showAdminLink: isSuperAdmin(req),
       delegateMode: isManagingOther,
+      superAdminManaging: Boolean(req.session?.superAdminManaging),
       managedByName: isManagingOther ? (req.session.managingAsName || req.session.managingAs) : null,
     });
     res.setHeader("Content-Type", "text/html; charset=utf-8");

@@ -6,6 +6,7 @@ import { renderGdprPage } from "./views/gdprPage.js";
 import { renderTermsPage } from "./views/termsPage.js";
 import { renderUtilitiesPage } from "./views/utilitiesPage.js";
 import { isSuperAdmin } from "./routes_admin.js";
+import { getOrCreateUserKey } from "./keys.js";
 
 const ROBOTS_TXT = `User-agent: *
 Allow: /
@@ -101,14 +102,24 @@ export function mountHomePageRoutes(app) {
       req.session?.twitchUser?.display_name ||
       req.session?.twitchUser?.login ||
       "Admin";
-    const overlayKey =
-      req.session?.userOverlayKey || req.session?.twitchUser?.id || "";
+    const managingAs = req.session?.managingAs;
+    const isManagingOther =
+      managingAs && managingAs !== req.session?.twitchUser?.id;
+    // In manage mode the "copy your overlay link" cards must point at the
+    // managed channel's overlay, not the operator's own.
+    const overlayKey = isManagingOther
+      ? getOrCreateUserKey(String(managingAs))
+      : req.session?.userOverlayKey || req.session?.twitchUser?.id || "";
     const html = renderDashboardPage({
       base: "",
       adminName,
       overlayKey,
       showUtilitiesLink: true,
       showAdminLink: isSuperAdmin(req),
+      delegateMode: Boolean(isManagingOther),
+      managedByName: isManagingOther
+        ? req.session.managingAsName || String(managingAs)
+        : null,
     });
     res.setHeader("Content-Type", "text/html; charset=utf-8");
     res.setHeader("Cache-Control", "no-store");

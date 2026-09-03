@@ -58,6 +58,7 @@ import { mountLibraryModerationRoutes } from "./routes_library_moderation.js";
 import { mountAnalyticsRoutes } from "./routes_analytics.js";
 import { mountOfficialLibraryRoutes } from "./routes_official_library.js";
 import { isDelegate } from "./delegate_store.js";
+import { isSuperAdminId } from "./super_admin.js";
 import { mountHomePageRoutes } from "./routes_home_page.js";
 import { mountGoalRoutes } from "./routes_goals.js";
 import { logger, requestLogger, setLoggerContext } from "./logger.js";
@@ -170,11 +171,16 @@ app.use((req, res, next) => {
 app.use(async (req, res, next) => {
   const managingAs = req.session?.managingAs;
   const selfId = req.session?.twitchUser?.id;
+  // superAdminManaging is only meaningful while managingAs is set — clear the
+  // stray flag on any request after the context was dropped elsewhere.
+  if (!managingAs && req.session?.superAdminManaging) req.session.superAdminManaging = null;
   if (!managingAs || !selfId || managingAs === selfId) return next();
   const verifiedAt = req.session.delegateVerifiedAt || 0;
   if (Date.now() - verifiedAt < 60_000) return next();
   try {
-    const valid = await isDelegate(managingAs, selfId);
+    // A super admin holds a delegate-style context for any channel without a
+    // delegate record (see routes_admin.js "/admin/broadcaster/:userId").
+    const valid = (await isDelegate(managingAs, selfId)) || isSuperAdminId(selfId);
     if (!valid) {
       req.session.managingAs = null;
       req.session.managingAsName = null;

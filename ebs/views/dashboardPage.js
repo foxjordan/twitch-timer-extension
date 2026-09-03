@@ -13,6 +13,8 @@ export function renderDashboardPage(options = {}) {
   const overlayKey = String(options.overlayKey || "");
   const showUtilitiesLink = Boolean(options.showUtilitiesLink);
   const showAdminLink = Boolean(options.showAdminLink);
+  const delegateMode = Boolean(options.delegateMode);
+  const managedByName = String(options.managedByName || "");
   const privacyUrl = `${base}/privacy`;
   const gdprUrl = `${base}/gdpr`;
   const termsUrl = `${base}/terms`;
@@ -103,6 +105,12 @@ export function renderDashboardPage(options = {}) {
   <body>
     ${renderGlobalHeader({ base, adminName, active: "dashboard", includeThemeToggle: true, showUtilitiesLink, showAdminLink, showLogout: true })}
     <main>
+      ${delegateMode ? `
+      <div style="background:#f59e0b22; border:2px solid #f59e0b; border-radius:10px; padding:12px 18px; margin-bottom:16px; display:flex; align-items:center; gap:12px; font-size:13px; font-weight:500;">
+        <span style="font-size:20px; flex-shrink:0;">⚠️</span>
+        <div style="flex:1;">You are managing <strong>${managedByName}</strong>'s settings — everything here and on the config pages affects <strong>their</strong> channel, not yours.</div>
+        <button type="button" id="stopManagingBtn" style="flex-shrink:0; padding:5px 14px; border-radius:7px; border:1px solid #f59e0b; color:#f59e0b; background:transparent; font-size:12px; font-weight:700; cursor:pointer;">Stop managing</button>
+      </div>` : ''}
       <h1>Dashboard</h1>
       <p class="lead">Every Browser Source link for your stream, in one place — copy what you need instead of hunting across separate config pages.</p>
 
@@ -172,6 +180,16 @@ export function renderDashboardPage(options = {}) {
             setTimeout(function() { if (statusEl) statusEl.textContent = ''; }, 2500);
           });
         });
+
+        var stopBtn = document.getElementById('stopManagingBtn');
+        if (stopBtn) {
+          stopBtn.addEventListener('click', function() {
+            stopBtn.disabled = true;
+            fetch('/api/delegate/stop', { method: 'POST', credentials: 'same-origin' })
+              .then(function() { window.location.href = '/admin'; })
+              .catch(function() { window.location.href = '/admin'; });
+          });
+        }
       })();
     </script>
   </body>

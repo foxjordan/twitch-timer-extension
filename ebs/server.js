@@ -62,6 +62,10 @@ import { mountHomePageRoutes } from "./routes_home_page.js";
 import { mountGoalRoutes } from "./routes_goals.js";
 import { logger, requestLogger, setLoggerContext } from "./logger.js";
 import { getRules, setRules, loadRules } from "./rules_store.js";
+import { getPlinkoConfig, setPlinkoConfig, loadPlinkoConfig } from "./plinko_store.js";
+import { computePlinkoDrop } from "./plinko.js";
+import { createPlinkoQueue } from "./plinko_queue.js";
+import { createSubDedup } from "./sub_dedup.js";
 import {
   addLogEntry,
   getLogEntries,
@@ -265,6 +269,17 @@ setInterval(() => {
 }, SSE_HEARTBEAT_MS);
 const lastWheelSpinByKey = new Map();
 const lastPromptByKey = new Map();
+const lastPlinkoDropByKey = new Map();
+const lastPlinkoBoardByKey = new Map(); // latest board look (rows/bins/token/style)
+const lastPlinkoQueueByKey = new Map(); // latest { nowPlaying, waiting[], waitingCount }
+const subDedup = createSubDedup(); // one subscription counted per subscriber
+// Drops play one at a time per channel so a burst of sound-triggered drops
+// doesn't clobber each other on the overlay. play()/onChange() are hoisted
+// function declarations defined further down.
+const plinkoQueue = createPlinkoQueue({
+  play: (item) => playPlinkoDrop(item),
+  onChange: (channelId) => broadcastPlinkoQueue(channelId),
+});
 const DEFAULT_WHEEL_OPTIONS = [
   { label: "Heads", color: "#9146FF" },
   { label: "Tails", color: "#F97316" },
@@ -302,6 +317,7 @@ loadOverlayKeys().catch(() => {});
 loadUserProfiles().catch(() => {});
 loadStyles().catch(() => {});
 loadRules().catch(() => {});
+loadPlinkoConfig().catch(() => {});
 loadTimerState().catch(() => {});
 loadGoals().catch(() => {});
 loadSoundAlerts().catch(() => {});
@@ -410,6 +426,7 @@ setInterval(async () => {
       await new Promise((resolve) => setImmediate(resolve));
     }
   }
+  subDedup.sweep(now); // tiny map (one entry per recent subscriber) — no batching needed
 }, 10 * 60 * 1000);
 
 // Per-channel pending alert queue: channelId -> [{ alertId, type, soundName, viewerUserId, viewerDisplayName, bitsAmount, enqueuedAt, expiresAt }]
@@ -723,6 +740,238 @@ app.post("/api/prompt/show", (req, res) => {
   res.json(payload);
 });
 
+// Plinko — a token dropped from a chosen top column bounces down a seeded
+// path and lands in a multiplier bin; the bin multiplies a configurable base
+// time onto the subathon timer. Same admin-trigger + SSE fan-out + late-join
+// cache shape as the wheel above, but this one also writes the timer.
+app.get("/api/plinko/config", (req, res) => {
+  if (!req?.session?.isAdmin)
+    return res.status(401).json({ error: "Admin login required" });
+  const uid = resolveTimerUserIdFromRequest(req);
+  if (!uid) return res.status(400).json({ error: "No broadcaster in session" });
+  res.json(getPlinkoConfig(uid));
+});
+
+app.post("/api/plinko/config", (req, res) => {
+  if (!req?.session?.isAdmin)
+    return res.status(401).json({ error: "Admin login required" });
+  const uid = resolveTimerUserIdFromRequest(req);
+  if (!uid) return res.status(400).json({ error: "No broadcaster in session" });
+  try {
+    const saved = setPlinkoConfig(uid, req.body || {});
+    logger.info("plinko_config_saved", { requestId: req.requestId, broadcasterId: uid });
+    res.json(saved);
+
+    // Push the new board look to any live browser source on this key so it
+    // updates without a reload / re-copied link. Late joiners get it from the
+    // late-join cache below.
+    const overlayKey = normKey(req.session?.userOverlayKey || "");
+    if (overlayKey) {
+      const boardPayload = {
+        rows: saved.rows,
+        bins: saved.bins,
+        token: saved.token,
+        style: saved.style,
+      };
+      lastPlinkoBoardByKey.set(overlayKey, boardPayload);
+      // Keep a cached (replayed-on-reconnect) drop visually consistent too.
+      for (const [ck, dropPayload] of lastPlinkoDropByKey) {
+        if (ck === overlayKey || ck.startsWith(overlayKey + ":")) {
+          Object.assign(dropPayload, boardPayload);
+        }
+      }
+      for (const client of Array.from(sseClients)) {
+        if (!client || client.key !== overlayKey) continue;
+        try {
+          client.res.write("event: plinko_board\n");
+          client.res.write(`data: ${JSON.stringify(boardPayload)}\n\n`);
+        } catch (e) {
+          sseClients.delete(client);
+        }
+      }
+    }
+  } catch (e) {
+    res.status(400).json({ error: "Invalid Plinko config" });
+  }
+});
+
+// Write a plinko_drop event to every browser source on this overlay key.
+function fanOutPlinkoDrop(overlayKey, boardId, payload) {
+  for (const client of Array.from(sseClients)) {
+    if (!client || client.key !== overlayKey) continue;
+    if (boardId && client.boardId && client.boardId !== boardId) continue;
+    try {
+      client.res.write("event: plinko_drop\n");
+      client.res.write(`data: ${JSON.stringify(payload)}\n\n`);
+    } catch (e) {
+      sseClients.delete(client);
+    }
+  }
+}
+
+// Push the current queue state (now dropping / who's waiting) to the Extras UI.
+function broadcastPlinkoQueue(channelId) {
+  let overlayKey = "";
+  try {
+    overlayKey = normKey(getOrCreateUserKey(String(channelId)));
+  } catch {
+    return;
+  }
+  if (!overlayKey) return;
+  const snap = plinkoQueue.snapshot(channelId);
+  lastPlinkoQueueByKey.set(overlayKey, snap);
+  const data = JSON.stringify(snap);
+  for (const client of Array.from(sseClients)) {
+    if (!client || client.key !== overlayKey) continue;
+    try {
+      client.res.write("event: plinko_queue\n");
+      client.res.write(`data: ${data}\n\n`);
+    } catch (e) {
+      sseClients.delete(client);
+    }
+  }
+}
+
+// Called by the queue when a drop reaches the front: animate it on the overlay,
+// then credit the timer when the token lands (not when it was queued).
+function playPlinkoDrop(item) {
+  const {
+    uid, overlayKey, boardId, payload, durationMs, secondsToAdd,
+    binIndex, multiplier, dropColumn, baseSeconds,
+  } = item;
+  const cacheKey = boardId ? `${overlayKey}:${boardId}` : overlayKey;
+  lastPlinkoDropByKey.set(cacheKey, payload);
+  fanOutPlinkoDrop(overlayKey, boardId, payload);
+
+  if (secondsToAdd > 0) {
+    setTimeout(() => {
+      try {
+        const before = getRemainingSeconds(uid);
+        const remaining = addSeconds(uid, secondsToAdd);
+        const actual = Math.max(0, remaining - before);
+        observability.lastTimerMutationAt = new Date().toISOString();
+        addLogEntry({
+          type: "plinko_drop",
+          source: item.source || "manual",
+          baseSeconds,
+          multiplier,
+          appliedSeconds: secondsToAdd,
+          actualSeconds: actual,
+          binIndex,
+          dropColumn,
+          userName:
+            item.viewerName && item.viewerName !== "Streamer" ? item.viewerName : undefined,
+          userId: uid,
+        });
+        broadcastToChannel({
+          broadcasterId: uid,
+          type: "timer_add",
+          payload: {
+            userId: uid,
+            secondsAdded: actual,
+            newRemaining: remaining,
+            hype: state.users.get(String(uid))?.hypeActive,
+          },
+        }).catch(() => {});
+      } catch (e) {
+        logger.warn("plinko_drop_credit_failed", { userId: uid, message: e?.message });
+      }
+    }, durationMs);
+  }
+}
+
+// Single entry point for making a drop happen — used by the manual route and by
+// the sound-alert trigger. `dropColumn` finite -> that column; otherwise random.
+// `test` fires animate immediately and never queue or touch the timer.
+function firePlinkoDrop({
+  uid,
+  overlayKey,
+  dropColumn,
+  boardId = "",
+  test = false,
+  source = "manual",
+  viewerName = "",
+}) {
+  const cfg = getPlinkoConfig(uid);
+  const col = Number.isFinite(dropColumn)
+    ? Math.max(0, Math.min(cfg.rows, Math.round(dropColumn)))
+    : Math.floor(Math.random() * (cfg.rows + 1));
+  const seed = uuidv4();
+  const { path: dropPath, binIndex, multiplier, secondsToAdd } = computePlinkoDrop(cfg, {
+    dropColumn: col,
+    seed,
+  });
+  const durationMs = Math.max(2000, Math.min(12000, 1400 + cfg.rows * 420));
+  const payload = {
+    dropId: seed,
+    boardId,
+    dropColumn: col,
+    rows: cfg.rows,
+    bins: cfg.bins,
+    token: cfg.token,
+    style: cfg.style,
+    path: dropPath,
+    binIndex,
+    multiplier,
+    baseSeconds: cfg.baseSeconds,
+    // Intended amount — actually credited when the token lands, so the overlay's
+    // "+time" and the subathon clock move together.
+    secondsAdded: test ? 0 : secondsToAdd,
+    source,
+    test,
+    durationMs,
+    triggeredAt: new Date().toISOString(),
+  };
+
+  if (test) {
+    fanOutPlinkoDrop(overlayKey, boardId, payload);
+    return payload;
+  }
+
+  const { accepted } = plinkoQueue.enqueue(uid, {
+    uid,
+    overlayKey,
+    boardId,
+    payload,
+    durationMs,
+    secondsToAdd,
+    binIndex,
+    multiplier,
+    dropColumn: col,
+    baseSeconds: cfg.baseSeconds,
+    viewerName: viewerName || "Someone",
+    source,
+  });
+  if (!accepted) {
+    logger.warn("plinko_drop_rejected", { userId: uid, source, reason: "queue_full" });
+  }
+  return payload;
+}
+
+app.post("/api/plinko/drop", (req, res) => {
+  if (!req?.session?.isAdmin)
+    return res.status(401).json({ error: "Admin login required" });
+  const overlayKey = normKey(
+    req.body?.overlayKey || req.query.key || req.session?.userOverlayKey || ""
+  );
+  if (!overlayKey)
+    return res.status(400).json({ error: "Overlay key is required" });
+  const uid = resolveTimerUserIdFromRequest(req);
+  if (!uid) return res.status(400).json({ error: "No broadcaster in session" });
+
+  const rawColumn = Number(req.body?.dropColumn);
+  const payload = firePlinkoDrop({
+    uid,
+    overlayKey,
+    dropColumn: Number.isFinite(rawColumn) ? rawColumn : undefined,
+    boardId: typeof req.body?.boardId === "string" ? req.body.boardId.trim() : "",
+    test: Boolean(req.body?.test),
+    source: "manual",
+    viewerName: "Streamer",
+  });
+  res.json(payload);
+});
+
 // moved to routes_overlay_api.js
 
 // Timer pause/resume (admin only)
@@ -832,7 +1081,8 @@ app.get("/api/overlay/stream", (req, res) => {
   const goalUserId = resolveGoalUserIdFromRequest(req);
   const timerUserId = resolveTimerUserIdFromRequest(req);
   const wheelId = typeof req.query.wheelId === "string" ? req.query.wheelId.trim() : "";
-  const client = { res, key, goalUserId, timerUserId, wheelId };
+  const boardId = typeof req.query.boardId === "string" ? req.query.boardId.trim() : "";
+  const client = { res, key, goalUserId, timerUserId, wheelId, boardId };
   sseClients.add(client);
   observability.totalSseClientsServed += 1;
   logger.info("sse_client_connected", {
@@ -878,6 +1128,26 @@ app.get("/api/overlay/stream", (req, res) => {
   if (lastWheel) {
     res.write("event: wheel_spin\n");
     res.write(`data: ${JSON.stringify(lastWheel)}\n\n`);
+  }
+
+  const plinkoCacheKey = boardId ? `${key}:${boardId}` : key;
+  const lastPlinko = lastPlinkoDropByKey.get(plinkoCacheKey);
+  if (lastPlinko) {
+    res.write("event: plinko_drop\n");
+    res.write(`data: ${JSON.stringify(lastPlinko)}\n\n`);
+  }
+
+  // Sent last so its look wins over anything carried on a replayed drop.
+  const lastPlinkoBoard = lastPlinkoBoardByKey.get(key);
+  if (lastPlinkoBoard) {
+    res.write("event: plinko_board\n");
+    res.write(`data: ${JSON.stringify(lastPlinkoBoard)}\n\n`);
+  }
+
+  const lastPlinkoQ = lastPlinkoQueueByKey.get(key);
+  if (lastPlinkoQ) {
+    res.write("event: plinko_queue\n");
+    res.write(`data: ${JSON.stringify(lastPlinkoQ)}\n\n`);
   }
 
   const lastPrompt = lastPromptByKey.get(key);
@@ -1292,6 +1562,29 @@ function handleSoundAlert({ channelId, soundId, soundName, tier, txId, viewerUse
         text: `${who} played "${soundName}" for ${costText}!`,
       });
     })().catch(() => {});
+  }
+
+  // Auto-drop a Plinko token if this sound is the configured trigger. Bits and
+  // Channel Points both reach here; test fires never do. The landing multiplier
+  // adds baseSeconds x multiplier on top of the sound's own Bits time.
+  if (!isTestAlert) {
+    const pk = getPlinkoConfig(String(channelId));
+    if (pk.triggerSoundId && String(soundId) === pk.triggerSoundId) {
+      (async () => {
+        let viewerName = "";
+        if (viewerUserId) {
+          viewerName =
+            (await fetchUserDisplayName(viewerUserId, channelId).catch(() => "")) || "";
+        }
+        firePlinkoDrop({
+          uid: String(channelId),
+          overlayKey: normKey(getOrCreateUserKey(String(channelId))),
+          source: "sound_alert",
+          viewerName: viewerName || viewerUserId || "Someone",
+          // dropColumn omitted -> random
+        });
+      })().catch(() => {});
+    }
   }
 }
 
@@ -1845,46 +2138,43 @@ async function handleEventSub(notification, expectedUserId = null) {
     });
   }
 
-  // ---- Sub dedup: channel.subscribe vs channel.subscription.message ----
-  // Twitch behaviour is inconsistent: resubs sometimes fire BOTH events
-  // (causing double time), sometimes only channel.subscription.message.
-  // Defer channel.subscribe by 7s. If channel.subscription.message arrives
-  // within that window, cancel the deferred subscribe (fast path). If the
-  // subscribe fires first and the message arrives within 45s, subtract the
-  // already-applied seconds retroactively (late path). Gap observed at 8s+.
-  const subUserId = e.user_id || e.user_login || "";
-  if (subType === "channel.subscribe" && subUserId && !(e.is_gift || e.was_gift)) {
-    const dedupKey = `${timerUid}:${subUserId}`;
-    const existing = pendingSubscribes.get(dedupKey);
-    if (existing) clearTimeout(existing.timer);
-    pendingSubscribes.set(dedupKey, {
-      timer: setTimeout(async () => {
-        pendingSubscribes.delete(dedupKey);
-        const applied = await processEventTimer(notification, timerUid, id, now);
-        if (applied > 0) {
-          recentlyAppliedSubscribes.set(dedupKey, { appliedSeconds: applied });
-          setTimeout(() => recentlyAppliedSubscribes.delete(dedupKey), 45000);
-        }
-      }, 7000),
+  // ---- Sub dedup ----
+  // Twitch fires BOTH channel.subscribe and channel.subscription.message for
+  // many resubs (especially Prime, which viewers re-up manually each month),
+  // and occasionally re-delivers channel.subscribe on a WS reconnect. Count
+  // each subscription once per subscriber — the first of the pair to arrive
+  // wins, the rest are dropped. See sub_dedup.js.
+  //
+  // Note: a resub often arrives channel.subscribe-first (message seconds to
+  // minutes later — too far apart to reliably wait for), so it's credited at
+  // the sub rate / "sub" goal segment rather than resub. Harmless when resub
+  // time == sub time (the common subathon setup); revisit if a streamer needs
+  // them weighted differently.
+  if (subType === "channel.subscribe" || subType === "channel.subscription.message") {
+    const { deduped } = subDedup.evaluate({
+      broadcaster: timerUid,
+      userId: e.user_id || e.user_login || "",
+      subType,
+      isGift: Boolean(e.is_gift || e.was_gift),
+      now,
     });
-    return;
-  }
-  if (subType === "channel.subscription.message" && subUserId) {
-    const dedupKey = `${timerUid}:${subUserId}`;
-    const pending = pendingSubscribes.get(dedupKey);
-    if (pending) {
-      // Fast path: subscribe hasn't fired yet — cancel it
-      clearTimeout(pending.timer);
-      pendingSubscribes.delete(dedupKey);
-      logger.info("sub_dedup_cancelled", { broadcasterId: timerUid, userId: subUserId });
-    } else {
-      // Late path: subscribe already fired — retroactively subtract its contribution
-      const recent = recentlyAppliedSubscribes.get(dedupKey);
-      if (recent) {
-        recentlyAppliedSubscribes.delete(dedupKey);
-        addSeconds(timerUid, -recent.appliedSeconds);
-        logger.info("sub_dedup_retroactive", { broadcasterId: timerUid, userId: subUserId, subtracted: recent.appliedSeconds });
-      }
+    if (deduped) {
+      addLogEntry({
+        type: "sub_deduped",
+        subType,
+        userId: timerUid,
+        userName: e.user_name || e.user_login || e.user_id || undefined,
+        subTier: e.tier,
+        baseSeconds: 0,
+        appliedSeconds: 0,
+        actualSeconds: 0,
+      });
+      logger.info("sub_deduped", {
+        broadcasterId: timerUid,
+        userId: e.user_id || e.user_login,
+        subType,
+      });
+      return;
     }
   }
 
@@ -1918,11 +2208,6 @@ async function handleEventSub(notification, expectedUserId = null) {
 
   processEventTimer(notification, timerUid, id, now);
 }
-
-// Pending channel.subscribe events awaiting possible channel.subscription.message dedup
-const pendingSubscribes = new Map();
-// Subscribes that already fired — keyed by `${timerUid}:${subUserId}`, TTL 45s
-const recentlyAppliedSubscribes = new Map();
 
 async function processEventTimer(notification, timerUid, id, now) {
   const subType = notification?.payload?.subscription?.type;

@@ -11,10 +11,13 @@ export function renderUtilitiesPage(options = {}) {
   const adminName = String(options.adminName || "");
   const overlayKey = String(options.overlayKey || "");
   const wheelOverlayBase = String(
-    options.wheelOverlayBase || `${base}/overlay/wheel`
+    options.wheelOverlayBase || `${base}/overlay/wheel`,
   );
   const promptOverlayBase = String(
-    options.promptOverlayBase || `${base}/overlay/prompt`
+    options.promptOverlayBase || `${base}/overlay/prompt`,
+  );
+  const plinkoOverlayBase = String(
+    options.plinkoOverlayBase || `${base}/overlay/plinko`,
   );
   const privacyUrl = `${base}/privacy`;
   const gdprUrl = `${base}/gdpr`;
@@ -121,6 +124,44 @@ export function renderUtilitiesPage(options = {}) {
       .prompt-share button { align-self: flex-start; background: var(--secondary-button-bg); color: var(--secondary-button-text); border: 1px solid var(--secondary-button-border); border-radius: 10px; padding: 8px 14px; cursor: pointer; font-weight: 600; }
       .secondary-tools { margin-top: 8px; }
       .secondary-tools h2 { margin: 0 0 12px; font-size: 18px; color: var(--text-muted); }
+      .plinko-grid { display: grid; grid-template-columns: minmax(280px, 360px) minmax(0, 1fr); gap: 18px; align-items: start; margin-top: 20px; }
+      @media (max-width: 860px) { .plinko-grid { grid-template-columns: 1fr; } }
+      .plinko-card { background: var(--surface-color); border: 1px solid var(--surface-border); border-radius: 16px; padding: 18px; box-shadow: 0 20px 40px rgba(15,23,42,0.12); display:flex; flex-direction: column; gap: 14px; }
+      .plinko-card h3 { margin: 0; font-size: 16px; }
+      .plinko-field { display:flex; flex-direction: column; gap: 6px; }
+      .plinko-field > label { font-size: 13px; letter-spacing:.04em; text-transform: uppercase; color: var(--text-muted); }
+      .plinko-field input[type=number] { width: 120px; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--input-border); background: var(--input-bg); color: var(--text-color); font: inherit; }
+      .plinko-hint { font-size: 12px; color: var(--text-muted); }
+      .plinko-hint a { color: var(--accent-color); text-decoration: none; }
+      .plinko-hint a:hover { text-decoration: underline; }
+      .plinko-row-between { display:flex; align-items:center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+      .plinko-mini { font-size: 12px; padding: 5px 10px; }
+      button.secondary, .plinko-card button.secondary { background: var(--secondary-button-bg); color: var(--secondary-button-text); border: 1px solid var(--secondary-button-border); border-radius: 10px; padding: 8px 14px; cursor: pointer; font-weight: 600; }
+      .plinko-bins-editor { display:flex; flex-direction: column; gap: 6px; max-height: 260px; overflow-y: auto; padding-right: 4px; }
+      .plinko-bin-row { display:flex; align-items:center; gap: 8px; font-size: 13px; }
+      .plinko-bin-row span { width: 26px; color: var(--text-muted); text-align: right; }
+      .plinko-bin-row input[type=number] { width: 78px; padding: 6px 8px; border-radius: 8px; border: 1px solid var(--input-border); background: var(--input-bg); color: var(--text-color); font: inherit; }
+      .plinko-bin-row input[type=color] { width: 34px; height: 30px; padding: 0; border: 1px solid var(--input-border); border-radius: 6px; background: none; cursor: pointer; }
+      .plinko-token-row { display:flex; gap: 12px; align-items: center; }
+      .plinko-token-preview { width: 52px; height: 52px; border-radius: 10px; border: 1px solid var(--surface-border); background: #0e0e10 center/contain no-repeat; flex-shrink: 0; }
+      .plinko-token-controls { display:flex; flex-direction: column; gap: 6px; }
+      .plinko-emote-grid { display:grid; grid-template-columns: repeat(auto-fill, 44px); gap: 6px; max-height: 200px; overflow-y: auto; margin-top: 8px; }
+      .plinko-emote-grid img { width: 44px; height: 44px; object-fit: contain; border-radius: 8px; border: 1px solid transparent; background: #0e0e10; cursor: pointer; }
+      .plinko-emote-grid img:hover { border-color: var(--accent-color); }
+      .plinko-columns { display:flex; flex-wrap: wrap; gap: 4px; }
+      .plinko-columns button { min-width: 34px; padding: 6px 4px; border-radius: 8px; border: 1px solid var(--secondary-button-border); background: var(--secondary-button-bg); color: var(--secondary-button-text); cursor: pointer; font: inherit; font-size: 13px; }
+      .plinko-columns button.active { background: var(--accent-color); color: #fff; border-color: var(--accent-color); }
+      .plinko-style-grid { display:flex; flex-direction: column; gap: 7px; font-size: 13px; }
+      .plinko-check { display:flex; align-items:center; gap: 8px; cursor: pointer; }
+      .plinko-inline { display:flex; align-items:center; justify-content: space-between; gap: 8px; }
+      .plinko-inline input[type=color] { width: 36px; height: 28px; padding: 0; border: 1px solid var(--input-border); border-radius: 6px; background: none; cursor: pointer; }
+      .plinko-inline input[type=range] { flex: 1; max-width: 150px; }
+      .plinko-preview { width: 100%; max-width: 420px; height: auto; align-self: center; background: #0e0e10; border-radius: 14px; border: 1px solid var(--surface-border); }
+      .plinko-share { display:flex; flex-wrap: wrap; gap: 8px; align-items: center; font-size: 13px; color: var(--text-muted); }
+      .plinko-share button { background: var(--secondary-button-bg); color: var(--secondary-button-text); border: 1px solid var(--secondary-button-border); border-radius: 10px; padding: 8px 14px; cursor: pointer; font-weight: 600; }
+      .plinko-field select { width: 100%; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--input-border); background: var(--input-bg); color: var(--text-color); font: inherit; }
+      .plinko-queue { border: 1px solid var(--surface-border); border-radius: 10px; padding: 10px 12px; font-size: 13px; display:flex; flex-direction: column; gap: 4px; }
+      .plinko-queue-next { color: var(--text-muted); }
       .global-footer { margin-top: 24px; padding-top: 18px; border-top: 1px solid var(--surface-border); display:flex; flex-wrap: wrap; gap: 12px; justify-content: center; font-size: 14px; color: var(--text-muted); }
       .global-footer a { color: var(--text-muted); text-decoration: none; }
       .global-footer a:hover { color: var(--accent-color); }
@@ -144,6 +185,7 @@ export function renderUtilitiesPage(options = {}) {
         <div class="sidebar-nav">
           <button class="sidebar-nav-item active" data-section="wheels">Wheels</button>
           <button class="sidebar-nav-item" data-section="prompts">Prompts</button>
+          <button class="sidebar-nav-item" data-section="plinko">Plinko</button>
           <button class="sidebar-nav-item" data-section="quick-tools">Quick Tools</button>
         </div>
       </nav>
@@ -184,6 +226,101 @@ export function renderUtilitiesPage(options = {}) {
       </div>
       </div>
 
+      <div class="section-page" data-section="plinko">
+      <div class="wheels-section">
+        <h2>Plinko board</h2>
+        <p class="lead" style="margin-bottom:0;">Drop a token from a column at the top &mdash; it bounces down and lands on a multiplier. The multiplier times your base time is added to the subathon timer. Add <code>/overlay/plinko</code> as its own Browser Source.</p>
+
+        <div class="plinko-grid">
+          <div class="plinko-card">
+            <h3>Board settings</h3>
+            <div class="plinko-field">
+              <label for="plinkoBaseSeconds">Base time (seconds)</label>
+              <input id="plinkoBaseSeconds" type="number" min="1" max="3600" step="1" value="60" />
+              <span class="plinko-hint">Landing on <strong>x2</strong> adds <strong>2&times;</strong> this.</span>
+            </div>
+            <div class="plinko-field">
+              <label for="plinkoRows">Peg rows</label>
+              <input id="plinkoRows" type="number" min="6" max="16" step="1" value="9" />
+              <span class="plinko-hint">More rows &rarr; the edge multipliers land less often.</span>
+            </div>
+            <div class="plinko-field">
+              <div class="plinko-row-between">
+                <label>Multipliers (left &rarr; right)</label>
+                <button id="plinkoMirrorBtn" type="button" class="secondary plinko-mini">Mirror left &rarr; right</button>
+              </div>
+              <div id="plinkoBinsEditor" class="plinko-bins-editor"></div>
+            </div>
+            <div class="plinko-field">
+              <label>Token image</label>
+              <div class="plinko-token-row">
+                <div id="plinkoTokenPreview" class="plinko-token-preview" aria-hidden="true"></div>
+                <div class="plinko-token-controls">
+                  <span id="plinkoTokenName" class="plinko-hint">No token set &mdash; a coin is used.</span>
+                  <div>
+                    <button id="plinkoEmotesBtn" type="button" class="secondary plinko-mini">Load my emotes</button>
+                    <button id="plinkoTokenClear" type="button" class="secondary plinko-mini">Clear</button>
+                  </div>
+                </div>
+              </div>
+              <div id="plinkoEmoteGrid" class="plinko-emote-grid" hidden></div>
+            </div>
+            <div class="plinko-field">
+              <label for="plinkoTriggerSound">Auto-drop on sound alert</label>
+              <select id="plinkoTriggerSound"><option value="">&mdash; none &mdash;</option></select>
+              <span class="plinko-hint">When this sound is redeemed (Bits or Channel Points), a token drops from a random column and its multiplier is added on top of the sound&rsquo;s normal time. Redemptions queue while one is dropping. &mdash; Set up or add sounds in <a href="${base}/sounds/config">Sound Alerts</a>.</span>
+            </div>
+            <div class="plinko-field">
+              <label>Overlay style</label>
+              <div class="plinko-style-grid">
+                <label class="plinko-check"><input type="checkbox" id="plinkoStylePanel" checked /> Background panel</label>
+                <label class="plinko-inline">Panel color <input type="color" id="plinkoStylePanelColor" value="#0f0f12" /></label>
+                <label class="plinko-inline">Panel opacity <input type="range" id="plinkoStylePanelOpacity" min="0" max="100" value="82" /></label>
+                <label class="plinko-check"><input type="checkbox" id="plinkoStylePegs" checked /> Show pegs</label>
+                <label class="plinko-inline">Peg color <input type="color" id="plinkoStylePegColor" value="#ffffff" /></label>
+                <label class="plinko-inline">Text color <input type="color" id="plinkoStyleTextColor" value="#f8fafc" /></label>
+                <label class="plinko-check"><input type="checkbox" id="plinkoStyleShowStatus" checked /> Show status text</label>
+                <label class="plinko-check"><input type="checkbox" id="plinkoStylePegSound" checked /> Peg click sound</label>
+                <label class="plinko-inline">Peg sound volume <input type="range" id="plinkoStylePegVol" min="0" max="100" value="35" /></label>
+                <label class="plinko-check"><input type="checkbox" id="plinkoStyleWinSound" checked /> Landing sound</label>
+                <label class="plinko-inline">Landing sound volume <input type="range" id="plinkoStyleWinVol" min="0" max="100" value="50" /></label>
+              </div>
+            </div>
+            <div class="plinko-row-between">
+              <button id="plinkoSaveBtn" type="button">Save board</button>
+              <span id="plinkoSaveStatus" class="plinko-hint"></span>
+            </div>
+          </div>
+
+          <div class="plinko-card">
+            <h3>Drop</h3>
+            <div class="plinko-field">
+              <label>Drop column</label>
+              <div id="plinkoColumns" class="plinko-columns"></div>
+            </div>
+            <div class="plinko-row-between">
+              <div>
+                <button id="plinkoDropBtn" class="secondary" type="button">Drop token</button>
+                <button id="plinkoRandomBtn" type="button" class="secondary">Drop random</button>
+                <button id="plinkoTestBtn" type="button" class="secondary">Test (no timer)</button>
+              </div>
+              <span id="plinkoDropStatus" class="plinko-hint"></span>
+            </div>
+            <div class="plinko-queue" id="plinkoQueuePanel" hidden>
+              <div><strong>Now dropping:</strong> <span id="plinkoQueueNow">&mdash;</span></div>
+              <div class="plinko-queue-next" id="plinkoQueueNext"></div>
+            </div>
+            <canvas id="plinkoPreview" class="plinko-preview" width="560" height="680"></canvas>
+            <div class="plinko-share">
+              <button id="plinkoCopyBtn" type="button">Copy Browser Source link</button>
+              <span id="plinkoCopyStatus" class="plinko-hint"></span>
+            </div>
+            <p class="plinko-hint">Set the Browser Source to <strong>560&nbsp;&times;&nbsp;680</strong> (portrait). The board fills that exactly and scales cleanly to any size with the same shape.</p>
+          </div>
+        </div>
+      </div>
+      </div>
+
       <div class="section-page" data-section="quick-tools">
       <div class="secondary-tools">
         <h2>Quick tools</h2>
@@ -211,7 +348,7 @@ export function renderUtilitiesPage(options = {}) {
               ${[4, 6, 8, 10, 20, 50, 100]
                 .map(
                   (sides) =>
-                    `<button type="button" data-dice="${sides}">d${sides}</button>`
+                    `<button type="button" data-dice="${sides}">d${sides}</button>`,
                 )
                 .join("")}
             </div>
@@ -838,7 +975,8 @@ export function renderUtilitiesPage(options = {}) {
             params.set('key', overlayShareKey);
             params.set('wheelId', inst.config.id);
             if (encoded) params.set('options', encoded);
-            var shareUrl = wheelOverlayBase + '?' + params.toString();
+            var wheelRel = wheelOverlayBase + '?' + params.toString();
+            var shareUrl = /^https?:/i.test(wheelOverlayBase) ? wheelRel : window.location.origin + wheelRel;
             navigator.clipboard.writeText(shareUrl).then(function() {
               copyStatus.textContent = 'Copied!';
             }).catch(function() {
@@ -971,7 +1109,8 @@ export function renderUtilitiesPage(options = {}) {
             if (!overlayShareKey) { promptCopyStatus.textContent = 'Set an overlay key first.'; return; }
             var params = new URLSearchParams();
             params.set('key', overlayShareKey);
-            var shareUrl = promptOverlayBase + '?' + params.toString();
+            var promptRel = promptOverlayBase + '?' + params.toString();
+            var shareUrl = /^https?:/i.test(promptOverlayBase) ? promptRel : window.location.origin + promptRel;
             navigator.clipboard.writeText(shareUrl).then(function() {
               promptCopyStatus.textContent = 'Copied!';
             }).catch(function() {
@@ -1056,6 +1195,440 @@ export function renderUtilitiesPage(options = {}) {
             diceSum.textContent = 'Total: ' + total + '  \\u00B7  Avg: ' + avg + '  \\u00B7  Median: ' + median;
           });
         });
+
+        /* ---- Plinko board ---- */
+        (function () {
+          var plinkoOverlayBase = ${JSON.stringify(plinkoOverlayBase)};
+          var PLINKO_BOARD_ID = 'default';
+          var section = document.querySelector('.section-page[data-section="plinko"]');
+          if (!section) return;
+
+          var baseInput = document.getElementById('plinkoBaseSeconds');
+          var rowsInput = document.getElementById('plinkoRows');
+          var binsEditor = document.getElementById('plinkoBinsEditor');
+          var mirrorBtn = document.getElementById('plinkoMirrorBtn');
+          var tokenPreview = document.getElementById('plinkoTokenPreview');
+          var tokenName = document.getElementById('plinkoTokenName');
+          var emotesBtn = document.getElementById('plinkoEmotesBtn');
+          var tokenClear = document.getElementById('plinkoTokenClear');
+          var emoteGrid = document.getElementById('plinkoEmoteGrid');
+          var saveBtn = document.getElementById('plinkoSaveBtn');
+          var saveStatus = document.getElementById('plinkoSaveStatus');
+          var columnsWrap = document.getElementById('plinkoColumns');
+          var dropBtn = document.getElementById('plinkoDropBtn');
+          var randomBtn = document.getElementById('plinkoRandomBtn');
+          var testBtn = document.getElementById('plinkoTestBtn');
+          var dropStatus = document.getElementById('plinkoDropStatus');
+          var previewCanvas = document.getElementById('plinkoPreview');
+          var copyBtn = document.getElementById('plinkoCopyBtn');
+          var copyStatus = document.getElementById('plinkoCopyStatus');
+          var stylePanel = document.getElementById('plinkoStylePanel');
+          var stylePanelColor = document.getElementById('plinkoStylePanelColor');
+          var stylePanelOpacity = document.getElementById('plinkoStylePanelOpacity');
+          var stylePegs = document.getElementById('plinkoStylePegs');
+          var stylePegColor = document.getElementById('plinkoStylePegColor');
+          var styleTextColor = document.getElementById('plinkoStyleTextColor');
+          var styleShowStatus = document.getElementById('plinkoStyleShowStatus');
+          var stylePegSound = document.getElementById('plinkoStylePegSound');
+          var stylePegVol = document.getElementById('plinkoStylePegVol');
+          var styleWinSound = document.getElementById('plinkoStyleWinSound');
+          var styleWinVol = document.getElementById('plinkoStyleWinVol');
+          var triggerSound = document.getElementById('plinkoTriggerSound');
+          var queuePanel = document.getElementById('plinkoQueuePanel');
+          var queueNow = document.getElementById('plinkoQueueNow');
+          var queueNext = document.getElementById('plinkoQueueNext');
+          var pctx = previewCanvas ? previewCanvas.getContext('2d') : null;
+
+          var STYLE_DEFAULTS = { panel: true, panelColor: '#0f0f12', panelOpacity: 0.82, pegs: true, pegColor: '#ffffff', textColor: '#f8fafc', showStatus: true, pegSound: true, pegSoundVolume: 0.35, winSound: true, winSoundVolume: 0.5 };
+          var pendingToken = { name: '', url: '', source: '' };
+          var dropColumn = 4;
+          var busy = false;
+          var previewBusy = false;
+          var animToken = null;
+
+          function trimNum(n) { return String(Math.round((Number(n) || 0) * 100) / 100); }
+          function clampNum(v, lo, hi) { return Math.min(hi, Math.max(lo, v)); }
+          function currentRows() { return clampNum(parseInt(rowsInput.value, 10) || 9, 6, 16); }
+
+          var plinkPool = [];
+          var plinkIdx = 0;
+          try {
+            for (var _pi = 0; _pi < 6; _pi++) { var _pa = new Audio('/assets/plink_sound.mp3'); _pa.preload = 'auto'; plinkPool.push(_pa); }
+          } catch (e) { plinkPool = []; }
+          function playPlink() {
+            var st = readStyle();
+            if (!st.pegSound || !plinkPool.length) return;
+            var a = plinkPool[plinkIdx];
+            plinkIdx = (plinkIdx + 1) % plinkPool.length;
+            try { a.volume = clampNum(st.pegSoundVolume, 0, 1); a.currentTime = 0; var p = a.play(); if (p && p.catch) p.catch(function () {}); } catch (e) {}
+          }
+          var winAudio = null;
+          try { winAudio = new Audio('/assets/plinko_win_sound.wav'); winAudio.preload = 'auto'; } catch (e) {}
+          function playWin() {
+            var st = readStyle();
+            if (!st.winSound || !winAudio) return;
+            try { winAudio.volume = clampNum(st.winSoundVolume, 0, 1); winAudio.currentTime = 0; var p = winAudio.play(); if (p && p.catch) p.catch(function () {}); } catch (e) {}
+          }
+
+          function readStyle() {
+            return {
+              panel: stylePanel.checked,
+              panelColor: stylePanelColor.value,
+              panelOpacity: clampNum((parseInt(stylePanelOpacity.value, 10) || 0) / 100, 0, 1),
+              pegs: stylePegs.checked,
+              pegColor: stylePegColor.value,
+              textColor: styleTextColor.value,
+              showStatus: styleShowStatus.checked,
+              pegSound: stylePegSound.checked,
+              pegSoundVolume: clampNum((parseInt(stylePegVol.value, 10) || 0) / 100, 0, 1),
+              winSound: styleWinSound.checked,
+              winSoundVolume: clampNum((parseInt(styleWinVol.value, 10) || 0) / 100, 0, 1),
+            };
+          }
+
+          function defaultBin(i, rows) {
+            var center = rows / 2;
+            var d = center > 0 ? Math.abs(i - center) / center : 0;
+            var m = Math.max(1, Math.round((1 + 3 * d * d) * 4) / 4);
+            var color = m >= 4 ? '#F97316' : m >= 2 ? '#EC4899' : m >= 1.5 ? '#3B82F6' : '#9146FF';
+            return { multiplier: m, color: color };
+          }
+
+          function readBins() {
+            var rows = [];
+            binsEditor.querySelectorAll('.plinko-bin-row').forEach(function (row) {
+              rows.push({
+                multiplier: parseFloat(row.querySelector('.plinko-bin-mult').value) || 1,
+                color: row.querySelector('.plinko-bin-color').value || '#9146FF',
+              });
+            });
+            return rows;
+          }
+
+          function renderBins(bins) {
+            var rows = currentRows();
+            var out = [];
+            for (var i = 0; i < rows + 1; i++) {
+              var b = (bins && bins[i]) || defaultBin(i, rows);
+              out.push(
+                '<div class="plinko-bin-row"><span>' + i + '</span>' +
+                '<input type="number" class="plinko-bin-mult" min="0.1" max="100" step="0.25" value="' + trimNum(b.multiplier) + '" />' +
+                '<input type="color" class="plinko-bin-color" value="' + (/^#[0-9a-fA-F]{6}$/.test(b.color) ? b.color : '#9146FF') + '" /></div>'
+              );
+            }
+            binsEditor.innerHTML = out.join('');
+          }
+
+          function renderColumns() {
+            var rows = currentRows();
+            if (dropColumn > rows) dropColumn = Math.floor(rows / 2);
+            var out = [];
+            for (var i = 0; i <= rows; i++) {
+              out.push('<button type="button" data-col="' + i + '"' + (i === dropColumn ? ' class="active"' : '') + '>' + i + '</button>');
+            }
+            columnsWrap.innerHTML = out.join('');
+          }
+
+          function setToken(tok) {
+            pendingToken = { name: (tok && tok.name) || '', url: (tok && tok.url) || '', source: (tok && tok.source) || '' };
+            tokenPreview.style.backgroundImage = pendingToken.url ? 'url("' + pendingToken.url + '")' : 'none';
+            tokenName.textContent = pendingToken.url ? (pendingToken.name || 'Custom token') : 'No token set — a coin is used.';
+            animToken = null;
+            if (pendingToken.url) {
+              var img = new Image();
+              img.onload = function () { animToken = img; };
+              img.src = pendingToken.url;
+            }
+            drawPreviewIdle();
+          }
+
+          function applyConfig(cfg) {
+            baseInput.value = cfg.baseSeconds;
+            rowsInput.value = cfg.rows;
+            renderBins(cfg.bins);
+            renderColumns();
+            setToken(cfg.token || {});
+            var st = cfg.style || {};
+            stylePanel.checked = st.panel !== false;
+            stylePanelColor.value = st.panelColor || STYLE_DEFAULTS.panelColor;
+            stylePanelOpacity.value = Math.round((typeof st.panelOpacity === 'number' ? st.panelOpacity : STYLE_DEFAULTS.panelOpacity) * 100);
+            stylePegs.checked = st.pegs !== false;
+            stylePegColor.value = st.pegColor || STYLE_DEFAULTS.pegColor;
+            styleTextColor.value = st.textColor || STYLE_DEFAULTS.textColor;
+            styleShowStatus.checked = st.showStatus !== false;
+            stylePegSound.checked = st.pegSound !== false;
+            stylePegVol.value = Math.round((typeof st.pegSoundVolume === 'number' ? st.pegSoundVolume : STYLE_DEFAULTS.pegSoundVolume) * 100);
+            styleWinSound.checked = st.winSound !== false;
+            styleWinVol.value = Math.round((typeof st.winSoundVolume === 'number' ? st.winSoundVolume : STYLE_DEFAULTS.winSoundVolume) * 100);
+            if ([].slice.call(triggerSound.options).some(function (o) { return o.value === (cfg.triggerSoundId || ''); })) {
+              triggerSound.value = cfg.triggerSoundId || '';
+            }
+          }
+
+          function formPayload() {
+            return { baseSeconds: parseInt(baseInput.value, 10) || 60, rows: currentRows(), bins: readBins(), token: pendingToken, style: readStyle(), triggerSoundId: triggerSound.value };
+          }
+
+          function populateSounds(sounds) {
+            var cur = triggerSound.value;
+            triggerSound.innerHTML = '<option value="">none</option>';
+            (sounds || []).forEach(function (s) {
+              var o = document.createElement('option');
+              o.value = s.id;
+              o.textContent = s.name || s.id;
+              triggerSound.appendChild(o);
+            });
+            triggerSound.value = cur;
+          }
+
+          function loadConfig() {
+            var defaults = { baseSeconds: 60, rows: 9, bins: null, token: {}, triggerSoundId: '' };
+            Promise.all([
+              fetch('/api/plinko/config', { credentials: 'same-origin' }).then(function (r) { return r.ok ? r.json() : null; }).catch(function () { return null; }),
+              fetch('/api/sounds', { credentials: 'same-origin' }).then(function (r) { return r.ok ? r.json() : null; }).catch(function () { return null; }),
+            ]).then(function (res) {
+              populateSounds(res[1] && res[1].sounds);
+              applyConfig(res[0] || defaults);
+            });
+          }
+
+          function save() {
+            saveStatus.textContent = 'Saving…';
+            fetch('/api/plinko/config', {
+              method: 'POST', credentials: 'same-origin',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(formPayload()),
+            })
+              .then(function (r) { return r.ok ? r.json() : Promise.reject(); })
+              .then(function (cfg) { applyConfig(cfg); saveStatus.textContent = 'Saved'; })
+              .catch(function () { saveStatus.textContent = 'Save failed'; });
+            setTimeout(function () { saveStatus.textContent = ''; }, 2500);
+          }
+
+          function drop(opts) {
+            opts = opts || {};
+            if (busy) return;
+            busy = true;
+            dropStatus.textContent = opts.test ? 'Testing…' : opts.random ? 'Dropping (random)…' : 'Dropping…';
+            // The preview animates from the plinko_drop SSE event (below), in
+            // lock-step with the real overlay — including when this drop waits
+            // in the queue behind sound-triggered ones.
+            var body = { boardId: PLINKO_BOARD_ID, test: !!opts.test };
+            if (!opts.random) body.dropColumn = dropColumn; // omit -> server picks a random column
+            fetch('/api/plinko/drop', {
+              method: 'POST', credentials: 'same-origin',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(body),
+            })
+              .then(function (r) { return r.ok ? r.json() : Promise.reject(r); })
+              .then(function () { busy = false; })
+              .catch(function () { busy = false; dropStatus.textContent = 'Drop failed'; });
+          }
+
+          function loadEmotes() {
+            emoteGrid.hidden = false;
+            emoteGrid.innerHTML = '<span class="plinko-hint">Loading…</span>';
+            Promise.all([
+              fetch('/api/sounds/twitch-emotes', { credentials: 'same-origin' }).then(function (r) { return r.ok ? r.json() : { emotes: [] }; }).catch(function () { return { emotes: [] }; }),
+              fetch('/api/sounds/seventv-emotes', { credentials: 'same-origin' }).then(function (r) { return r.ok ? r.json() : { emotes: [] }; }).catch(function () { return { emotes: [] }; }),
+            ]).then(function (res) {
+              var twitch = (res[0].emotes || []).map(function (e) { return { name: e.name, url: e.url, source: 'twitch' }; });
+              var seventv = (res[1].emotes || []).map(function (e) { return { name: e.name, url: e.url, source: '7tv' }; });
+              var all = twitch.concat(seventv).filter(function (e) { return e.url; });
+              if (!all.length) { emoteGrid.innerHTML = '<span class="plinko-hint">No emotes found.</span>'; return; }
+              emoteGrid.innerHTML = '';
+              all.forEach(function (e) {
+                var img = document.createElement('img');
+                img.src = e.url; img.alt = e.name; img.title = e.name;
+                img.addEventListener('click', function () { setToken(e); emoteGrid.hidden = true; });
+                emoteGrid.appendChild(img);
+              });
+            });
+          }
+
+          /* ---- preview rendering (mirrors plinkoOverlayPage.js) ---- */
+          var W = 560, H = 680, PAD_X = 42, TOP_Y = 64, BINS_H = 74;
+          var binsTop = H - BINS_H - 16;
+          function binW(rows) { return (W - PAD_X * 2) / (rows + 1); }
+          function xForPos(u, rows) { return PAD_X + (u + 0.5) * binW(rows); }
+          function rowGap(rows) { return (binsTop - TOP_Y) / (rows + 1); }
+          function tokenR(rows) { return Math.min(binW(rows) * 0.42, rowGap(rows) * 0.9, 26); }
+          function hexA(hex, a) {
+            var h = String(hex || '#9146FF').replace('#', '');
+            if (h.length === 3) h = h[0]+h[0]+h[1]+h[1]+h[2]+h[2];
+            var n = parseInt(h, 16); if (isNaN(n)) return 'rgba(145,70,255,' + a + ')';
+            return 'rgba(' + ((n>>16)&255) + ',' + ((n>>8)&255) + ',' + (n&255) + ',' + a + ')';
+          }
+          function pRoundRect(x, y, w, h, r) {
+            pctx.beginPath();
+            pctx.moveTo(x + r, y);
+            pctx.arcTo(x + w, y, x + w, y + h, r);
+            pctx.arcTo(x + w, y + h, x, y + h, r);
+            pctx.arcTo(x, y + h, x, y, r);
+            pctx.arcTo(x, y, x + w, y, r);
+            pctx.closePath();
+          }
+          function drawBoard(bins, rows, highlight) {
+            if (!pctx) return;
+            var s = readStyle();
+            pctx.clearRect(0, 0, W, H);
+
+            if (s.panel) {
+              pRoundRect(6, 6, W - 12, H - 12, 22);
+              pctx.fillStyle = hexA(s.panelColor, s.panelOpacity);
+              pctx.fill();
+            }
+
+            if (s.pegs) {
+              pctx.fillStyle = hexA(s.pegColor, 0.55);
+              for (var r = 0; r < rows; r++) {
+                var y = TOP_Y + (r + 1) * rowGap(rows);
+                var shift = r % 2 === 0 ? 0.5 : 0;
+                for (var k = -1; k <= rows + 1; k++) {
+                  var u = k + shift;
+                  if (u < -0.2 || u > rows + 0.2) continue;
+                  pctx.beginPath(); pctx.arc(xForPos(u, rows), y, 3, 0, Math.PI * 2); pctx.fill();
+                }
+              }
+            }
+
+            for (var i = 0; i < rows + 1; i++) {
+              var b = bins[i] || bins[bins.length - 1] || { multiplier: 1, color: '#9146FF' };
+              var bx = PAD_X + i * binW(rows);
+              var active = i === highlight;
+              pctx.fillStyle = hexA(b.color, active ? 0.85 : 0.22);
+              pctx.fillRect(bx + 2, binsTop, binW(rows) - 4, BINS_H);
+              pctx.fillStyle = b.color;
+              pctx.fillRect(bx + 2, binsTop, binW(rows) - 4, 4);
+              pctx.fillStyle = active ? s.textColor : hexA(s.textColor, 0.9);
+              pctx.font = (active ? 'bold ' : '') + Math.min(18, binW(rows) * 0.5) + 'px Inter, sans-serif';
+              pctx.textAlign = 'center'; pctx.textBaseline = 'middle';
+              pctx.fillText('x' + trimNum(b.multiplier), bx + binW(rows) / 2, binsTop + BINS_H / 2 + 2);
+            }
+          }
+          function drawToken(x, y, rows) {
+            var rad = tokenR(rows);
+            if (animToken) {
+              pctx.save(); pctx.beginPath(); pctx.arc(x, y, rad, 0, Math.PI * 2); pctx.clip();
+              pctx.drawImage(animToken, x - rad, y - rad, rad * 2, rad * 2); pctx.restore();
+              pctx.beginPath(); pctx.arc(x, y, rad, 0, Math.PI * 2);
+              pctx.strokeStyle = 'rgba(255,255,255,0.85)'; pctx.lineWidth = 2; pctx.stroke();
+            } else {
+              pctx.beginPath(); pctx.arc(x, y, rad, 0, Math.PI * 2);
+              pctx.fillStyle = '#FCD34D'; pctx.fill();
+              pctx.strokeStyle = 'rgba(0,0,0,0.3)'; pctx.stroke();
+            }
+          }
+          function drawPreviewIdle() {
+            var rows = currentRows();
+            drawBoard(readBins().length ? readBins() : [], rows, -1);
+          }
+          function animatePreview(p) {
+            if (previewBusy || !p) return;
+            previewBusy = true;
+            var rows = p.rows || currentRows();
+            var bins = (p.bins && p.bins.length) ? p.bins : readBins();
+            var path = Array.isArray(p.path) ? p.path : [];
+            var n = path.length || rows;
+            var start = clampNum(Number(p.dropColumn) || 0, 0, rows);
+            var duration = clampNum(Number(p.durationMs) || (1400 + n * 420), 1600, 14000);
+            var stops = [start], pos = start;
+            for (var i = 0; i < n; i++) {
+              pos += path[i] ? 0.5 : -0.5;
+              if (pos < 0) pos = 0; if (pos > rows) pos = rows;
+              stops.push(pos);
+            }
+            var landBin = typeof p.binIndex === 'number' ? p.binIndex : Math.round(pos);
+            var t0 = performance.now(), segMs = duration / (n + 1), vGap = (binsTop - TOP_Y) / (n + 1);
+            var lastPlinkedSeg = -1;
+            function frame(now) {
+              var el = now - t0;
+              var seg = Math.min(n, Math.floor(el / segMs));
+              var f = clampNum((el - seg * segMs) / segMs, 0, 1);
+              if (seg > lastPlinkedSeg && seg < n) { lastPlinkedSeg = seg; playPlink(); }
+              var eased = f < 0.5 ? 2 * f * f : 1 - Math.pow(-2 * f + 2, 2) / 2;
+              var u = stops[seg] + (stops[Math.min(seg + 1, stops.length - 1)] - stops[seg]) * eased;
+              var y = TOP_Y + (seg + f) * vGap;
+              var hop = seg < n ? Math.sin(f * Math.PI) * Math.min(vGap, 46) * 0.5 : 0;
+              drawBoard(bins, rows, el >= duration - segMs ? landBin : -1);
+              drawToken(xForPos(u, rows), y - hop, rows);
+              if (el < duration) { requestAnimationFrame(frame); }
+              else {
+                previewBusy = false;
+                playWin();
+                drawBoard(bins, rows, landBin);
+                drawToken(xForPos(landBin, rows), binsTop + BINS_H / 2, rows);
+                var mult = bins[landBin] ? bins[landBin].multiplier : 1;
+                var added = Number(p.secondsAdded) || 0;
+                dropStatus.textContent = (p.test ? 'Test landed on x' : 'Landed on x') + trimNum(mult) + (added > 0 ? '  (+' + added + 's)' : '');
+              }
+            }
+            requestAnimationFrame(frame);
+          }
+
+          /* ---- wiring ---- */
+          rowsInput.addEventListener('change', function () { rowsInput.value = currentRows(); renderBins(readBins()); renderColumns(); drawPreviewIdle(); });
+          binsEditor.addEventListener('input', drawPreviewIdle);
+          mirrorBtn.addEventListener('click', function () {
+            var b = readBins(), n = b.length;
+            for (var i = 0; i < Math.floor(n / 2); i++) { b[n - 1 - i] = { multiplier: b[i].multiplier, color: b[i].color }; }
+            renderBins(b); drawPreviewIdle();
+          });
+          emotesBtn.addEventListener('click', function () { if (emoteGrid.hidden) loadEmotes(); else emoteGrid.hidden = true; });
+          tokenClear.addEventListener('click', function () { setToken({}); });
+          [stylePanel, stylePanelColor, stylePanelOpacity, stylePegs, stylePegColor, styleTextColor, styleShowStatus, stylePegSound, stylePegVol, styleWinSound, styleWinVol]
+            .forEach(function (el) { el.addEventListener('input', drawPreviewIdle); });
+          saveBtn.addEventListener('click', save);
+          columnsWrap.addEventListener('click', function (e) {
+            var btn = e.target.closest('button[data-col]'); if (!btn) return;
+            dropColumn = parseInt(btn.getAttribute('data-col'), 10) || 0;
+            renderColumns();
+          });
+          dropBtn.addEventListener('click', function () { drop({}); });
+          randomBtn.addEventListener('click', function () { drop({ random: true }); });
+          testBtn.addEventListener('click', function () { drop({ test: true }); });
+
+          /* ---- live drop + queue stream (mirrors the OBS overlay) ---- */
+          function renderQueue(snap) {
+            if (!snap || (!snap.nowPlaying && !snap.waitingCount)) { queuePanel.hidden = true; return; }
+            queuePanel.hidden = false;
+            queueNow.textContent = snap.nowPlaying ? snap.nowPlaying.viewerName : '—';
+            var names = (snap.waiting || []).map(function (w) { return '@' + w.viewerName; });
+            var extra = (snap.waitingCount || 0) - names.length;
+            queueNext.textContent = names.length
+              ? 'Up next: ' + names.join(', ') + (extra > 0 ? ' +' + extra + ' more' : '') + '  (' + snap.waitingCount + ' waiting)'
+              : '';
+          }
+          function connectPlinkoStream() {
+            if (!overlayShareKey) return;
+            var url = '/api/overlay/stream?key=' + encodeURIComponent(overlayShareKey) + '&boardId=' + encodeURIComponent(PLINKO_BOARD_ID);
+            var es = new EventSource(url);
+            es.addEventListener('plinko_drop', function (ev) {
+              try { animatePreview(JSON.parse(ev.data)); } catch (e) {}
+            });
+            es.addEventListener('plinko_queue', function (ev) {
+              try { renderQueue(JSON.parse(ev.data)); } catch (e) {}
+            });
+            es.addEventListener('error', function () { es.close(); setTimeout(connectPlinkoStream, 5000); });
+          }
+          copyBtn.addEventListener('click', function () {
+            if (!overlayShareKey) { copyStatus.textContent = 'Set an overlay key first.'; return; }
+            var cfg = { rows: currentRows(), bins: readBins(), token: pendingToken, style: readStyle() };
+            var params = new URLSearchParams();
+            params.set('key', overlayShareKey);
+            params.set('boardId', PLINKO_BOARD_ID);
+            params.set('config', encodeOptions(JSON.stringify(cfg)));
+            var rel = plinkoOverlayBase + '?' + params.toString();
+            var full = /^https?:/i.test(plinkoOverlayBase) ? rel : window.location.origin + rel;
+            navigator.clipboard.writeText(full)
+              .then(function () { copyStatus.textContent = 'Copied!'; })
+              .catch(function () { copyStatus.textContent = 'Copy failed'; });
+            setTimeout(function () { copyStatus.textContent = ''; }, 2500);
+          });
+
+          loadConfig();
+          connectPlinkoStream();
+        })();
       })();
     </script>
   </body>

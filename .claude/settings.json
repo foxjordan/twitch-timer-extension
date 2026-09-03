@@ -62,7 +62,22 @@
       "WebFetch(domain:developers.google.com)",
       "WebFetch(domain:help.twitch.tv)",
       "mcp__plugin_playwright_playwright__browser_console_messages",
-      "WebFetch(domain:brand.twitch.com)"
+      "WebFetch(domain:brand.twitch.com)",
+      "Bash(npm test *)",
+      "Bash(node --test --test-name-pattern=\"round trip\")",
+      "Bash(git -C /Users/jordanfox/Documents/twitch-timer-extension diff .claude/settings.json)",
+      "Bash(rm -f /tmp/plinko_boot*.log /tmp/plinko_boot*.pid /tmp/plinko_overlay*.html /tmp/plinko_overlay_script.js /tmp/utils_script.js)",
+      "Bash(git -C /Users/jordanfox/Documents/twitch-timer-extension diff --stat ebs/ .gitignore)",
+      "Bash(git -C /Users/jordanfox/Documents/twitch-timer-extension diff ebs/server.js)",
+      "Bash(cp plinko.js /tmp/plinko_fixed.js)",
+      "Bash(sed -i '' 's/const steps = nRows % 2 === 0 ? nRows : nRows + 1;/const steps = nRows;/' plinko.js)",
+      "Bash(node --test --test-name-pattern=\"even number of half-steps|no rounding bias|deterministic\")",
+      "Bash(pkill -f \"node server.js\")",
+      "Bash(curl -s -o /dev/null -w \"post-kill curl http=%{http_code}\\\\n\" \"http://localhost:8080/overlay/plinko\")",
+      "Bash(rm -f /tmp/ut.js)",
+      "Bash(node --test --test-name-pattern=\"triggerSoundId\")",
+      "Bash(node --test plinko_queue.test.js)",
+      "Bash(rm -f /Users/jordanfox/Documents/twitch-timer-extension/.playwright-mcp/page-2026-09-03T04-05-23-199Z.yml /tmp/plinko_dev.log /tmp/plinko_dev.pid /tmp/plinko_boot*.log 2>/dev/null; grep -c \"playwright\" /Users/jordanfox/Documents/twitch-timer-extension/.gitignore || echo \"\\(playwright not in .gitignore\\)\")"
     ],
     "additionalDirectories": [
       "/tmp"

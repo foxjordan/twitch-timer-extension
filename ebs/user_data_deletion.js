@@ -7,6 +7,7 @@ import { deleteAllSounds } from "./sounds_store.js";
 import { deleteTtsSettings } from "./tts_store.js";
 import { deleteAllGoals } from "./goals_store.js";
 import { deleteRules } from "./rules_store.js";
+import { deletePlinkoConfig } from "./plinko_store.js";
 import { deleteStyle } from "./styles.js";
 import { deleteUserKey } from "./keys.js";
 import { deleteTimerState } from "./state.js";
@@ -69,6 +70,9 @@ export async function deleteAllUserData(userId, ctx = {}) {
 
   // 8. Timer rules
   if (deleteRules(uid)) deleted.push("rules");
+
+  // 8b. Plinko board config
+  if (deletePlinkoConfig(uid)) deleted.push("plinko");
 
   // 9. Overlay styles
   if (deleteStyle(uid)) deleted.push("styles");

@@ -168,12 +168,14 @@ export function mountHomePageRoutes(app) {
       req.session?.userOverlayKey || req.session?.twitchUser?.id || "";
     const wheelOverlayBase = `/overlay/wheel`;
     const promptOverlayBase = `/overlay/prompt`;
+    const plinkoOverlayBase = `/overlay/plinko`;
     const html = renderUtilitiesPage({
       base: "",
       adminName,
       overlayKey,
       wheelOverlayBase,
       promptOverlayBase,
+      plinkoOverlayBase,
       showAdminLink: isSuperAdmin(req),
     });
     res.setHeader("Content-Type", "text/html; charset=utf-8");

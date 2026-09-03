@@ -185,9 +185,11 @@ export function renderUtilitiesPage(options = {}) {
     <main>
       <nav class="sidebar">
         <div class="sidebar-nav">
-          <button class="sidebar-nav-item active" data-section="wheels">Wheels</button>
+          <button class="sidebar-nav-item active" data-section="plinko">Plinko</button>
+          <button class="sidebar-nav-item" data-section="wheels">Wheels</button>
+          <!-- Prompts — temporarily hidden from the sidebar (not removed). To restore:
           <button class="sidebar-nav-item" data-section="prompts">Prompts</button>
-          <button class="sidebar-nav-item" data-section="plinko">Plinko</button>
+          -->
           <button class="sidebar-nav-item" data-section="quick-tools">Quick Tools</button>
         </div>
       </nav>
@@ -195,7 +197,7 @@ export function renderUtilitiesPage(options = {}) {
       <h1>Utilities lab</h1>
       <p class="lead">Lightweight, browser-friendly tools you can project to stream or pipe into a Browser Source.</p>
 
-      <div class="section-page active" data-section="wheels">
+      <div class="section-page" data-section="wheels">
       <div class="wheels-section">
         <div id="wheelsContainer"></div>
         <button id="addWheelBtn" class="add-wheel-btn" type="button">+ Add wheel</button>
@@ -228,7 +230,7 @@ export function renderUtilitiesPage(options = {}) {
       </div>
       </div>
 
-      <div class="section-page" data-section="plinko">
+      <div class="section-page active" data-section="plinko">
       <div class="wheels-section">
         <h2>Plinko board</h2>
         <p class="lead" style="margin-bottom:0;">Drop a token from a column at the top &mdash; it bounces down and lands on a multiplier. The multiplier times your base time is added to the subathon timer. Add <code>/overlay/plinko</code> as its own Browser Source.</p>
@@ -392,7 +394,7 @@ export function renderUtilitiesPage(options = {}) {
           if (key && !lshViewed[key] && window.lsh) { lshViewed[key] = true; lsh.feature(key); }
         }
         lshFeatureOnce('extras');
-        lshFeatureOnce('wheel'); // 'wheels' section is the default-active one on load
+        lshFeatureOnce('plinko'); // 'plinko' section is the default-active one on load
         (function() {
           var requested = String(window.location.hash || '').replace('#', '');
           var validSections = Array.prototype.map.call(

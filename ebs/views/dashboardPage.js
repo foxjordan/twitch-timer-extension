@@ -46,13 +46,23 @@ export function renderDashboardPage(options = {}) {
       configLabel: "Open Configurator",
     },
     {
-      tag: "Prompts",
-      title: "Chat Prompt overlay",
-      desc: "Shows a conversation starter on screen whenever you push one from Utilities.",
-      url: `${base}/overlay/prompt${keyQs}`,
-      configHref: `${base}/utilities#prompts`,
-      configLabel: "Manage Prompts",
+      tag: "Plinko",
+      title: "Plinko overlay",
+      desc: "Drop a token down the peg board — the landing slot multiplies the time added to your subathon timer.",
+      url: `${base}/overlay/plinko${keyQs}${keyQs ? "&" : "?"}boardId=default`,
+      configHref: `${base}/utilities#plinko`,
+      configLabel: "Open Configurator",
     },
+    // Chat Prompt overlay — temporarily hidden from the dashboard (not removed).
+    // To restore, un-comment this entry.
+    // {
+    //   tag: "Prompts",
+    //   title: "Chat Prompt overlay",
+    //   desc: "Shows a conversation starter on screen whenever you push one from Utilities.",
+    //   url: `${base}/overlay/prompt${keyQs}`,
+    //   configHref: `${base}/utilities#prompts`,
+    //   configLabel: "Manage Prompts",
+    // },
   ];
 
   return `<!doctype html>

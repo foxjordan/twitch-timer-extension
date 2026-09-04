@@ -53,6 +53,14 @@ export function renderDashboardPage(options = {}) {
       configHref: `${base}/utilities#plinko`,
       configLabel: "Open Configurator",
     },
+    {
+      tag: "Slots",
+      title: "Slot Machine overlay",
+      desc: "Viewers spin a 3-reel slot — matched symbols multiply the time added to your subathon timer.",
+      url: `${base}/overlay/slots${keyQs}${keyQs ? "&" : "?"}boardId=default`,
+      configHref: `${base}/utilities#slots`,
+      configLabel: "Open Configurator",
+    },
     // Chat Prompt overlay — temporarily hidden from the dashboard (not removed).
     // To restore, un-comment this entry.
     // {

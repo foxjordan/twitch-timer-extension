@@ -65,6 +65,8 @@ import { logger, requestLogger, setLoggerContext } from "./logger.js";
 import { getRules, setRules, loadRules } from "./rules_store.js";
 import { getPlinkoConfig, setPlinkoConfig, loadPlinkoConfig } from "./plinko_store.js";
 import { computePlinkoDrop } from "./plinko.js";
+import { getSlotsConfig, setSlotsConfig, loadSlotsConfig } from "./slots_store.js";
+import { computeSlotsSpin, SLOTS_DURATION_MS } from "./slots.js";
 import { createPlinkoQueue } from "./plinko_queue.js";
 import { createSubDedup } from "./sub_dedup.js";
 import {
@@ -286,6 +288,15 @@ const plinkoQueue = createPlinkoQueue({
   play: (item) => playPlinkoDrop(item),
   onChange: (channelId) => broadcastPlinkoQueue(channelId),
 });
+// Slot-machine spins play one at a time per channel too. Same game-agnostic
+// queue module; play()/onChange() are hoisted function declarations below.
+const lastSlotsSpinByKey = new Map();
+const lastSlotsBoardByKey = new Map();
+const lastSlotsQueueByKey = new Map();
+const slotsQueue = createPlinkoQueue({
+  play: (item) => playSlotsSpin(item),
+  onChange: (channelId) => broadcastSlotsQueue(channelId),
+});
 const DEFAULT_WHEEL_OPTIONS = [
   { label: "Heads", color: "#9146FF" },
   { label: "Tails", color: "#F97316" },
@@ -324,6 +335,7 @@ loadUserProfiles().catch(() => {});
 loadStyles().catch(() => {});
 loadRules().catch(() => {});
 loadPlinkoConfig().catch(() => {});
+loadSlotsConfig().catch(() => {});
 loadTimerState().catch(() => {});
 loadGoals().catch(() => {});
 loadSoundAlerts().catch(() => {});
@@ -840,6 +852,54 @@ app.post("/api/plinko/config", (req, res) => {
   }
 });
 
+app.get("/api/slots/config", (req, res) => {
+  if (!req?.session?.isAdmin)
+    return res.status(401).json({ error: "Admin login required" });
+  const uid = resolveTimerUserIdFromRequest(req);
+  if (!uid) return res.status(400).json({ error: "No broadcaster in session" });
+  res.json(getSlotsConfig(uid));
+});
+
+app.post("/api/slots/config", (req, res) => {
+  if (!req?.session?.isAdmin)
+    return res.status(401).json({ error: "Admin login required" });
+  const uid = resolveTimerUserIdFromRequest(req);
+  if (!uid) return res.status(400).json({ error: "No broadcaster in session" });
+  try {
+    const saved = setSlotsConfig(uid, req.body || {});
+    logger.info("slots_config_saved", { requestId: req.requestId, broadcasterId: uid });
+    res.json(saved);
+
+    // Push the new look to any live browser source on this key so it restyles
+    // without a reload. Late joiners get it from the connect-time replay.
+    const overlayKey = normKey(req.session?.userOverlayKey || "");
+    if (overlayKey) {
+      const boardPayload = {
+        symbols: saved.symbols.map((s) => s.emote),
+        style: saved.style,
+        baseSeconds: saved.baseSeconds,
+      };
+      lastSlotsBoardByKey.set(overlayKey, boardPayload);
+      for (const [ck, spinPayload] of lastSlotsSpinByKey) {
+        if (ck === overlayKey || ck.startsWith(overlayKey + ":")) {
+          Object.assign(spinPayload, boardPayload);
+        }
+      }
+      for (const client of Array.from(sseClients)) {
+        if (!client || client.key !== overlayKey) continue;
+        try {
+          client.res.write("event: slots_board\n");
+          client.res.write(`data: ${JSON.stringify(boardPayload)}\n\n`);
+        } catch (e) {
+          sseClients.delete(client);
+        }
+      }
+    }
+  } catch (e) {
+    res.status(400).json({ error: "Invalid Slots config" });
+  }
+});
+
 // Write a plinko_drop event to every browser source on this overlay key.
 function fanOutPlinkoDrop(overlayKey, boardId, payload) {
   for (const client of Array.from(sseClients)) {
@@ -993,6 +1053,146 @@ function firePlinkoDrop({
   return payload;
 }
 
+// --- Slots -----------------------------------------------------------------
+
+function fanOutSlotsSpin(overlayKey, boardId, payload) {
+  for (const client of Array.from(sseClients)) {
+    if (!client || client.key !== overlayKey) continue;
+    if (boardId && client.boardId && client.boardId !== boardId) continue;
+    try {
+      client.res.write("event: slots_spin\n");
+      client.res.write(`data: ${JSON.stringify(payload)}\n\n`);
+    } catch (e) {
+      sseClients.delete(client);
+    }
+  }
+}
+
+function broadcastSlotsQueue(channelId) {
+  let overlayKey = "";
+  try {
+    overlayKey = normKey(getOrCreateUserKey(String(channelId)));
+  } catch {
+    return;
+  }
+  if (!overlayKey) return;
+  const snap = slotsQueue.snapshot(channelId);
+  lastSlotsQueueByKey.set(overlayKey, snap);
+  const data = JSON.stringify(snap);
+  for (const client of Array.from(sseClients)) {
+    if (!client || client.key !== overlayKey) continue;
+    try {
+      client.res.write("event: slots_queue\n");
+      client.res.write(`data: ${data}\n\n`);
+    } catch (e) {
+      sseClients.delete(client);
+    }
+  }
+}
+
+// Called by the queue when a spin reaches the front: animate it on the overlay,
+// then credit the timer when the reels stop (not when it was queued).
+function playSlotsSpin(item) {
+  const {
+    uid, overlayKey, boardId, payload, durationMs, secondsToAdd,
+    matchKind, multiplier, baseSeconds,
+  } = item;
+  const cacheKey = boardId ? `${overlayKey}:${boardId}` : overlayKey;
+  lastSlotsSpinByKey.set(cacheKey, payload);
+  fanOutSlotsSpin(overlayKey, boardId, payload);
+
+  if (secondsToAdd > 0) {
+    setTimeout(() => {
+      try {
+        const before = getRemainingSeconds(uid);
+        const remaining = addSeconds(uid, secondsToAdd);
+        const actual = Math.max(0, remaining - before);
+        observability.lastTimerMutationAt = new Date().toISOString();
+        addLogEntry({
+          type: "slots_spin",
+          source: item.source || "manual",
+          baseSeconds,
+          multiplier,
+          matchKind,
+          appliedSeconds: secondsToAdd,
+          actualSeconds: actual,
+          userName:
+            item.viewerName && item.viewerName !== "Streamer" ? item.viewerName : undefined,
+          userId: uid,
+        });
+        broadcastToChannel({
+          broadcasterId: uid,
+          type: "timer_add",
+          payload: {
+            userId: uid,
+            secondsAdded: actual,
+            newRemaining: remaining,
+            hype: state.users.get(String(uid))?.hypeActive,
+          },
+        }).catch(() => {});
+      } catch (e) {
+        logger.warn("slots_spin_credit_failed", { userId: uid, message: e?.message });
+      }
+    }, durationMs);
+  }
+}
+
+// Single entry point for a spin — used by the manual route and the sound-alert
+// trigger. `test` fires animate immediately and never queue or touch the timer.
+function fireSlotsSpin({
+  uid,
+  overlayKey,
+  boardId = "",
+  test = false,
+  source = "manual",
+  viewerName = "",
+}) {
+  const cfg = getSlotsConfig(uid);
+  const seed = uuidv4();
+  const { reels, matchKind, multiplier, secondsToAdd } = computeSlotsSpin(cfg, { seed });
+  const durationMs = SLOTS_DURATION_MS;
+  const payload = {
+    spinId: seed,
+    boardId,
+    reels,
+    symbols: cfg.symbols.map((s) => s.emote),
+    matchKind,
+    multiplier,
+    baseSeconds: cfg.baseSeconds,
+    style: cfg.style,
+    // Intended amount — actually credited when the reels stop, so the overlay's
+    // "+time" and the subathon clock move together.
+    secondsAdded: test ? 0 : secondsToAdd,
+    source,
+    test,
+    durationMs,
+    triggeredAt: new Date().toISOString(),
+  };
+
+  if (test) {
+    fanOutSlotsSpin(overlayKey, boardId, payload);
+    return payload;
+  }
+
+  const { accepted } = slotsQueue.enqueue(uid, {
+    uid,
+    overlayKey,
+    boardId,
+    payload,
+    durationMs,
+    secondsToAdd,
+    matchKind,
+    multiplier,
+    baseSeconds: cfg.baseSeconds,
+    viewerName: viewerName || "Someone",
+    source,
+  });
+  if (!accepted) {
+    logger.warn("slots_spin_rejected", { userId: uid, source, reason: "queue_full" });
+  }
+  return payload;
+}
+
 app.post("/api/plinko/drop", (req, res) => {
   if (!req?.session?.isAdmin)
     return res.status(401).json({ error: "Admin login required" });
@@ -1009,6 +1209,27 @@ app.post("/api/plinko/drop", (req, res) => {
     uid,
     overlayKey,
     dropColumn: Number.isFinite(rawColumn) ? rawColumn : undefined,
+    boardId: typeof req.body?.boardId === "string" ? req.body.boardId.trim() : "",
+    test: Boolean(req.body?.test),
+    source: "manual",
+    viewerName: "Streamer",
+  });
+  res.json(payload);
+});
+
+app.post("/api/slots/spin", (req, res) => {
+  if (!req?.session?.isAdmin)
+    return res.status(401).json({ error: "Admin login required" });
+  const overlayKey = normKey(
+    req.body?.overlayKey || req.query.key || req.session?.userOverlayKey || ""
+  );
+  if (!overlayKey) return res.status(400).json({ error: "Overlay key is required" });
+  const uid = resolveTimerUserIdFromRequest(req);
+  if (!uid) return res.status(400).json({ error: "No broadcaster in session" });
+
+  const payload = fireSlotsSpin({
+    uid,
+    overlayKey,
     boardId: typeof req.body?.boardId === "string" ? req.body.boardId.trim() : "",
     test: Boolean(req.body?.test),
     source: "manual",
@@ -1193,6 +1414,32 @@ app.get("/api/overlay/stream", (req, res) => {
   if (lastPlinkoQ) {
     res.write("event: plinko_queue\n");
     res.write(`data: ${JSON.stringify(lastPlinkoQ)}\n\n`);
+  }
+
+  const slotsCacheKey = boardId ? `${key}:${boardId}` : key;
+  const lastSlots = lastSlotsSpinByKey.get(slotsCacheKey);
+  if (lastSlots) {
+    res.write("event: slots_spin\n");
+    res.write(`data: ${JSON.stringify(lastSlots)}\n\n`);
+  }
+  // Send the current saved look on connect (from the store, so it's right even
+  // with no ?config= param and no save/spin since boot); fall back to the cache.
+  let slotsBoard = null;
+  if (timerUserId) {
+    try {
+      const sc = getSlotsConfig(String(timerUserId));
+      slotsBoard = { symbols: sc.symbols.map((s) => s.emote), style: sc.style, baseSeconds: sc.baseSeconds };
+    } catch { /* fall through */ }
+  }
+  if (!slotsBoard) slotsBoard = lastSlotsBoardByKey.get(key) || null;
+  if (slotsBoard) {
+    res.write("event: slots_board\n");
+    res.write(`data: ${JSON.stringify(slotsBoard)}\n\n`);
+  }
+  const lastSlotsQ = lastSlotsQueueByKey.get(key);
+  if (lastSlotsQ) {
+    res.write("event: slots_queue\n");
+    res.write(`data: ${JSON.stringify(lastSlotsQ)}\n\n`);
   }
 
   const lastPrompt = lastPromptByKey.get(key);
@@ -1627,6 +1874,28 @@ function handleSoundAlert({ channelId, soundId, soundName, tier, txId, viewerUse
           source: "sound_alert",
           viewerName: viewerName || viewerUserId || "Someone",
           // dropColumn omitted -> random
+        });
+      })().catch(() => {});
+    }
+  }
+
+  // Auto-spin the slot machine if this sound is its configured trigger. Same
+  // rules as the Plinko trigger: Bits/Channel Points reach here, test fires
+  // don't; the spin's time is a bonus on top of the sound's own Bits time.
+  if (!isTestAlert) {
+    const sk = getSlotsConfig(String(channelId));
+    if (sk.triggerSoundId && String(soundId) === sk.triggerSoundId) {
+      (async () => {
+        let viewerName = "";
+        if (viewerUserId) {
+          viewerName =
+            (await fetchUserDisplayName(viewerUserId, channelId).catch(() => "")) || "";
+        }
+        fireSlotsSpin({
+          uid: String(channelId),
+          overlayKey: normKey(getOrCreateUserKey(String(channelId))),
+          source: "sound_alert",
+          viewerName: viewerName || viewerUserId || "Someone",
         });
       })().catch(() => {});
     }

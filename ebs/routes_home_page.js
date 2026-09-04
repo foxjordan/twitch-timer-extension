@@ -180,6 +180,7 @@ export function mountHomePageRoutes(app) {
     const wheelOverlayBase = `/overlay/wheel`;
     const promptOverlayBase = `/overlay/prompt`;
     const plinkoOverlayBase = `/overlay/plinko`;
+    const slotsOverlayBase = `/overlay/slots`;
     const html = renderUtilitiesPage({
       base: "",
       adminName,
@@ -187,6 +188,7 @@ export function mountHomePageRoutes(app) {
       wheelOverlayBase,
       promptOverlayBase,
       plinkoOverlayBase,
+      slotsOverlayBase,
       showAdminLink: isSuperAdmin(req),
     });
     res.setHeader("Content-Type", "text/html; charset=utf-8");

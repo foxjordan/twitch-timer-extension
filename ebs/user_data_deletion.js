@@ -8,6 +8,7 @@ import { deleteTtsSettings } from "./tts_store.js";
 import { deleteAllGoals } from "./goals_store.js";
 import { deleteRules } from "./rules_store.js";
 import { deletePlinkoConfig } from "./plinko_store.js";
+import { deleteSlotsConfig } from "./slots_store.js";
 import { deleteStyle } from "./styles.js";
 import { deleteUserKey } from "./keys.js";
 import { deleteTimerState } from "./state.js";
@@ -74,6 +75,9 @@ export async function deleteAllUserData(userId, ctx = {}) {
 
   // 8b. Plinko board config
   if (deletePlinkoConfig(uid)) deleted.push("plinko");
+
+  // 8c. Slots board config
+  if (deleteSlotsConfig(uid)) deleted.push("slots");
 
   // Analytics events (first-party client_events table)
   try {

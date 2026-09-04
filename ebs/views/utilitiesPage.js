@@ -20,6 +20,9 @@ export function renderUtilitiesPage(options = {}) {
   const plinkoOverlayBase = String(
     options.plinkoOverlayBase || `${base}/overlay/plinko`,
   );
+  const slotsOverlayBase = String(
+    options.slotsOverlayBase || `${base}/overlay/slots`,
+  );
   const privacyUrl = `${base}/privacy`;
   const gdprUrl = `${base}/gdpr`;
   const termsUrl = `${base}/terms`;
@@ -186,6 +189,7 @@ export function renderUtilitiesPage(options = {}) {
       <nav class="sidebar">
         <div class="sidebar-nav">
           <button class="sidebar-nav-item active" data-section="plinko">Plinko</button>
+          <button class="sidebar-nav-item" data-section="slots">Slots</button>
           <button class="sidebar-nav-item" data-section="wheels">Wheels</button>
           <!-- Prompts — temporarily hidden from the sidebar (not removed). To restore:
           <button class="sidebar-nav-item" data-section="prompts">Prompts</button>
@@ -325,6 +329,115 @@ export function renderUtilitiesPage(options = {}) {
       </div>
       </div>
 
+      <div class="section-page" data-section="slots">
+      <div class="wheels-section">
+        <h2>Slot machine</h2>
+        <p class="lead" style="margin-bottom:0;">Viewers spin a 3-reel slot &mdash; matched symbols multiply your base time and add it to the subathon timer. Add <code>/overlay/slots</code> as its own Browser Source.</p>
+        <style>
+          .slots-sym-head, .slots-sym-row { display:flex; align-items:center; gap:8px; }
+          .slots-sym-row { margin-bottom:6px; }
+          .slots-sym-head { margin-bottom:4px; font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.05em; color:var(--text-muted); }
+          .slots-sym-head-thumb { flex:0 0 44px; }
+          .slots-sym-head-name { flex:1; }
+          .slots-sym-head-num { flex:0 0 66px; text-align:center; }
+          .slots-sym-head-x { flex:0 0 30px; }
+          .slots-sym-thumb { width:44px; height:44px; flex:0 0 44px; border-radius:8px; border:1px solid var(--surface-border); background-color:var(--surface-muted); background-position:center; background-size:72%; background-repeat:no-repeat; cursor:pointer; font-size:9px; color:var(--text-muted); }
+          .slots-sym-row input[type=number] { flex:0 0 66px; width:66px; }
+          .slots-sym-row .slots-sym-x { flex:0 0 30px; padding:5px 0; }
+          .slots-sym-name { flex:1; font-size:12px; color:var(--text-muted); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+          .slots-preview { display:flex; gap:10px; justify-content:center; width:fit-content; margin:14px auto 4px; padding:16px; border-radius:16px; box-shadow:0 8px 20px rgba(0,0,0,0.28); }
+          .slots-prev-reel { width:88px; height:88px; border-radius:10px; display:flex; align-items:center; justify-content:center; overflow:hidden; box-shadow:inset 0 0 0 2px rgba(255,255,255,0.06), inset 0 6px 12px rgba(0,0,0,0.4), inset 0 -6px 12px rgba(0,0,0,0.4); }
+          .slots-prev-reel img { width:64px; height:64px; object-fit:contain; transition:transform .18s ease; }
+          .slots-prev-reel.win { box-shadow:inset 0 0 0 3px #4ade80, 0 0 16px rgba(74,222,128,.5); }
+          .slots-prev-status { text-align:center; font-size:11px; opacity:0.8; margin-bottom:10px; }
+          .slots-warn { color:#f59e0b; font-size:12px; }
+        </style>
+
+        <div class="plinko-grid">
+          <div class="plinko-card">
+            <h3>Reel settings</h3>
+            <div class="plinko-field">
+              <label for="slotsBaseSeconds">Base time (seconds)</label>
+              <input id="slotsBaseSeconds" type="number" min="1" max="3600" step="1" value="30" />
+              <span class="plinko-hint">Every spin adds at least <strong>1&times;</strong> this; matches multiply up.</span>
+            </div>
+            <div class="plinko-field">
+              <label>Symbols <span class="plinko-hint">(2&ndash;8 &mdash; weight = how often it lands, &times; = payout for three of it)</span></label>
+              <div class="slots-sym-head">
+                <span class="slots-sym-head-thumb"></span>
+                <span class="slots-sym-head-name">Emote</span>
+                <span class="slots-sym-head-num">Weight</span>
+                <span class="slots-sym-head-num">3-match &times;</span>
+                <span class="slots-sym-head-x"></span>
+              </div>
+              <div id="slotsSymbols"></div>
+              <button id="slotsAddSymbol" type="button" class="secondary plinko-mini">Add symbol</button>
+              <div id="slotsEmoteGrid" class="plinko-emote-grid" hidden></div>
+            </div>
+            <div class="plinko-field">
+              <label for="slotsAnyTwo">Any two match &times;</label>
+              <input id="slotsAnyTwo" type="number" min="1" max="100" step="0.25" value="1.5" />
+            </div>
+            <div class="plinko-field">
+              <label for="slotsNoMatch">No match &times;</label>
+              <input id="slotsNoMatch" type="number" min="1" max="100" step="0.25" value="1" />
+            </div>
+            <div class="plinko-field">
+              <label for="slotsTriggerSound">Auto-spin on sound alert</label>
+              <select id="slotsTriggerSound"><option value="">&mdash; none &mdash;</option></select>
+              <span id="slotsTriggerWarn" class="slots-warn" hidden>This sound already triggers Plinko.</span>
+              <span class="plinko-hint">When this sound is redeemed (Bits or Channel Points), a spin fires and its time is added on top of the sound&rsquo;s normal time. Redemptions queue while one is spinning. &mdash; Set up sounds in <a href="${base}/sounds/config">Sound Alerts</a>.</span>
+            </div>
+            <div class="plinko-field">
+              <label>Overlay style</label>
+              <div class="plinko-style-grid">
+                <label class="plinko-check"><input type="checkbox" id="slotsStylePanel" checked /> Background panel</label>
+                <label class="plinko-inline">Panel color <input type="color" id="slotsStylePanelColor" value="#0f0f12" /></label>
+                <label class="plinko-inline">Panel opacity <input type="range" id="slotsStylePanelOpacity" min="0" max="100" value="82" /></label>
+                <label class="plinko-inline">Reel color <input type="color" id="slotsStyleReelColor" value="#17171b" /></label>
+                <label class="plinko-inline">Text color <input type="color" id="slotsStyleTextColor" value="#f8fafc" /></label>
+                <label class="plinko-check"><input type="checkbox" id="slotsStyleShowStatus" checked /> Show status text</label>
+                <label class="plinko-check"><input type="checkbox" id="slotsStyleReelSound" checked /> Reel-stop sound</label>
+                <label class="plinko-inline">Reel sound volume <input type="range" id="slotsStyleReelVol" min="0" max="100" value="35" /></label>
+                <label class="plinko-check"><input type="checkbox" id="slotsStyleWinSound" checked /> Win sound</label>
+                <label class="plinko-inline">Win sound volume <input type="range" id="slotsStyleWinVol" min="0" max="100" value="50" /></label>
+              </div>
+            </div>
+            <div class="plinko-row-between">
+              <button id="slotsSaveBtn" type="button">Save reels</button>
+              <span id="slotsSaveStatus" class="plinko-hint"></span>
+            </div>
+          </div>
+
+          <div class="plinko-card">
+            <h3>Spin</h3>
+            <div class="plinko-row-between">
+              <div>
+                <button id="slotsSpinBtn" type="button">Spin</button>
+                <button id="slotsTestBtn" type="button" class="secondary">Test (no timer)</button>
+              </div>
+              <span id="slotsSpinStatus" class="plinko-hint"></span>
+            </div>
+            <div class="plinko-queue" id="slotsQueuePanel" hidden>
+              <div><strong>Now spinning:</strong> <span id="slotsQueueNow">&mdash;</span></div>
+              <div class="plinko-queue-next" id="slotsQueueNext"></div>
+            </div>
+            <div id="slotsPreview" class="slots-preview">
+              <div class="slots-prev-reel" id="slotsPrev0"></div>
+              <div class="slots-prev-reel" id="slotsPrev1"></div>
+              <div class="slots-prev-reel" id="slotsPrev2"></div>
+            </div>
+            <div id="slotsPrevStatus" class="slots-prev-status">Waiting for a spin&hellip;</div>
+            <div class="plinko-share">
+              <button id="slotsCopyBtn" type="button">Copy Browser Source link</button>
+              <span id="slotsCopyStatus" class="plinko-hint"></span>
+            </div>
+            <p class="plinko-hint">Set the Browser Source to <strong>540&nbsp;&times;&nbsp;220</strong>.</p>
+          </div>
+        </div>
+      </div>
+      </div>
+
       <div class="section-page" data-section="quick-tools">
       <div class="secondary-tools">
         <h2>Quick tools</h2>
@@ -381,7 +494,7 @@ export function renderUtilitiesPage(options = {}) {
           document.querySelectorAll('.sidebar-nav-item').forEach(function(el) {
             el.classList.toggle('active', el.getAttribute('data-section') === sectionId);
           });
-          lshFeatureOnce({ wheels: 'wheel', prompts: 'prompts', plinko: 'plinko' }[sectionId]);
+          lshFeatureOnce({ wheels: 'wheel', prompts: 'prompts', plinko: 'plinko', slots: 'slots' }[sectionId]);
         }
         document.querySelectorAll('.sidebar-nav-item').forEach(function(btn) {
           btn.addEventListener('click', function() {
@@ -1645,6 +1758,397 @@ export function renderUtilitiesPage(options = {}) {
 
           loadConfig();
           connectPlinkoStream();
+        })();
+
+        /* ---- Slot machine ---- */
+        (function () {
+          var slotsOverlayBase = ${JSON.stringify(slotsOverlayBase)};
+          var SLOTS_BOARD_ID = 'default';
+          var section = document.querySelector('.section-page[data-section="slots"]');
+          if (!section) return;
+
+          var baseInput = document.getElementById('slotsBaseSeconds');
+          var symbolsWrap = document.getElementById('slotsSymbols');
+          var addSymbolBtn = document.getElementById('slotsAddSymbol');
+          var emoteGrid = document.getElementById('slotsEmoteGrid');
+          var anyTwoInput = document.getElementById('slotsAnyTwo');
+          var noMatchInput = document.getElementById('slotsNoMatch');
+          var triggerSound = document.getElementById('slotsTriggerSound');
+          var triggerWarn = document.getElementById('slotsTriggerWarn');
+          var saveBtn = document.getElementById('slotsSaveBtn');
+          var saveStatus = document.getElementById('slotsSaveStatus');
+          var spinBtn = document.getElementById('slotsSpinBtn');
+          var testBtn = document.getElementById('slotsTestBtn');
+          var spinStatus = document.getElementById('slotsSpinStatus');
+          var queuePanel = document.getElementById('slotsQueuePanel');
+          var queueNow = document.getElementById('slotsQueueNow');
+          var queueNext = document.getElementById('slotsQueueNext');
+          var copyBtn = document.getElementById('slotsCopyBtn');
+          var copyStatus = document.getElementById('slotsCopyStatus');
+          var prevReels = [document.getElementById('slotsPrev0'), document.getElementById('slotsPrev1'), document.getElementById('slotsPrev2')];
+          var stylePanel = document.getElementById('slotsStylePanel');
+          var stylePanelColor = document.getElementById('slotsStylePanelColor');
+          var stylePanelOpacity = document.getElementById('slotsStylePanelOpacity');
+          var styleReelColor = document.getElementById('slotsStyleReelColor');
+          var styleTextColor = document.getElementById('slotsStyleTextColor');
+          var styleShowStatus = document.getElementById('slotsStyleShowStatus');
+          var styleReelSound = document.getElementById('slotsStyleReelSound');
+          var styleReelVol = document.getElementById('slotsStyleReelVol');
+          var styleWinSound = document.getElementById('slotsStyleWinSound');
+          var styleWinVol = document.getElementById('slotsStyleWinVol');
+
+          var MIN_SYMBOLS = 2, MAX_SYMBOLS = 8;
+          var STYLE_DEFAULTS = { panel: true, panelColor: '#0f0f12', panelOpacity: 0.82, reelColor: '#17171b', textColor: '#f8fafc', showStatus: true, reelSound: true, reelSoundVolume: 0.35, winSound: true, winSoundVolume: 0.5 };
+          var symbols = [];      // [{ emote:{name,url,source}, weight, tripleMultiplier }]
+          var activeSymbolIdx = -1;
+          var plinkoTriggerId = '';
+          var busy = false;
+
+          function clampNum(v, lo, hi) { return Math.min(hi, Math.max(lo, v)); }
+          function emptySymbol() { return { emote: { name: '', url: '', source: '' }, weight: 1, tripleMultiplier: 2 }; }
+
+          // Preview audio (same assets + style toggles as the OBS overlay).
+          var reelPool = [];
+          var reelIdx = 0;
+          try {
+            for (var _si = 0; _si < 3; _si++) { var _sa = new Audio('/assets/plink_sound.mp3'); _sa.preload = 'auto'; reelPool.push(_sa); }
+          } catch (e) { reelPool = []; }
+          function playReelStop() {
+            if (!styleReelSound.checked || !reelPool.length) return;
+            var a = reelPool[reelIdx];
+            reelIdx = (reelIdx + 1) % reelPool.length;
+            try { a.volume = clampNum((parseInt(styleReelVol.value, 10) || 0) / 100, 0, 1); a.currentTime = 0; var p = a.play(); if (p && p.catch) p.catch(function () {}); } catch (e) {}
+          }
+          var winAudio = null;
+          try { winAudio = new Audio('/assets/plinko_win_sound.wav'); winAudio.preload = 'auto'; } catch (e) {}
+          function playWin() {
+            if (!styleWinSound.checked || !winAudio) return;
+            try { winAudio.volume = clampNum((parseInt(styleWinVol.value, 10) || 0) / 100, 0, 1); winAudio.currentTime = 0; var p = winAudio.play(); if (p && p.catch) p.catch(function () {}); } catch (e) {}
+          }
+
+          function readStyle() {
+            return {
+              panel: stylePanel.checked,
+              panelColor: stylePanelColor.value,
+              panelOpacity: clampNum((parseInt(stylePanelOpacity.value, 10) || 0) / 100, 0, 1),
+              reelColor: styleReelColor.value,
+              textColor: styleTextColor.value,
+              showStatus: styleShowStatus.checked,
+              reelSound: styleReelSound.checked,
+              reelSoundVolume: clampNum((parseInt(styleReelVol.value, 10) || 0) / 100, 0, 1),
+              winSound: styleWinSound.checked,
+              winSoundVolume: clampNum((parseInt(styleWinVol.value, 10) || 0) / 100, 0, 1),
+            };
+          }
+
+          function renderSymbols() {
+            while (symbolsWrap.firstChild) symbolsWrap.removeChild(symbolsWrap.firstChild);
+            symbols.forEach(function (sym, i) {
+              var row = document.createElement('div');
+              row.className = 'slots-sym-row';
+
+              var thumb = document.createElement('button');
+              thumb.type = 'button';
+              thumb.className = 'slots-sym-thumb';
+              thumb.textContent = sym.emote.url ? '' : 'pick';
+              thumb.style.backgroundImage = sym.emote.url ? 'url("' + sym.emote.url + '")' : 'none';
+              thumb.addEventListener('click', function () { activeSymbolIdx = i; loadEmotes(); });
+              row.appendChild(thumb);
+
+              var name = document.createElement('span');
+              name.className = 'slots-sym-name';
+              name.textContent = sym.emote.name || (sym.emote.url ? 'custom' : 'no emote');
+              row.appendChild(name);
+
+              var w = document.createElement('input');
+              w.type = 'number'; w.min = '1'; w.max = '1000'; w.step = '1'; w.value = String(sym.weight);
+              w.title = 'weight';
+              w.addEventListener('input', function () { sym.weight = parseInt(w.value, 10) || 1; });
+              row.appendChild(w);
+
+              var t = document.createElement('input');
+              t.type = 'number'; t.min = '1'; t.max = '100'; t.step = '0.25'; t.value = String(sym.tripleMultiplier);
+              t.title = 'three-of-a-kind multiplier';
+              t.addEventListener('input', function () { sym.tripleMultiplier = parseFloat(t.value) || 1; });
+              row.appendChild(t);
+
+              var rm = document.createElement('button');
+              rm.type = 'button'; rm.className = 'secondary plinko-mini slots-sym-x'; rm.textContent = '✕';
+              rm.disabled = symbols.length <= MIN_SYMBOLS;
+              rm.addEventListener('click', function () {
+                if (symbols.length <= MIN_SYMBOLS) return;
+                symbols.splice(i, 1);
+                renderSymbols();
+                renderPreviewIdle();
+              });
+              row.appendChild(rm);
+
+              symbolsWrap.appendChild(row);
+            });
+            addSymbolBtn.disabled = symbols.length >= MAX_SYMBOLS;
+          }
+
+          function prevHexToRgba(hex, a) {
+            var h = String(hex || '#0f0f12').replace('#', '');
+            if (h.length === 3) h = h[0] + h[0] + h[1] + h[1] + h[2] + h[2];
+            var n = parseInt(h, 16);
+            if (isNaN(n)) return 'rgba(15,15,18,' + a + ')';
+            return 'rgba(' + ((n >> 16) & 255) + ',' + ((n >> 8) & 255) + ',' + (n & 255) + ',' + a + ')';
+          }
+          function applyPreviewStyle() {
+            var st = readStyle();
+            var panel = document.getElementById('slotsPreview');
+            if (panel) {
+              panel.style.background = st.panel ? prevHexToRgba(st.panelColor, st.panelOpacity) : 'transparent';
+              panel.style.boxShadow = st.panel ? '' : 'none';
+            }
+            for (var i = 0; i < 3; i++) if (prevReels[i]) prevReels[i].style.background = st.reelColor;
+            var ps = document.getElementById('slotsPrevStatus');
+            if (ps) { ps.style.color = st.textColor; ps.hidden = !st.showStatus; }
+          }
+          function renderPreviewIdle() {
+            for (var i = 0; i < 3; i++) setPrevReel(i, symbols[i] && symbols[i].emote, false);
+            applyPreviewStyle();
+          }
+          function setPrevReel(i, emote, win) {
+            var el = prevReels[i];
+            if (!el) return;
+            el.classList.toggle('win', !!win);
+            while (el.firstChild) el.removeChild(el.firstChild);
+            if (emote && emote.url) {
+              var img = document.createElement('img');
+              img.src = emote.url; img.alt = emote.name || '';
+              el.appendChild(img);
+            }
+          }
+
+          function loadEmotes() {
+            emoteGrid.hidden = false;
+            while (emoteGrid.firstChild) emoteGrid.removeChild(emoteGrid.firstChild);
+            var loading = document.createElement('span');
+            loading.className = 'plinko-hint'; loading.textContent = 'Loading…';
+            emoteGrid.appendChild(loading);
+            Promise.all([
+              fetch('/api/sounds/twitch-emotes', { credentials: 'same-origin' }).then(function (r) { return r.ok ? r.json() : { emotes: [] }; }).catch(function () { return { emotes: [] }; }),
+              fetch('/api/sounds/seventv-emotes', { credentials: 'same-origin' }).then(function (r) { return r.ok ? r.json() : { emotes: [] }; }).catch(function () { return { emotes: [] }; }),
+            ]).then(function (res) {
+              var twitch = (res[0].emotes || []).map(function (e) { return { name: e.name, url: e.url, source: 'twitch' }; });
+              var seventv = (res[1].emotes || []).map(function (e) { return { name: e.name, url: e.url, source: '7tv' }; });
+              var all = twitch.concat(seventv).filter(function (e) { return e.url; });
+              while (emoteGrid.firstChild) emoteGrid.removeChild(emoteGrid.firstChild);
+              if (!all.length) {
+                var none = document.createElement('span');
+                none.className = 'plinko-hint'; none.textContent = 'No emotes found.';
+                emoteGrid.appendChild(none);
+                return;
+              }
+              all.forEach(function (e) {
+                var img = document.createElement('img');
+                img.src = e.url; img.alt = e.name; img.title = e.name;
+                img.addEventListener('click', function () {
+                  if (activeSymbolIdx >= 0 && symbols[activeSymbolIdx]) {
+                    symbols[activeSymbolIdx].emote = { name: e.name, url: e.url, source: e.source };
+                    renderSymbols();
+                    renderPreviewIdle();
+                  }
+                  emoteGrid.hidden = true;
+                });
+                emoteGrid.appendChild(img);
+              });
+            });
+          }
+
+          function updateTriggerWarn() {
+            triggerWarn.hidden = !(triggerSound.value && triggerSound.value === plinkoTriggerId);
+          }
+
+          function populateSounds(sounds) {
+            var cur = triggerSound.value;
+            while (triggerSound.firstChild) triggerSound.removeChild(triggerSound.firstChild);
+            var none = document.createElement('option');
+            none.value = ''; none.textContent = '— none —';
+            triggerSound.appendChild(none);
+            (sounds || []).forEach(function (s) {
+              var o = document.createElement('option');
+              o.value = s.id;
+              o.textContent = s.name || s.id;
+              triggerSound.appendChild(o);
+            });
+            triggerSound.value = cur;
+          }
+
+          function applyConfig(cfg) {
+            baseInput.value = cfg.baseSeconds;
+            anyTwoInput.value = cfg.anyTwoMultiplier;
+            noMatchInput.value = cfg.noMatchMultiplier;
+            symbols = (cfg.symbols || []).map(function (s) {
+              return {
+                emote: { name: (s.emote && s.emote.name) || '', url: (s.emote && s.emote.url) || '', source: (s.emote && s.emote.source) || '' },
+                weight: s.weight || 1,
+                tripleMultiplier: s.tripleMultiplier || 2,
+              };
+            });
+            if (symbols.length < MIN_SYMBOLS) { while (symbols.length < MIN_SYMBOLS) symbols.push(emptySymbol()); }
+            renderSymbols();
+            var st = cfg.style || {};
+            stylePanel.checked = st.panel !== false;
+            stylePanelColor.value = st.panelColor || STYLE_DEFAULTS.panelColor;
+            stylePanelOpacity.value = Math.round((typeof st.panelOpacity === 'number' ? st.panelOpacity : STYLE_DEFAULTS.panelOpacity) * 100);
+            styleReelColor.value = st.reelColor || STYLE_DEFAULTS.reelColor;
+            styleTextColor.value = st.textColor || STYLE_DEFAULTS.textColor;
+            styleShowStatus.checked = st.showStatus !== false;
+            styleReelSound.checked = st.reelSound !== false;
+            styleReelVol.value = Math.round((typeof st.reelSoundVolume === 'number' ? st.reelSoundVolume : STYLE_DEFAULTS.reelSoundVolume) * 100);
+            styleWinSound.checked = st.winSound !== false;
+            styleWinVol.value = Math.round((typeof st.winSoundVolume === 'number' ? st.winSoundVolume : STYLE_DEFAULTS.winSoundVolume) * 100);
+            if ([].slice.call(triggerSound.options).some(function (o) { return o.value === (cfg.triggerSoundId || ''); })) {
+              triggerSound.value = cfg.triggerSoundId || '';
+            }
+            updateTriggerWarn();
+            renderPreviewIdle(); // after the style inputs are populated
+          }
+
+          function formPayload() {
+            return {
+              baseSeconds: parseInt(baseInput.value, 10) || 30,
+              symbols: symbols.map(function (s) { return { emote: s.emote, weight: s.weight, tripleMultiplier: s.tripleMultiplier }; }),
+              anyTwoMultiplier: parseFloat(anyTwoInput.value) || 1,
+              noMatchMultiplier: parseFloat(noMatchInput.value) || 1,
+              triggerSoundId: triggerSound.value,
+              style: readStyle(),
+            };
+          }
+
+          function loadConfig() {
+            Promise.all([
+              fetch('/api/slots/config', { credentials: 'same-origin' }).then(function (r) { return r.ok ? r.json() : null; }).catch(function () { return null; }),
+              fetch('/api/sounds', { credentials: 'same-origin' }).then(function (r) { return r.ok ? r.json() : null; }).catch(function () { return null; }),
+              fetch('/api/plinko/config', { credentials: 'same-origin' }).then(function (r) { return r.ok ? r.json() : null; }).catch(function () { return null; }),
+            ]).then(function (res) {
+              populateSounds(res[1] && res[1].sounds);
+              plinkoTriggerId = (res[2] && res[2].triggerSoundId) || '';
+              applyConfig(res[0] || { baseSeconds: 30, symbols: [emptySymbol(), emptySymbol(), emptySymbol()], anyTwoMultiplier: 1.5, noMatchMultiplier: 1, triggerSoundId: '', style: {} });
+            });
+          }
+
+          function save() {
+            saveStatus.textContent = 'Saving…';
+            fetch('/api/slots/config', {
+              method: 'POST', credentials: 'same-origin',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(formPayload()),
+            })
+              .then(function (r) { return r.ok ? r.json() : Promise.reject(); })
+              .then(function (cfg) { applyConfig(cfg); saveStatus.textContent = 'Saved'; })
+              .catch(function () { saveStatus.textContent = 'Save failed'; });
+            setTimeout(function () { saveStatus.textContent = ''; }, 2500);
+          }
+
+          function spin(opts) {
+            opts = opts || {};
+            if (busy) return;
+            busy = true;
+            spinStatus.textContent = opts.test ? 'Testing…' : 'Spinning…';
+            fetch('/api/slots/spin', {
+              method: 'POST', credentials: 'same-origin',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ boardId: SLOTS_BOARD_ID, test: !!opts.test }),
+            })
+              .then(function (r) { return r.ok ? r.json() : Promise.reject(r); })
+              .then(function () { busy = false; })
+              .catch(function () { busy = false; spinStatus.textContent = 'Spin failed'; });
+          }
+
+          function renderQueue(snap) {
+            if (!snap || (!snap.nowPlaying && !snap.waitingCount)) { queuePanel.hidden = true; return; }
+            queuePanel.hidden = false;
+            queueNow.textContent = snap.nowPlaying ? snap.nowPlaying.viewerName : '—';
+            var names = (snap.waiting || []).map(function (w) { return '@' + w.viewerName; });
+            var extra = (snap.waitingCount || 0) - names.length;
+            queueNext.textContent = names.length
+              ? 'Up next: ' + names.join(', ') + (extra > 0 ? ' +' + extra + ' more' : '') + '  (' + snap.waitingCount + ' waiting)'
+              : '';
+          }
+
+          function animatePreview(payload) {
+            if (!payload || !Array.isArray(payload.reels)) return;
+            applyPreviewStyle();
+            var syms = Array.isArray(payload.symbols) ? payload.symbols : symbols.map(function (s) { return s.emote; });
+            var reels = payload.reels;
+            var matchKind = payload.matchKind || 'none';
+            var winReels = [];
+            if (matchKind === 'triple') winReels = [0, 1, 2];
+            else if (matchKind === 'pair') {
+              if (reels[0] === reels[1]) winReels = [0, 1];
+              else if (reels[1] === reels[2]) winReels = [1, 2];
+              else if (reels[0] === reels[2]) winReels = [0, 2];
+            }
+            spinStatus.textContent = payload.test ? 'Test: ' + matchKind : matchKind + '  x' + (Math.round((Number(payload.multiplier) || 1) * 100) / 100);
+            // staggered stops derived from the payload, same as the overlay
+            var dm = Number(payload.durationMs) || 2700;
+            var lastStop = Math.max(900, dm - 260);
+            var STOP = [lastStop - 900, lastStop - 450, lastStop];
+            [0, 1, 2].forEach(function (i) {
+              var k = 0;
+              // blur: cycle symbols fast until this reel's stop time
+              var spin = setInterval(function () {
+                k = (k + 1) % syms.length;
+                setPrevReel(i, syms[k], false);
+              }, 55);
+              setTimeout(function () {
+                clearInterval(spin);
+                setPrevReel(i, syms[reels[i]], winReels.indexOf(i) !== -1);
+                playReelStop();
+                var img = prevReels[i].querySelector('img');
+                if (img) { img.style.transform = 'scale(1.22)'; setTimeout(function () { img.style.transform = 'scale(1)'; }, 150); }
+                if (i === 2 && matchKind !== 'none') playWin();
+              }, STOP[i]);
+            });
+            setTimeout(renderPreviewIdle, 4200);
+          }
+
+          function connectSlotsStream() {
+            if (!overlayShareKey) return;
+            var url = '/api/overlay/stream?key=' + encodeURIComponent(overlayShareKey) + '&boardId=' + encodeURIComponent(SLOTS_BOARD_ID);
+            var es = new EventSource(url);
+            es.addEventListener('slots_spin', function (ev) {
+              try { animatePreview(JSON.parse(ev.data)); } catch (e) {}
+            });
+            es.addEventListener('slots_queue', function (ev) {
+              try { renderQueue(JSON.parse(ev.data)); } catch (e) {}
+            });
+            es.addEventListener('error', function () { es.close(); setTimeout(connectSlotsStream, 5000); });
+          }
+
+          addSymbolBtn.addEventListener('click', function () {
+            if (symbols.length >= MAX_SYMBOLS) return;
+            symbols.push(emptySymbol());
+            renderSymbols();
+            renderPreviewIdle();
+          });
+          triggerSound.addEventListener('change', updateTriggerWarn);
+          [stylePanel, stylePanelColor, stylePanelOpacity, styleReelColor, styleTextColor, styleShowStatus, styleReelSound, styleReelVol, styleWinSound, styleWinVol]
+            .forEach(function (el) { el.addEventListener('input', renderPreviewIdle); });
+          saveBtn.addEventListener('click', save);
+          spinBtn.addEventListener('click', function () { spin({}); });
+          testBtn.addEventListener('click', function () { spin({ test: true }); });
+          copyBtn.addEventListener('click', function () {
+            if (!overlayShareKey) { copyStatus.textContent = 'Set an overlay key first.'; return; }
+            var cfg = { symbols: symbols.map(function (s) { return s.emote; }), style: readStyle(), baseSeconds: parseInt(baseInput.value, 10) || 30 };
+            var params = new URLSearchParams();
+            params.set('key', overlayShareKey);
+            params.set('boardId', SLOTS_BOARD_ID);
+            params.set('config', encodeOptions(JSON.stringify(cfg)));
+            var rel = slotsOverlayBase + '?' + params.toString();
+            var full = /^https?:/i.test(slotsOverlayBase) ? rel : window.location.origin + rel;
+            navigator.clipboard.writeText(full)
+              .then(function () { copyStatus.textContent = 'Copied!'; })
+              .catch(function () { copyStatus.textContent = 'Copy failed'; });
+            setTimeout(function () { copyStatus.textContent = ''; }, 2500);
+          });
+
+          loadConfig();
+          connectSlotsStream();
         })();
       })();
     </script>

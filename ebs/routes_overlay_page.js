@@ -4,6 +4,7 @@ import { renderGoalsConfigPage } from "./views/goalsConfigPage.js";
 import { renderGoalsOverlayPage } from "./views/goalsOverlayPage.js";
 import { renderWheelOverlayPage } from "./views/wheelOverlayPage.js";
 import { renderPlinkoOverlayPage } from "./views/plinkoOverlayPage.js";
+import { renderSlotsOverlayPage } from "./views/slotsOverlayPage.js";
 import { renderPromptOverlayPage } from "./views/promptOverlayPage.js";
 import { renderSoundAlertOverlayPage } from "./views/soundAlertOverlayPage.js";
 import { renderSoundConfigPage } from "./views/soundConfigPage.js";
@@ -60,6 +61,16 @@ export function mountOverlayPageRoutes(app, deps) {
   app.get("/overlay/plinko", (req, res) => {
     if (!requireOverlayAuth(req, res)) return;
     const html = renderPlinkoOverlayPage();
+    res.setHeader("Content-Type", "text/html; charset=utf-8");
+    res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+    res.setHeader("Pragma", "no-cache");
+    res.setHeader("Expires", "0");
+    res.send(html);
+  });
+
+  app.get("/overlay/slots", (req, res) => {
+    if (!requireOverlayAuth(req, res)) return;
+    const html = renderSlotsOverlayPage();
     res.setHeader("Content-Type", "text/html; charset=utf-8");
     res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
     res.setHeader("Pragma", "no-cache");

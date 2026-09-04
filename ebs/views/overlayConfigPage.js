@@ -353,6 +353,14 @@ export function renderOverlayConfigPage(options = {}) {
               </div>
             </div>
       </div><!-- end controls panel -->
+      ${(!delegateMode || superAdminManaging) ? `<div style="margin-top:12px; padding:10px 14px; background:var(--surface-muted); border-left:3px solid var(--accent-color); border-radius:8px; font-size:12px; color:var(--text-muted); line-height:1.5;">
+        <strong style="color:var(--text-color); font-weight:600;">More ways for viewers to interact</strong> &mdash; Plinko and the Slot Machine are chat-driven games that add time straight to this countdown.
+        <span style="display:inline-block; margin-top:4px;">
+          <a id="gamesCrosslinkPlinko" href="/utilities#plinko" style="color:var(--accent-color); font-weight:600; text-decoration:none;">Set up Plinko &rarr;</a>
+          <span style="opacity:0.4; margin:0 6px;">&middot;</span>
+          <a id="gamesCrosslinkSlots" href="/utilities#slots" style="color:var(--accent-color); font-weight:600; text-decoration:none;">Set up Slots &rarr;</a>
+        </span>
+      </div>` : ''}
       </div><!-- end controls section-page -->
 
       <div class="section-page" data-section="styles">
@@ -1714,6 +1722,11 @@ export function renderOverlayConfigPage(options = {}) {
       refresh();
       saveStyle();
       if (window.lsh) lsh.feature('timer');
+
+      [['gamesCrosslinkPlinko', 'games_crosslink_plinko'], ['gamesCrosslinkSlots', 'games_crosslink_slots']].forEach(function(pair) {
+        var a = document.getElementById(pair[0]);
+        if (a) a.addEventListener('click', function() { if (window.lsh) lsh.use('timer', pair[1]); });
+      });
 
       (function() {
         var STORAGE_KEY = 'saNudgeDismissedAt';

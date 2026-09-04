@@ -276,7 +276,7 @@ export function renderUtilitiesPage(options = {}) {
             <div class="plinko-field">
               <label for="plinkoTriggerSound">Auto-drop on sound alert</label>
               <select id="plinkoTriggerSound"><option value="">&mdash; none &mdash;</option></select>
-              <span class="plinko-hint">When this sound is redeemed (Bits or Channel Points), a token drops from a random column and its multiplier is added on top of the sound&rsquo;s normal time. Redemptions queue while one is dropping. &mdash; Set up or add sounds in <a href="${base}/sounds/config">Sound Alerts</a>.</span>
+              <span class="plinko-hint">When this sound is redeemed (Bits or Channel Points), a token drops from a random column and its multiplier is added on top of the sound&rsquo;s normal time. Great for BRB scenes &mdash; viewers keep the timer moving while you&rsquo;re away from the desk. Redemptions queue while one is dropping. &mdash; Set up or add sounds in <a href="${base}/sounds/config">Sound Alerts</a>.</span>
             </div>
             <div class="plinko-field">
               <label>Overlay style</label>
@@ -386,7 +386,7 @@ export function renderUtilitiesPage(options = {}) {
               <label for="slotsTriggerSound">Auto-spin on sound alert</label>
               <select id="slotsTriggerSound"><option value="">&mdash; none &mdash;</option></select>
               <span id="slotsTriggerWarn" class="slots-warn" hidden>This sound already triggers Plinko.</span>
-              <span class="plinko-hint">When this sound is redeemed (Bits or Channel Points), a spin fires and its time is added on top of the sound&rsquo;s normal time. Redemptions queue while one is spinning. &mdash; Set up sounds in <a href="${base}/sounds/config">Sound Alerts</a>.</span>
+              <span class="plinko-hint">When this sound is redeemed (Bits or Channel Points), a spin fires and its time is added on top of the sound&rsquo;s normal time. Great for BRB scenes &mdash; viewers keep the timer moving while you&rsquo;re away from the desk. Redemptions queue while one is spinning. &mdash; Set up sounds in <a href="${base}/sounds/config">Sound Alerts</a>.</span>
             </div>
             <div class="plinko-field">
               <label>Overlay style</label>

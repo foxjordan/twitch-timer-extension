@@ -82,7 +82,7 @@ test('sanitizeSlotsConfig clamps and coerces', () => {
     anyTwoMultiplier: 0.2,
     noMatchMultiplier: -5,
     triggerSoundId: 'z'.repeat(200),
-    style: { panelOpacity: 5, reelSoundVolume: -1, panelColor: 'nope' },
+    style: { panelOpacity: 5, reelSoundVolume: -1, panelColor: 'nope', loseSoundVolume: -1, bgSoundVolume: 5 },
   });
   assert.equal(out.baseSeconds, 3600);
   assert.equal(out.symbols.length, MIN_SYMBOLS); // padded up to 2
@@ -93,6 +93,24 @@ test('sanitizeSlotsConfig clamps and coerces', () => {
   assert.equal(out.style.panelOpacity, 1);
   assert.equal(out.style.reelSoundVolume, 0);
   assert.equal(out.style.panelColor, DEFAULT_SLOTS_CONFIG.style.panelColor);
+  assert.equal(out.style.loseSoundVolume, 0);
+  assert.equal(out.style.bgSoundVolume, 1);
+});
+
+test('sanitizeSlotsConfig defaults and toggles the lose/background sounds independently', () => {
+  const withToggles = sanitizeSlotsConfig({
+    style: { loseSound: false, bgSound: false, bgSoundVolume: 0.6 },
+  });
+  assert.equal(withToggles.style.loseSound, false);
+  assert.equal(withToggles.style.winSound, true); // untouched fields keep the base
+  assert.equal(withToggles.style.bgSound, false);
+  assert.equal(withToggles.style.bgSoundVolume, 0.6);
+
+  const defaults = sanitizeSlotsConfig({});
+  assert.equal(defaults.style.loseSound, true);
+  assert.equal(defaults.style.loseSoundVolume, 0.5);
+  assert.equal(defaults.style.bgSound, true);
+  assert.equal(defaults.style.bgSoundVolume, 0.25);
 });
 
 test('sanitizeSlotsConfig rejects a non-allowlisted emote host', () => {

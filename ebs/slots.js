@@ -65,6 +65,10 @@ export const DEFAULT_SLOTS_CONFIG = {
     reelSoundVolume: 0.35,
     winSound: true,
     winSoundVolume: 0.5,
+    loseSound: true,
+    loseSoundVolume: 0.5,
+    bgSound: true,
+    bgSoundVolume: 0.25,
   },
 };
 
@@ -120,6 +124,10 @@ function sanitizeStyle(raw, baseStyle) {
     reelSoundVolume: vol('reelSoundVolume'),
     winSound: bool(raw.winSound, base.winSound),
     winSoundVolume: vol('winSoundVolume'),
+    loseSound: bool(raw.loseSound, base.loseSound),
+    loseSoundVolume: vol('loseSoundVolume'),
+    bgSound: bool(raw.bgSound, base.bgSound),
+    bgSoundVolume: vol('bgSoundVolume'),
   };
 }
 

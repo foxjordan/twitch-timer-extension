@@ -22,6 +22,10 @@ export function renderSlotsOverlayPage() {
       reelSoundVolume: 0.35,
       winSound: true,
       winSoundVolume: 0.5,
+      loseSound: true,
+      loseSoundVolume: 0.5,
+      bgSound: true,
+      bgSoundVolume: 0.25,
     },
   };
 
@@ -94,7 +98,7 @@ export function renderSlotsOverlayPage() {
         var reelPool = [];
         var reelIdx = 0;
         try {
-          for (var i = 0; i < 3; i++) { var a = new Audio('/assets/plink_sound.mp3'); a.preload = 'auto'; reelPool.push(a); }
+          for (var i = 0; i < 3; i++) { var a = new Audio('/assets/slot_land_sound.wav'); a.preload = 'auto'; reelPool.push(a); }
         } catch (e) { reelPool = []; }
         function playReelStop() {
           var s = style();
@@ -104,11 +108,31 @@ export function renderSlotsOverlayPage() {
           try { el.volume = clamp(s.reelSoundVolume, 0, 1); el.currentTime = 0; var p = el.play(); if (p && p.catch) p.catch(function () {}); } catch (e) {}
         }
         var winAudio = null;
-        try { winAudio = new Audio('/assets/plinko_win_sound.wav'); winAudio.preload = 'auto'; } catch (e) {}
+        try { winAudio = new Audio('/assets/slot_win_sound.wav'); winAudio.preload = 'auto'; } catch (e) {}
         function playWin() {
           var s = style();
           if (!s.winSound || !winAudio) return;
           try { winAudio.volume = clamp(s.winSoundVolume, 0, 1); winAudio.currentTime = 0; var p = winAudio.play(); if (p && p.catch) p.catch(function () {}); } catch (e) {}
+        }
+        var loseAudio = null;
+        try { loseAudio = new Audio('/assets/game_lost.wav'); loseAudio.preload = 'auto'; } catch (e) {}
+        function playLose() {
+          var s = style();
+          if (!s.loseSound || !loseAudio) return;
+          try { loseAudio.volume = clamp(s.loseSoundVolume, 0, 1); loseAudio.currentTime = 0; var p = loseAudio.play(); if (p && p.catch) p.catch(function () {}); } catch (e) {}
+        }
+        // Loops for the duration of a spin, from the first reel motion to the
+        // moment the result is revealed (see handleSpin/finishSpin below).
+        var bgAudio = null;
+        try { bgAudio = new Audio('/assets/slots_background_sound.mp3'); bgAudio.preload = 'auto'; bgAudio.loop = true; } catch (e) {}
+        function playBg() {
+          var s = style();
+          if (!s.bgSound || !bgAudio) return;
+          try { bgAudio.volume = clamp(s.bgSoundVolume, 0, 1); bgAudio.currentTime = 0; var p = bgAudio.play(); if (p && p.catch) p.catch(function () {}); } catch (e) {}
+        }
+        function stopBg() {
+          if (!bgAudio) return;
+          try { bgAudio.pause(); bgAudio.currentTime = 0; } catch (e) {}
         }
 
         function style() {
@@ -125,6 +149,10 @@ export function renderSlotsOverlayPage() {
             reelSoundVolume: typeof s.reelSoundVolume === 'number' ? s.reelSoundVolume : d.reelSoundVolume,
             winSound: typeof s.winSound === 'boolean' ? s.winSound : d.winSound,
             winSoundVolume: typeof s.winSoundVolume === 'number' ? s.winSoundVolume : d.winSoundVolume,
+            loseSound: typeof s.loseSound === 'boolean' ? s.loseSound : d.loseSound,
+            loseSoundVolume: typeof s.loseSoundVolume === 'number' ? s.loseSoundVolume : d.loseSoundVolume,
+            bgSound: typeof s.bgSound === 'boolean' ? s.bgSound : d.bgSound,
+            bgSoundVolume: typeof s.bgSoundVolume === 'number' ? s.bgSoundVolume : d.bgSoundVolume,
           };
         }
         function symbols() {
@@ -200,6 +228,7 @@ export function renderSlotsOverlayPage() {
           var S = syms.length;
           var reels = Array.isArray(p.reels) && p.reels.length === 3 ? p.reels : [0, 0, 0];
           animating = true;
+          playBg();
           if (style().showStatus) statusEl.textContent = p.test ? 'Test spin…' : 'Spinning…';
           for (var r = 0; r < 3; r++) reelEls[r].classList.remove('win');
 
@@ -276,6 +305,7 @@ export function renderSlotsOverlayPage() {
 
         function finishSpin(p) {
           animating = false;
+          stopBg();
           var matchKind = p.matchKind || 'none';
           var reels = Array.isArray(p.reels) ? p.reels : [];
           var winReels = [];
@@ -287,7 +317,7 @@ export function renderSlotsOverlayPage() {
           }
           for (var i = 0; i < winReels.length; i++) reelEls[winReels[i]].classList.add('win');
 
-          if (matchKind !== 'none') playWin();
+          if (matchKind !== 'none') playWin(); else playLose();
 
           var mult = Number(p.multiplier) || 1;
           if (p.test) {

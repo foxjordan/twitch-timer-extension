@@ -401,6 +401,10 @@ export function renderUtilitiesPage(options = {}) {
                 <label class="plinko-inline">Reel sound volume <input type="range" id="slotsStyleReelVol" min="0" max="100" value="35" /></label>
                 <label class="plinko-check"><input type="checkbox" id="slotsStyleWinSound" checked /> Win sound</label>
                 <label class="plinko-inline">Win sound volume <input type="range" id="slotsStyleWinVol" min="0" max="100" value="50" /></label>
+                <label class="plinko-check"><input type="checkbox" id="slotsStyleLoseSound" checked /> No-match sound</label>
+                <label class="plinko-inline">No-match sound volume <input type="range" id="slotsStyleLoseVol" min="0" max="100" value="50" /></label>
+                <label class="plinko-check"><input type="checkbox" id="slotsStyleBgSound" checked /> Spinning background sound</label>
+                <label class="plinko-inline">Background sound volume <input type="range" id="slotsStyleBgVol" min="0" max="100" value="25" /></label>
               </div>
             </div>
             <div class="plinko-row-between">
@@ -1796,9 +1800,13 @@ export function renderUtilitiesPage(options = {}) {
           var styleReelVol = document.getElementById('slotsStyleReelVol');
           var styleWinSound = document.getElementById('slotsStyleWinSound');
           var styleWinVol = document.getElementById('slotsStyleWinVol');
+          var styleLoseSound = document.getElementById('slotsStyleLoseSound');
+          var styleLoseVol = document.getElementById('slotsStyleLoseVol');
+          var styleBgSound = document.getElementById('slotsStyleBgSound');
+          var styleBgVol = document.getElementById('slotsStyleBgVol');
 
           var MIN_SYMBOLS = 2, MAX_SYMBOLS = 8;
-          var STYLE_DEFAULTS = { panel: true, panelColor: '#0f0f12', panelOpacity: 0.82, reelColor: '#17171b', textColor: '#f8fafc', showStatus: true, reelSound: true, reelSoundVolume: 0.35, winSound: true, winSoundVolume: 0.5 };
+          var STYLE_DEFAULTS = { panel: true, panelColor: '#0f0f12', panelOpacity: 0.82, reelColor: '#17171b', textColor: '#f8fafc', showStatus: true, reelSound: true, reelSoundVolume: 0.35, winSound: true, winSoundVolume: 0.5, loseSound: true, loseSoundVolume: 0.5, bgSound: true, bgSoundVolume: 0.25 };
           var symbols = [];      // [{ emote:{name,url,source}, weight, tripleMultiplier }]
           var activeSymbolIdx = -1;
           var plinkoTriggerId = '';
@@ -1811,7 +1819,7 @@ export function renderUtilitiesPage(options = {}) {
           var reelPool = [];
           var reelIdx = 0;
           try {
-            for (var _si = 0; _si < 3; _si++) { var _sa = new Audio('/assets/plink_sound.mp3'); _sa.preload = 'auto'; reelPool.push(_sa); }
+            for (var _si = 0; _si < 3; _si++) { var _sa = new Audio('/assets/slot_land_sound.wav'); _sa.preload = 'auto'; reelPool.push(_sa); }
           } catch (e) { reelPool = []; }
           function playReelStop() {
             if (!styleReelSound.checked || !reelPool.length) return;
@@ -1820,10 +1828,26 @@ export function renderUtilitiesPage(options = {}) {
             try { a.volume = clampNum((parseInt(styleReelVol.value, 10) || 0) / 100, 0, 1); a.currentTime = 0; var p = a.play(); if (p && p.catch) p.catch(function () {}); } catch (e) {}
           }
           var winAudio = null;
-          try { winAudio = new Audio('/assets/plinko_win_sound.wav'); winAudio.preload = 'auto'; } catch (e) {}
+          try { winAudio = new Audio('/assets/slot_win_sound.wav'); winAudio.preload = 'auto'; } catch (e) {}
           function playWin() {
             if (!styleWinSound.checked || !winAudio) return;
             try { winAudio.volume = clampNum((parseInt(styleWinVol.value, 10) || 0) / 100, 0, 1); winAudio.currentTime = 0; var p = winAudio.play(); if (p && p.catch) p.catch(function () {}); } catch (e) {}
+          }
+          var loseAudio = null;
+          try { loseAudio = new Audio('/assets/game_lost.wav'); loseAudio.preload = 'auto'; } catch (e) {}
+          function playLose() {
+            if (!styleLoseSound.checked || !loseAudio) return;
+            try { loseAudio.volume = clampNum((parseInt(styleLoseVol.value, 10) || 0) / 100, 0, 1); loseAudio.currentTime = 0; var p = loseAudio.play(); if (p && p.catch) p.catch(function () {}); } catch (e) {}
+          }
+          var bgAudio = null;
+          try { bgAudio = new Audio('/assets/slots_background_sound.mp3'); bgAudio.preload = 'auto'; bgAudio.loop = true; } catch (e) {}
+          function playBg() {
+            if (!styleBgSound.checked || !bgAudio) return;
+            try { bgAudio.volume = clampNum((parseInt(styleBgVol.value, 10) || 0) / 100, 0, 1); bgAudio.currentTime = 0; var p = bgAudio.play(); if (p && p.catch) p.catch(function () {}); } catch (e) {}
+          }
+          function stopBg() {
+            if (!bgAudio) return;
+            try { bgAudio.pause(); bgAudio.currentTime = 0; } catch (e) {}
           }
 
           function readStyle() {
@@ -1838,6 +1862,10 @@ export function renderUtilitiesPage(options = {}) {
               reelSoundVolume: clampNum((parseInt(styleReelVol.value, 10) || 0) / 100, 0, 1),
               winSound: styleWinSound.checked,
               winSoundVolume: clampNum((parseInt(styleWinVol.value, 10) || 0) / 100, 0, 1),
+              loseSound: styleLoseSound.checked,
+              loseSoundVolume: clampNum((parseInt(styleLoseVol.value, 10) || 0) / 100, 0, 1),
+              bgSound: styleBgSound.checked,
+              bgSoundVolume: clampNum((parseInt(styleBgVol.value, 10) || 0) / 100, 0, 1),
             };
           }
 
@@ -2001,6 +2029,10 @@ export function renderUtilitiesPage(options = {}) {
             styleReelVol.value = Math.round((typeof st.reelSoundVolume === 'number' ? st.reelSoundVolume : STYLE_DEFAULTS.reelSoundVolume) * 100);
             styleWinSound.checked = st.winSound !== false;
             styleWinVol.value = Math.round((typeof st.winSoundVolume === 'number' ? st.winSoundVolume : STYLE_DEFAULTS.winSoundVolume) * 100);
+            styleLoseSound.checked = st.loseSound !== false;
+            styleLoseVol.value = Math.round((typeof st.loseSoundVolume === 'number' ? st.loseSoundVolume : STYLE_DEFAULTS.loseSoundVolume) * 100);
+            styleBgSound.checked = st.bgSound !== false;
+            styleBgVol.value = Math.round((typeof st.bgSoundVolume === 'number' ? st.bgSoundVolume : STYLE_DEFAULTS.bgSoundVolume) * 100);
             if ([].slice.call(triggerSound.options).some(function (o) { return o.value === (cfg.triggerSoundId || ''); })) {
               triggerSound.value = cfg.triggerSoundId || '';
             }
@@ -2073,6 +2105,7 @@ export function renderUtilitiesPage(options = {}) {
           function animatePreview(payload) {
             if (!payload || !Array.isArray(payload.reels)) return;
             applyPreviewStyle();
+            playBg();
             var syms = Array.isArray(payload.symbols) ? payload.symbols : symbols.map(function (s) { return s.emote; });
             var reels = payload.reels;
             var matchKind = payload.matchKind || 'none';
@@ -2101,7 +2134,7 @@ export function renderUtilitiesPage(options = {}) {
                 playReelStop();
                 var img = prevReels[i].querySelector('img');
                 if (img) { img.style.transform = 'scale(1.22)'; setTimeout(function () { img.style.transform = 'scale(1)'; }, 150); }
-                if (i === 2 && matchKind !== 'none') playWin();
+                if (i === 2) { stopBg(); if (matchKind !== 'none') playWin(); else playLose(); }
               }, STOP[i]);
             });
             setTimeout(renderPreviewIdle, 4200);
@@ -2127,7 +2160,7 @@ export function renderUtilitiesPage(options = {}) {
             renderPreviewIdle();
           });
           triggerSound.addEventListener('change', updateTriggerWarn);
-          [stylePanel, stylePanelColor, stylePanelOpacity, styleReelColor, styleTextColor, styleShowStatus, styleReelSound, styleReelVol, styleWinSound, styleWinVol]
+          [stylePanel, stylePanelColor, stylePanelOpacity, styleReelColor, styleTextColor, styleShowStatus, styleReelSound, styleReelVol, styleWinSound, styleWinVol, styleLoseSound, styleLoseVol, styleBgSound, styleBgVol]
             .forEach(function (el) { el.addEventListener('input', renderPreviewIdle); });
           saveBtn.addEventListener('click', save);
           spinBtn.addEventListener('click', function () { spin({}); });

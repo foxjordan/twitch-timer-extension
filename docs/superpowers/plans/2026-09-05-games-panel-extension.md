@@ -1686,7 +1686,7 @@ Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>"
 - Consumes: `GamesControls` (Task 10); extends the existing `extConfig.features` state (already fetched at `ComponentApp.jsx:452-459`) to read `.plinko`/`.slots`; extends the existing `pendingRef.current.type` switch inside the existing `onTransactionComplete` handler (`ComponentApp.jsx:468` onward) with `"plinko"`/`"slots"` cases.
 - Produces: viewers see a third "Games" tab in the video-overlay Component when `hasGames` is true.
 
-- [ ] **Step 1: Import the component**
+- [x] **Step 1: Import the component**
 
 Near the top of `ComponentApp.jsx`, add:
 
@@ -1694,7 +1694,7 @@ Near the top of `ComponentApp.jsx`, add:
 import { GamesControls } from "./GamesControls.jsx";
 ```
 
-- [ ] **Step 2: Add state for the games transaction hand-off**
+- [x] **Step 2: Add state for the games transaction hand-off**
 
 Near the existing TTS state block (around `ComponentApp.jsx:368-382`), add:
 
@@ -1707,7 +1707,7 @@ Near the existing TTS state block (around `ComponentApp.jsx:368-382`), add:
   const [gamesPendingTx, setGamesPendingTx] = useState(null);
 ```
 
-- [ ] **Step 3: Extend the pendingRef comment and the click-to-transaction path**
+- [x] **Step 3: Extend the pendingRef comment and the click-to-transaction path**
 
 Find the `pendingRef` declaration (around line 360):
 
@@ -1734,7 +1734,7 @@ Add a new function near `handleTtsPay` (around line 609) that `GamesControls` ca
   }
 ```
 
-- [ ] **Step 4: Extend the existing `onTransactionComplete` handler**
+- [x] **Step 4: Extend the existing `onTransactionComplete` handler**
 
 Find (`ComponentApp.jsx:468-531`):
 
@@ -1881,7 +1881,7 @@ Replace the `if (pending.type === "tts") { ... } else { ... }` shape with `if / 
     });
 ```
 
-- [ ] **Step 5: Extend `onTransactionCancelled`**
+- [x] **Step 5: Extend `onTransactionCancelled`**
 
 Find (`ComponentApp.jsx:533-535`):
 
@@ -1900,7 +1900,7 @@ Replace with:
     });
 ```
 
-- [ ] **Step 6: Extend the tab-bar gating**
+- [x] **Step 6: Extend the tab-bar gating**
 
 Find (`ComponentApp.jsx:758-762`):
 
@@ -2039,7 +2039,7 @@ Replace with:
         )}
 ```
 
-- [ ] **Step 7: Render the Games panel**
+- [x] **Step 7: Render the Games panel**
 
 Find the end of the TTS tab block (`ComponentApp.jsx:1160-1164`):
 
@@ -2080,7 +2080,7 @@ Find the end of the TTS tab block (`ComponentApp.jsx:1160-1164`):
 
 (`auth` and `bitsEnabled` already exist as state in this file. The wrapping `<div>` matches the TTS block's own flex-column wrapper immediately above, so the Games tab fits the same fixed-height layout this surface uses instead of the Panel's freer scrolling layout.)
 
-- [ ] **Step 8: Verify manually**
+- [x] **Step 8: Verify manually**
 
 `cd extension && npm run dev`, open `preview-component.html` (this repo's existing local-preview page per `vite.config.js`), and — with a test broadcaster who has `globalGamesConfig.launched: true`, `getGamesSettings(uid).granted: true` (or Pro), and both `visibility.plinko`/`visibility.slots` true — confirm:
 1. A "Games" tab appears alongside Sounds/TTS (or alone, with no tab bar, if Sounds/TTS are both off for that test channel).
@@ -2089,7 +2089,7 @@ Find the end of the TTS tab block (`ComponentApp.jsx:1160-1164`):
 4. After confirming, the "Queued — ~N ahead of you" banner appears and counts down, then a token actually drops on the OBS overlay if you have it open with the same key.
 5. Toggle `visibility.plinko`/`visibility.slots` off via the settings route from Task 4 and confirm the tab disappears on reload.
 
-- [ ] **Step 9: Commit**
+- [x] **Step 9: Commit**
 
 ```bash
 cd extension && git add src/ComponentApp.jsx

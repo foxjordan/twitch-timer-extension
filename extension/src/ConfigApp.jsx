@@ -64,6 +64,12 @@ function getTtsTiers(minTier) {
   return VALID_TIERS.slice(startIdx).map((sku) => ({ sku, label: TIER_LABELS[sku] }));
 }
 
+function getGamesTiers(minTier) {
+  const minIdx = VALID_TIERS.indexOf(minTier || "sound_100");
+  const startIdx = minIdx >= 0 ? minIdx : 0;
+  return VALID_TIERS.slice(startIdx).map((sku) => ({ sku, label: TIER_LABELS[sku] }));
+}
+
 function ConfigApp() {
   const [auth, setAuth] = useState(null);
   const [sounds, setSounds] = useState([]);
@@ -97,6 +103,10 @@ function ConfigApp() {
   const [ttsProActive, setTtsProActive] = useState(false);
   const [ttsMinTier, setTtsMinTier] = useState("sound_300");
   const [ttsBannedWordsText, setTtsBannedWordsText] = useState("");
+  const [gamesSettings, setGamesSettingsState] = useState(null);
+  const [gamesAccessible, setGamesAccessible] = useState(false);
+  const [gamesLaunched, setGamesLaunched] = useState(false);
+  const [gamesGlobalMinTier, setGamesGlobalMinTier] = useState("sound_100");
   const [previewingVoice, setPreviewingVoice] = useState(null);
   const [extConfig, setExtConfig] = useState({ features: { tts: true, videoClips: true, communityLibrary: true } });
   const [initialLoadFailed, setInitialLoadFailed] = useState(false);
@@ -219,6 +229,19 @@ function ConfigApp() {
           if (data.voices) setTtsVoices(data.voices);
           if (typeof data.proActive === "boolean") setTtsProActive(data.proActive);
           if (data.minTier) setTtsMinTier(data.minTier);
+        })
+        .catch(() => {});
+
+      // Fetch Games settings
+      fetch(`${EBS_BASE}/api/games/settings`, {
+        headers: { Authorization: `Bearer ${authData.token}` },
+      })
+        .then((r) => r.json())
+        .then((data) => {
+          if (data.settings) setGamesSettingsState(data.settings);
+          if (typeof data.accessible === "boolean") setGamesAccessible(data.accessible);
+          if (typeof data.launched === "boolean") setGamesLaunched(data.launched);
+          if (data.globalMinTier) setGamesGlobalMinTier(data.globalMinTier);
         })
         .catch(() => {});
     });
@@ -500,6 +523,27 @@ function ConfigApp() {
       setTtsSettings(data.settings);
       logEvent("tts_settings_updated", patch);
       flash("TTS settings saved");
+    } catch (e) {
+      setError(e.message);
+    }
+  }
+
+  async function handleGamesSettingsUpdate(patch) {
+    setError(null);
+    try {
+      const res = await fetch(`${EBS_BASE}/api/games/settings`, {
+        method: "POST",
+        headers: { ...headers(), "Content-Type": "application/json" },
+        body: JSON.stringify(patch),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error || "Games settings update failed");
+      }
+      const data = await res.json();
+      setGamesSettingsState(data.settings);
+      logEvent("games_settings_updated", patch);
+      flash("Games settings saved");
     } catch (e) {
       setError(e.message);
     }
@@ -1264,6 +1308,92 @@ function ConfigApp() {
           </div>
         </div>
       )}
+
+      {gamesSettings && (
+        <div style={styles.card}>
+          <h3 style={styles.subHeading}>Games</h3>
+          {!gamesAccessible && (
+            <div style={{ fontSize: 11, opacity: 0.5, marginBottom: 8 }}>
+              Games require a Pro plan or admin grant.
+            </div>
+          )}
+          {gamesAccessible && !gamesLaunched && (
+            <div style={{ fontSize: 11, opacity: 0.5, marginBottom: 8 }}>
+              Games aren't visible to viewers yet — coming soon.
+            </div>
+          )}
+          <div style={styles.ttsGrid}>
+            <div>
+              <label style={styles.row}>
+                <span>Show Games to viewers</span>
+                <input
+                  type="checkbox"
+                  checked={gamesSettings.visibility.enabled}
+                  disabled={!gamesAccessible}
+                  onChange={(e) =>
+                    handleGamesSettingsUpdate({ visibility: { ...gamesSettings.visibility, enabled: e.target.checked } })
+                  }
+                />
+              </label>
+              <label style={styles.row}>
+                <span>Plinko</span>
+                <input
+                  type="checkbox"
+                  checked={gamesSettings.visibility.plinko}
+                  disabled={!gamesAccessible}
+                  onChange={(e) =>
+                    handleGamesSettingsUpdate({ visibility: { ...gamesSettings.visibility, plinko: e.target.checked } })
+                  }
+                />
+              </label>
+              <label style={styles.row}>
+                <span>Plinko minimum Bits</span>
+                <select
+                  value={gamesSettings.pricing.plinkoMinTier}
+                  disabled={!gamesAccessible}
+                  onChange={(e) =>
+                    handleGamesSettingsUpdate({ pricing: { ...gamesSettings.pricing, plinkoMinTier: e.target.value } })
+                  }
+                  style={styles.select}
+                >
+                  {getGamesTiers(gamesGlobalMinTier).map((t) => (
+                    <option key={t.sku} value={t.sku}>{t.label}</option>
+                  ))}
+                </select>
+              </label>
+            </div>
+            <div>
+              <label style={styles.row}>
+                <span>Slots</span>
+                <input
+                  type="checkbox"
+                  checked={gamesSettings.visibility.slots}
+                  disabled={!gamesAccessible}
+                  onChange={(e) =>
+                    handleGamesSettingsUpdate({ visibility: { ...gamesSettings.visibility, slots: e.target.checked } })
+                  }
+                />
+              </label>
+              <label style={styles.row}>
+                <span>Slots minimum Bits</span>
+                <select
+                  value={gamesSettings.pricing.slotsMinTier}
+                  disabled={!gamesAccessible}
+                  onChange={(e) =>
+                    handleGamesSettingsUpdate({ pricing: { ...gamesSettings.pricing, slotsMinTier: e.target.value } })
+                  }
+                  style={styles.select}
+                >
+                  {getGamesTiers(gamesGlobalMinTier).map((t) => (
+                    <option key={t.sku} value={t.sku}>{t.label}</option>
+                  ))}
+                </select>
+              </label>
+            </div>
+          </div>
+        </div>
+      )}
+
       <BrandedFooter style={{ marginTop: 16, paddingBottom: 8 }} />
     </div>
   );

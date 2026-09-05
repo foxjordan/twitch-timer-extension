@@ -491,7 +491,7 @@ Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>"
 - Consumes: `getGamesSettings`, `getGlobalGamesConfig` from `./games_store.js` (Task 1); `isPro` from `./subscription_store.js` (already imported in this file at line 2).
 - Produces: `GET /api/ext/config`'s JSON response gains `features.plinko` and `features.slots` booleans, used by Task 11/12's `hasGames` check.
 
-- [ ] **Step 1: Add the import**
+- [x] **Step 1: Add the import**
 
 At the top of `ebs/routes_sounds.js`, near the existing `import { isPro } from "./subscription_store.js";` (line 2), add:
 
@@ -499,7 +499,7 @@ At the top of `ebs/routes_sounds.js`, near the existing `import { isPro } from "
 import { getGamesSettings, getGlobalGamesConfig } from "./games_store.js";
 ```
 
-- [ ] **Step 2: Extend the route**
+- [x] **Step 2: Extend the route**
 
 Replace the existing handler:
 
@@ -546,7 +546,7 @@ with:
   });
 ```
 
-- [ ] **Step 3: Wire `loadGamesSettings()` into server boot**
+- [x] **Step 3: Wire `loadGamesSettings()` into server boot**
 
 In `ebs/server.js`, find the existing boot sequence that calls `loadPlinkoConfig()` / `loadSlotsConfig()` (search for `loadPlinkoConfig().catch`). Add, on its own line right after those:
 
@@ -560,7 +560,7 @@ Add the import at the top of `server.js` next to the other games-related imports
 import { loadGamesSettings } from "./games_store.js";
 ```
 
-- [ ] **Step 4: Verify manually**
+- [x] **Step 4: Verify manually**
 
 Run: `cd ebs && npm run dev` (or however the dev server is normally started — check `package.json`'s `dev` script), then in another terminal:
 
@@ -570,7 +570,7 @@ curl -s "http://localhost:8080/api/ext/config?channelId=12345" | node -e "proces
 
 Expected: JSON response includes `"plinko": false` and `"slots": false` (since `globalGamesConfig.launched` defaults to `false` — no broadcaster can be `gamesAccessible` yet). This is correct: the kill switch is off by default, exactly as designed.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add ebs/routes_sounds.js ebs/server.js

@@ -39,7 +39,7 @@
   - `function setGlobalGamesConfig(patch)` → the updated global config (cloned).
   - `function persistGlobalGamesConfig()` → `Promise<void>`.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Create `ebs/games_store.test.js`:
 
@@ -149,12 +149,12 @@ test('setGlobalGamesConfig ignores an unknown tier string', () => {
 });
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `cd ebs && node --test games_store.test.js`
 Expected: FAIL — `Cannot find module './games_store.js'`
 
-- [ ] **Step 3: Write the implementation**
+- [x] **Step 3: Write the implementation**
 
 Create `ebs/games_store.js`:
 
@@ -296,12 +296,12 @@ export function setGlobalGamesConfig(patch = {}) {
 }
 ```
 
-- [ ] **Step 4: Run tests to verify they pass**
+- [x] **Step 4: Run tests to verify they pass**
 
 Run: `cd ebs && node --test games_store.test.js`
 Expected: PASS (11 tests)
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 cd ebs && git add games_store.js games_store.test.js

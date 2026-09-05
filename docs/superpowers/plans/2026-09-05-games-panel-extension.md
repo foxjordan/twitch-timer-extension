@@ -715,7 +715,7 @@ Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>"
 - Consumes: `getGlobalGamesConfig`, `setGlobalGamesConfig` from `./games_store.js`.
 - Produces: `GET /api/admin/games-config`, `POST /api/admin/games-config` — this is the only way `globalGamesConfig.launched` ever flips to `true`.
 
-- [ ] **Step 1: Add the import**
+- [x] **Step 1: Add the import**
 
 At the top of `ebs/routes_admin.js`, next to `import { getTtsSettings, setTtsSettings, getGlobalTtsConfig, setGlobalTtsConfig } from "./tts_store.js";` (line 8), add:
 
@@ -723,7 +723,7 @@ At the top of `ebs/routes_admin.js`, next to `import { getTtsSettings, setTtsSet
 import { getGlobalGamesConfig, setGlobalGamesConfig } from "./games_store.js";
 ```
 
-- [ ] **Step 2: Add the routes**
+- [x] **Step 2: Add the routes**
 
 Inside `mountAdminRoutes(app, ctx)`, next to the existing `GET /api/admin/tts-config` / `POST /api/admin/tts-config` routes (around line 415-432), add:
 
@@ -750,7 +750,7 @@ Inside `mountAdminRoutes(app, ctx)`, next to the existing `GET /api/admin/tts-co
 
 (`VALID_TIERS`, `TIER_LABELS`, `TIER_COSTS`, and `isSuperAdmin` are already imported/defined in this file — see line 16 and line 28.)
 
-- [ ] **Step 3: Verify manually**
+- [x] **Step 3: Verify manually**
 
 As a super-admin session in the browser console on the EBS dashboard:
 
@@ -764,7 +764,7 @@ fetch('/api/admin/games-config', {method:'POST', credentials:'include', headers:
 
 Then re-check `GET /api/ext/config?channelId=<a Pro or granted test broadcaster>` from Task 3 — `features.plinko`/`features.slots` should now be `true` for that broadcaster (given `isPro()` currently always returns `true` per the existing TODO in `subscription_store.js`, every broadcaster now qualifies).
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 cd ebs && git add routes_admin.js

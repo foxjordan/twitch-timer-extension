@@ -1,6 +1,7 @@
 import { logger } from "./logger.js";
 import { isPro } from "./subscription_store.js";
 import { isSuperAdmin } from "./routes_admin.js";
+import { getGamesSettings, getGlobalGamesConfig } from "./games_store.js";
 import jwt from "jsonwebtoken";
 import { createHmac, timingSafeEqual } from "crypto";
 import multer from "multer";
@@ -1258,11 +1259,16 @@ export function mountSoundRoutes(app, deps = {}) {
     if (!channelId) return res.status(400).json({ error: "channelId required" });
     const uid = String(channelId);
     const soundSettings = getSoundSettings(uid);
+    const gs = getGamesSettings(uid);
+    const globalGames = getGlobalGamesConfig();
+    const gamesAccessible = globalGames.launched && (isPro(uid) || gs.granted);
     res.json({
       features: {
         tts: true,           // toggled per-channel via TTS settings — placeholder for now
         videoClips: Boolean(soundSettings?.videoClipsEnabled),
         communityLibrary: true,
+        plinko: gamesAccessible && gs.visibility.enabled && gs.visibility.plinko,
+        slots: gamesAccessible && gs.visibility.enabled && gs.visibility.slots,
       },
       banner: getBannerConfig(),
     });

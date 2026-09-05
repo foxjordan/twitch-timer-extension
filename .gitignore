@@ -15,6 +15,7 @@ ebs/overlay-styles.json
 ebs/overlay-sound-alerts.json
 ebs/overlay-plinko.json
 ebs/overlay-slots.json
+ebs/overlay-games-settings.json
 ebs/banner-config.json
 
 # Catch-all for any encrypted tokens or session data

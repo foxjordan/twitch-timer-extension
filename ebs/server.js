@@ -952,6 +952,18 @@ app.get("/api/games/settings", (req, res) => {
 app.post("/api/games/settings", (req, res) => {
   const uid = requireGamesBroadcaster(req, res);
   if (!uid) return;
+  // Gate the whole update on prior accessibility (Pro or an existing admin
+  // grant) — mirrors isTtsAccessible's role in POST /api/tts/settings
+  // (routes_tts.js). setGamesSettings accepts `granted` in its patch (an
+  // admin-grant field), and this endpoint is reachable with nothing more
+  // than the broadcaster's own extension JWT; without this gate a
+  // never-granted, non-Pro broadcaster could POST { granted: true } and
+  // bootstrap their own paywall bypass. A user who already qualifies here
+  // can still patch `granted` on themselves, but that's inert — it grants
+  // nothing they don't already have.
+  if (!(isPro(uid) || getGamesSettings(uid).granted)) {
+    return res.status(403).json({ error: "Games requires a Pro plan or admin grant" });
+  }
   const updated = setGamesSettings(uid, req.body || {});
   logger.info("games_settings_updated", { userId: uid });
   res.json({ settings: updated });

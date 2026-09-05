@@ -1433,7 +1433,7 @@ function GamesControls({
 
 This component does **not** call `window.Twitch.ext.bits.useBits` or register `onTransactionComplete`/`onTransactionCancelled` itself — those Twitch APIs only support one registered callback per page, and `App.jsx`/`ComponentApp.jsx` each already own one (for Sounds/TTS). `GamesControls` only renders UI and makes plain `fetch` calls to the new EBS routes; the host decides when to actually spend Bits and tells `GamesControls` the outcome via props.
 
-- [ ] **Step 1: Write the component**
+- [x] **Step 1: Write the component**
 
 Create `extension/src/GamesControls.jsx`:
 
@@ -1661,12 +1661,12 @@ export function GamesControls({
 }
 ```
 
-- [ ] **Step 2: Verify it builds**
+- [x] **Step 2: Verify it builds**
 
 Run: `cd extension && npm run build`
 Expected: build succeeds with no new errors (this file isn't wired into any host yet, so it won't be reachable in the bundle's actual UI until Tasks 11/12, but it must be valid JS/JSX and its imports must resolve).
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 cd extension && git add src/GamesControls.jsx

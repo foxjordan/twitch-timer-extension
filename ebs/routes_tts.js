@@ -246,12 +246,26 @@ export function mountTtsRoutes(app, deps = {}) {
       return res.json({ approved: false, reason: "You must share your identity with the extension to use TTS. Click the extension settings gear and grant access." });
     }
 
-    const { message, voiceId, channelId } = req.body || {};
-    if (!message || !voiceId || !channelId) {
-      return res.status(400).json({ approved: false, reason: "message, voiceId, and channelId are required" });
+    // The channel this message plays on is the viewer's own authenticated
+    // channel context (claims.channel_id) — never a client-supplied value.
+    // A body-supplied channelId let a viewer authenticated (and about to
+    // spend real Bits) on channel A run moderation/validation against, and
+    // ultimately play a TTS message on, an unrelated channel B. Found via
+    // security review of the parallel Games redemption routes; the
+    // approval-token "channel mismatch" check further down in
+    // /api/tts/redeem didn't catch this because it only compared two
+    // client-supplied values against each other, never against the real
+    // authenticated channel.
+    const uid = String(claims.channel_id || "");
+    if (!uid) {
+      return res.status(401).json({ approved: false, reason: "Channel context required" });
     }
 
-    const uid = String(channelId);
+    const { message, voiceId } = req.body || {};
+    if (!message || !voiceId) {
+      return res.status(400).json({ approved: false, reason: "message and voiceId are required" });
+    }
+
     const viewerUserId = claims.user_id;
     // Shared base for all rejection log entries in this handler
     const ttsLogBase = { channelId: uid, viewerUserId, voiceId, message, eventKind: 'rejected' };
@@ -340,9 +354,16 @@ export function mountTtsRoutes(app, deps = {}) {
     const claims = requireExtensionAuth(req, res);
     if (!claims) return;
 
-    const { receipt, approvalToken, channelId } = req.body || {};
-    if (!receipt || !approvalToken || !channelId) {
-      return res.status(400).json({ error: "receipt, approvalToken, and channelId are required" });
+    // Same fix as /api/tts/validate above — the acting channel is the
+    // viewer's own authenticated context, never a client-supplied value.
+    const uid = String(claims.channel_id || "");
+    if (!uid) {
+      return res.status(401).json({ error: "Channel context required" });
+    }
+
+    const { receipt, approvalToken } = req.body || {};
+    if (!receipt || !approvalToken) {
+      return res.status(400).json({ error: "receipt and approvalToken are required" });
     }
 
     // Verify transaction receipt JWT
@@ -360,18 +381,31 @@ export function mountTtsRoutes(app, deps = {}) {
       return res.json({ ok: true, duplicate: true });
     }
 
+    // Defense in depth: if the receipt carries its own channel claim, it
+    // must match the authenticated channel.
+    const receiptChannel = String(
+      txClaims.channel_id || txClaims.channelId ||
+      receiptData.channel_id || receiptData.channelId || ""
+    );
+    if (receiptChannel && receiptChannel !== uid) {
+      return res.status(400).json({ error: "Receipt channel mismatch" });
+    }
+
     // Consume approval token (single-use)
     const tokenData = consumeApprovalToken(approvalToken);
     if (!tokenData) {
       return res.status(400).json({ error: "Invalid or expired approval token" });
     }
 
-    // Verify token matches channelId
-    if (tokenData.channelId !== String(channelId)) {
+    // Verify the token (bound to a channel back in /api/tts/validate, now
+    // also derived from claims.channel_id) matches this request's
+    // authenticated channel — meaningful now that both sides come from a
+    // real JWT rather than two client-supplied values checked against
+    // each other.
+    if (tokenData.channelId !== uid) {
       return res.status(400).json({ error: "Channel mismatch" });
     }
 
-    const uid = String(channelId);
     const settings = getTtsSettings(uid);
 
     // Generate TTS audio

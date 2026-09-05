@@ -1633,11 +1633,24 @@ export function mountSoundRoutes(app, deps = {}) {
     const claims = requireExtensionAuth(req, res);
     if (!claims) return;
 
-    const { receipt, soundId, channelId } = req.body || {};
-    if (!receipt || !soundId || !channelId) {
+    // The channel this redemption plays on is the viewer's own authenticated
+    // channel context (claims.channel_id, set by Twitch based on which
+    // channel's extension instance authorized this JWT) — never a
+    // client-supplied value. A body-supplied channelId let a viewer
+    // authenticated (and paying real Bits) on channel A play an arbitrary
+    // sound/clip/video on an unrelated channel B's overlay. Found via
+    // security review of the parallel Games redemption routes, then fixed
+    // here too since the pattern is identical.
+    const channelId = String(claims.channel_id || "");
+    if (!channelId) {
+      return res.status(401).json({ error: "Channel context required" });
+    }
+
+    const { receipt, soundId } = req.body || {};
+    if (!receipt || !soundId) {
       return res
         .status(400)
-        .json({ error: "receipt, soundId, and channelId are required" });
+        .json({ error: "receipt and soundId are required" });
     }
 
     // 2. Verify transaction receipt JWT
@@ -1652,6 +1665,17 @@ export function mountSoundRoutes(app, deps = {}) {
     const receiptData = txClaims.data || txClaims;
     const txId = receiptData.transactionId || receiptData.transactionID || receiptData.id;
     const viewerUserId = claims.user_id;
+
+    // Defense in depth: if the receipt carries its own channel claim (Bits
+    // transaction receipts are channel-scoped), it must match.
+    const receiptChannel = String(
+      txClaims.channel_id || txClaims.channelId ||
+      receiptData.channel_id || receiptData.channelId || ""
+    );
+    if (receiptChannel && receiptChannel !== channelId) {
+      logSoundEvent({ channelId, viewerUserId, soundId, txId, eventKind: 'failed', failureReason: 'channel_mismatch' });
+      return res.status(400).json({ error: "Receipt channel mismatch" });
+    }
 
     // 3. Validate sound exists and is enabled
     const sound = getSound(String(channelId), soundId);

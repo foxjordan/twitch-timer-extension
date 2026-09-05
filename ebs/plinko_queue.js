@@ -30,7 +30,7 @@ export function createPlinkoQueue({
     const cid = String(channelId);
     let q = queues.get(cid);
     if (!q) {
-      q = { items: [], playing: null, draining: false };
+      q = { items: [], playing: null, draining: false, advanceSeq: 0 };
       queues.set(cid, q);
     }
     if (q.items.length >= maxSize) {
@@ -39,7 +39,13 @@ export function createPlinkoQueue({
     q.items.push({ ...item, enqueuedAt: now(), expiresAt: now() + ttlMs });
     onChange(cid);
     if (!q.draining) drain(cid);
-    return { accepted: true, waiting: q.items.length };
+    // Read after drain() runs — mirrors how `waiting` below is already
+    // computed post-drain, so an item that starts playing immediately (an
+    // idle queue) is correctly reported as position 0, not 1: drain() will
+    // have already shifted it out of q.items and into q.playing by now.
+    const waiting = q.items.length;
+    const position = (q.playing ? 1 : 0) + (waiting - 1);
+    return { accepted: true, waiting, position, advanceSeq: q.advanceSeq };
   }
 
   function drain(cid) {
@@ -49,6 +55,9 @@ export function createPlinkoQueue({
     let item = null;
     while (q.items.length) {
       const candidate = q.items.shift();
+      // One shift = one "someone ahead of you cleared" event, whether the
+      // item goes on to play or gets discarded as stale below.
+      q.advanceSeq++;
       if (candidate.expiresAt && candidate.expiresAt <= now()) {
         onChange(cid); // a stale drop was dropped
         continue;
@@ -87,11 +96,12 @@ export function createPlinkoQueue({
 
   function snapshot(channelId) {
     const q = queues.get(String(channelId));
-    if (!q) return { nowPlaying: null, waiting: [], waitingCount: 0 };
+    if (!q) return { nowPlaying: null, waiting: [], waitingCount: 0, advanceSeq: 0 };
     return {
       nowPlaying: q.playing ? pub(q.playing) : null,
       waiting: q.items.slice(0, 50).map(pub),
       waitingCount: q.items.length,
+      advanceSeq: q.advanceSeq,
     };
   }
 

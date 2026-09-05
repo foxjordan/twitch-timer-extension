@@ -104,7 +104,12 @@ test('snapshot is empty once the queue drains', () => {
   const h = harness();
   h.q.enqueue('ch1', item('alice'));
   h.runAll();
-  assert.deepEqual(h.q.snapshot('ch1'), { nowPlaying: null, waiting: [], waitingCount: 0 });
+  // The channel's queue object (and its advanceSeq counter) is discarded
+  // entirely once it fully drains (queues.delete(cid)) — a later snapshot
+  // hits the "no queue at all" branch, which reports advanceSeq 0. This is
+  // safe: nothing can still be "waiting" on a stale advanceSeq reference if
+  // the queue is empty.
+  assert.deepEqual(h.q.snapshot('ch1'), { nowPlaying: null, waiting: [], waitingCount: 0, advanceSeq: 0 });
   assert.equal(h.q.size('ch1'), 0);
 });
 
@@ -137,4 +142,55 @@ test('onChange fires on enqueue and when a drop finishes', () => {
   assert.ok(afterEnqueue >= 2);
   h.runAll();
   assert.ok(h.changes.length > afterEnqueue); // more changes as drops play/finish
+});
+
+test('enqueue into an idle queue reports position 0 — it starts playing immediately', () => {
+  const h = harness();
+  const result = h.q.enqueue('ch1', item('alice'));
+  assert.equal(result.accepted, true);
+  assert.equal(result.position, 0);
+});
+
+test('enqueue while something plays reports how many plays are ahead', () => {
+  const h = harness();
+  h.q.enqueue('ch1', item('alice')); // starts playing, position 0
+  const bob = h.q.enqueue('ch1', item('bob'));
+  const carol = h.q.enqueue('ch1', item('carol'));
+  assert.equal(bob.position, 1); // alice's play is ahead of bob's
+  assert.equal(carol.position, 2); // alice's and bob's plays are ahead of carol's
+});
+
+test('advanceSeq increments once per play-start, letting position count down correctly', () => {
+  const h = harness();
+  h.q.enqueue('ch1', item('alice', 5000));
+  const bob = h.q.enqueue('ch1', item('bob', 5000));
+  const seqAtBobJoin = bob.advanceSeq;
+  assert.equal(h.q.snapshot('ch1').advanceSeq, seqAtBobJoin); // nothing advanced yet
+  h.advance(5400); // alice's durationMs + gapMs elapses, drain() moves to bob
+  h.flush();
+  const seqNow = h.q.snapshot('ch1').advanceSeq;
+  const remaining = bob.position - (seqNow - seqAtBobJoin);
+  assert.equal(remaining, 0); // bob is now the one playing
+});
+
+test('advanceSeq also increments when a stale item is skipped, not just on a real play', () => {
+  const h = harness({ ttlMs: 5000 });
+  h.q.enqueue('ch1', item('playing', 6000)); // starts immediately; holds the queue for 6000+400=6400ms
+  h.q.enqueue('ch1', item('stale', 6000)); // expiresAt = 0 + 5000 = 5000
+  h.advance(5100); // 'stale' is now past its expiry, while 'playing' is still mid-animation
+  const fresh = h.q.enqueue('ch1', item('fresh', 6000)); // expiresAt = 5100 + 5000 = 10100 — outlives 'playing'
+  const freshJoinSeq = fresh.advanceSeq;
+  h.advance(1400); // clock = 6500, past 'playing's scheduled finish at 6400
+  h.flush();
+  const seqNow = h.q.snapshot('ch1').advanceSeq;
+  // Two shifts happen ahead of fresh's own play: 'stale' being discarded,
+  // then fresh itself being shifted into q.playing — both counted by
+  // advanceSeq, distinguishing this from a queue where only real plays count.
+  assert.ok(seqNow - freshJoinSeq >= 1);
+  assert.deepEqual(h.played.map((i) => i.viewerName), ['playing', 'fresh']);
+});
+
+test('snapshot reports advanceSeq 0 for a channel that has never queued anything', () => {
+  const h = harness();
+  assert.equal(h.q.snapshot('never-used').advanceSeq, 0);
 });

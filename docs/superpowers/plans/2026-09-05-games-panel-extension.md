@@ -2498,7 +2498,7 @@ Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>"
 - Consumes: `GET /api/games/settings`, `POST /api/games/settings` (Task 4); `VALID_TIERS`, `TIER_LABELS` from `./tiers.js` (already imported in this file).
 - Produces: nothing consumed by other tasks — this is the broadcaster-facing settings surface described in the spec's "Streamer settings" section, terminal to this plan.
 
-- [ ] **Step 1: Add state**
+- [x] **Step 1: Add state**
 
 Near the existing `ttsSettings`/`ttsProActive`/`ttsMinTier` state (`ConfigApp.jsx:95-98`), add:
 
@@ -2509,7 +2509,7 @@ Near the existing `ttsSettings`/`ttsProActive`/`ttsMinTier` state (`ConfigApp.js
   const [gamesGlobalMinTier, setGamesGlobalMinTier] = useState("sound_100");
 ```
 
-- [ ] **Step 2: Add a tier-options helper**
+- [x] **Step 2: Add a tier-options helper**
 
 Next to the existing `getTtsTiers` helper (`ConfigApp.jsx:61-65`), add:
 
@@ -2521,7 +2521,7 @@ function getGamesTiers(minTier) {
 }
 ```
 
-- [ ] **Step 3: Fetch settings on load**
+- [x] **Step 3: Fetch settings on load**
 
 In the same `onAuthorized` block that fetches TTS settings (`ConfigApp.jsx:209-223`), add a sibling fetch:
 
@@ -2540,7 +2540,7 @@ In the same `onAuthorized` block that fetches TTS settings (`ConfigApp.jsx:209-2
         .catch(() => {});
 ```
 
-- [ ] **Step 4: Add the update handler**
+- [x] **Step 4: Add the update handler**
 
 Next to `handleTtsSettingsUpdate` (`ConfigApp.jsx:487-506`), add:
 
@@ -2567,7 +2567,7 @@ Next to `handleTtsSettingsUpdate` (`ConfigApp.jsx:487-506`), add:
   }
 ```
 
-- [ ] **Step 5: Render the settings section**
+- [x] **Step 5: Render the settings section**
 
 Next to the TTS Settings card (`ConfigApp.jsx:1099-1189` region — insert this as its own card after that block closes):
 
@@ -2660,7 +2660,7 @@ Next to the TTS Settings card (`ConfigApp.jsx:1099-1189` region — insert this 
 
 (Every `onChange` sends the *whole* `visibility`/`pricing` sub-object rather than a bare field, since `setGamesSettings`'s patch merge in Task 1 replaces `curr.visibility.<field>` individually but reads `patch.visibility` as one object — sending the full current sub-object with one field changed is the simplest way to avoid clobbering the other fields in it from the client side.)
 
-- [ ] **Step 6: Verify manually**
+- [x] **Step 6: Verify manually**
 
 `cd extension && npm run dev`, open `preview-config.html`. With a test broadcaster who has `accessible: true`:
 1. The Games card renders with both checkboxes checked and both minimum-Bits selects showing "100 Bits" by default.
@@ -2668,7 +2668,7 @@ Next to the TTS Settings card (`ConfigApp.jsx:1099-1189` region — insert this 
 3. Trying to select a tier below `gamesGlobalMinTier` isn't even offered as an option (the `<select>` only lists tiers from the floor up).
 4. With a non-Pro, non-granted test broadcaster, confirm the card shows the "require a Pro plan" message and every control is disabled.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 cd extension && git add src/ConfigApp.jsx

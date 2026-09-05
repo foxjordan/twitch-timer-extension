@@ -1119,7 +1119,7 @@ function firePlinkoDrop({
     return payload;
   }
 
-  const { accepted } = plinkoQueue.enqueue(uid, {
+  const enqueueResult = plinkoQueue.enqueue(uid, {
     uid,
     overlayKey,
     boardId,
@@ -1133,8 +1133,14 @@ function firePlinkoDrop({
     viewerName: viewerName || "Someone",
     source,
   });
-  if (!accepted) {
+  if (!enqueueResult.accepted) {
     logger.warn("plinko_drop_rejected", { userId: uid, source, reason: "queue_full" });
+  } else {
+    payload.queue = {
+      position: enqueueResult.position,
+      waitingCount: enqueueResult.waiting,
+      advanceSeq: enqueueResult.advanceSeq,
+    };
   }
   return payload;
 }
@@ -1260,7 +1266,7 @@ function fireSlotsSpin({
     return payload;
   }
 
-  const { accepted } = slotsQueue.enqueue(uid, {
+  const enqueueResult = slotsQueue.enqueue(uid, {
     uid,
     overlayKey,
     boardId,
@@ -1273,8 +1279,14 @@ function fireSlotsSpin({
     viewerName: viewerName || "Someone",
     source,
   });
-  if (!accepted) {
+  if (!enqueueResult.accepted) {
     logger.warn("slots_spin_rejected", { userId: uid, source, reason: "queue_full" });
+  } else {
+    payload.queue = {
+      position: enqueueResult.position,
+      waitingCount: enqueueResult.waiting,
+      advanceSeq: enqueueResult.advanceSeq,
+    };
   }
   return payload;
 }

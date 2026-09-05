@@ -1315,6 +1315,88 @@ app.post("/api/plinko/drop", (req, res) => {
   res.json(payload);
 });
 
+app.post("/api/plinko/redeem", async (req, res) => {
+  const claims = requireExtensionAuth(req, res);
+  if (!claims) return;
+
+  const { receipt, channelId, dropColumn } = req.body || {};
+  if (!receipt || !channelId) {
+    return res.status(400).json({ error: "receipt and channelId are required" });
+  }
+  const uid = String(channelId);
+
+  let txClaims;
+  try {
+    txClaims = jwt.verify(receipt, EXT_SECRET, { algorithms: ["HS256"] });
+  } catch {
+    return res.status(400).json({ error: "Invalid transaction receipt" });
+  }
+  const receiptData = txClaims.data || txClaims;
+  const txId = receiptData.transactionId || receiptData.transactionID || receiptData.id;
+  const viewerUserId = claims.user_id;
+
+  const gs = getGamesSettings(uid);
+  const glob = getGlobalGamesConfig();
+  const accessible = glob.launched && (isPro(uid) || gs.granted);
+  if (!accessible || !gs.visibility.enabled || !gs.visibility.plinko) {
+    return res.status(404).json({ error: "Plinko is not available on this channel" });
+  }
+
+  const receiptSku = receiptData.product?.sku || receiptData.product?.domainID;
+  const floorIdx = VALID_TIERS.indexOf(gs.pricing.plinkoMinTier);
+  const skuIdx = VALID_TIERS.indexOf(receiptSku);
+  if (skuIdx < 0 || skuIdx < floorIdx) {
+    return res.status(400).json({ error: "Bits amount is below the minimum for this game" });
+  }
+
+  if (txId) {
+    const dedupKey = `gamestx:${txId}`;
+    if (state.seen.has(dedupKey)) {
+      return res.json({ accepted: true, duplicate: true });
+    }
+    state.seen.set(dedupKey, Date.now() + 24 * 3600 * 1000);
+  }
+
+  let viewerName = "Someone";
+  if (viewerUserId) {
+    try {
+      viewerName = (await fetchUserDisplayName(viewerUserId, uid)) || "Someone";
+    } catch {}
+  }
+
+  const overlayKey = normKey(getOrCreateUserKey(uid));
+  const rawColumn = Number(dropColumn);
+  const payload = firePlinkoDrop({
+    uid,
+    overlayKey,
+    dropColumn: Number.isFinite(rawColumn) ? rawColumn : undefined,
+    source: "bits_redeem",
+    viewerName,
+  });
+
+  if (!payload.queue) {
+    // Bits were already spent (the transaction completed) but the drop
+    // couldn't be queued — this must be visible in the broadcaster's
+    // activity log, not just the server's own logger.warn inside
+    // firePlinkoDrop, which isn't broadcaster-facing.
+    addLogEntry({
+      type: "plinko_drop_rejected",
+      source: "bits_redeem",
+      reason: "queue_full",
+      userId: uid,
+      userName: viewerName !== "Someone" ? viewerName : undefined,
+      txId: txId || undefined,
+    });
+    return res.json({ accepted: false, reason: "full" });
+  }
+  res.json({
+    accepted: true,
+    position: payload.queue.position,
+    advanceSeqAtJoin: payload.queue.advanceSeq,
+    waitingCount: payload.queue.waitingCount,
+  });
+});
+
 app.post("/api/slots/spin", (req, res) => {
   if (!req?.session?.isAdmin)
     return res.status(401).json({ error: "Admin login required" });
@@ -1334,6 +1416,82 @@ app.post("/api/slots/spin", (req, res) => {
     viewerName: "Streamer",
   });
   res.json(payload);
+});
+
+app.post("/api/slots/redeem", async (req, res) => {
+  const claims = requireExtensionAuth(req, res);
+  if (!claims) return;
+
+  const { receipt, channelId } = req.body || {};
+  if (!receipt || !channelId) {
+    return res.status(400).json({ error: "receipt and channelId are required" });
+  }
+  const uid = String(channelId);
+
+  let txClaims;
+  try {
+    txClaims = jwt.verify(receipt, EXT_SECRET, { algorithms: ["HS256"] });
+  } catch {
+    return res.status(400).json({ error: "Invalid transaction receipt" });
+  }
+  const receiptData = txClaims.data || txClaims;
+  const txId = receiptData.transactionId || receiptData.transactionID || receiptData.id;
+  const viewerUserId = claims.user_id;
+
+  const gs = getGamesSettings(uid);
+  const glob = getGlobalGamesConfig();
+  const accessible = glob.launched && (isPro(uid) || gs.granted);
+  if (!accessible || !gs.visibility.enabled || !gs.visibility.slots) {
+    return res.status(404).json({ error: "Slots is not available on this channel" });
+  }
+
+  const receiptSku = receiptData.product?.sku || receiptData.product?.domainID;
+  const floorIdx = VALID_TIERS.indexOf(gs.pricing.slotsMinTier);
+  const skuIdx = VALID_TIERS.indexOf(receiptSku);
+  if (skuIdx < 0 || skuIdx < floorIdx) {
+    return res.status(400).json({ error: "Bits amount is below the minimum for this game" });
+  }
+
+  if (txId) {
+    const dedupKey = `gamestx:${txId}`;
+    if (state.seen.has(dedupKey)) {
+      return res.json({ accepted: true, duplicate: true });
+    }
+    state.seen.set(dedupKey, Date.now() + 24 * 3600 * 1000);
+  }
+
+  let viewerName = "Someone";
+  if (viewerUserId) {
+    try {
+      viewerName = (await fetchUserDisplayName(viewerUserId, uid)) || "Someone";
+    } catch {}
+  }
+
+  const overlayKey = normKey(getOrCreateUserKey(uid));
+  const payload = fireSlotsSpin({
+    uid,
+    overlayKey,
+    source: "bits_redeem",
+    viewerName,
+  });
+
+  if (!payload.queue) {
+    addLogEntry({
+      type: "slots_spin_rejected",
+      source: "bits_redeem",
+      reason: "queue_full",
+      userId: uid,
+      userName: viewerName !== "Someone" ? viewerName : undefined,
+      txId: txId || undefined,
+    });
+    return res.json({ accepted: false, reason: "full" });
+  }
+  res.json({
+    accepted: true,
+    position: payload.queue.position,
+    advanceSeqAtJoin: payload.queue.advanceSeq,
+    waitingCount: payload.queue.waitingCount,
+  });
 });
 
 // moved to routes_overlay_api.js

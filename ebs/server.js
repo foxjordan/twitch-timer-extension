@@ -296,6 +296,13 @@ function requireExtensionAuth(req, res) {
 const sseClients = new Set();
 const SSE_HEARTBEAT_MS = 30_000; // ping every 30 s
 
+// Viewer-facing queue-depth stream — deliberately separate from sseClients,
+// which is gated by a per-broadcaster overlay key. This one is scoped only
+// by channelId (public, non-secret — same trust level as GET
+// /api/overlay/status) since every viewer's extension instance connects to
+// it, and it must never be given the overlay key.
+const gamesQueueClients = new Set();
+
 // Periodic heartbeat – detects dead connections and keeps proxies from dropping idle ones
 setInterval(() => {
   for (const client of sseClients) {
@@ -321,7 +328,10 @@ const subDedup = createSubDedup(); // one subscription counted per subscriber
 // function declarations defined further down.
 const plinkoQueue = createPlinkoQueue({
   play: (item) => playPlinkoDrop(item),
-  onChange: (channelId) => broadcastPlinkoQueue(channelId),
+  onChange: (channelId) => {
+    broadcastPlinkoQueue(channelId);
+    broadcastGamesQueueSse(channelId);
+  },
 });
 // Slot-machine spins play one at a time per channel too. Same game-agnostic
 // queue module; play()/onChange() are hoisted function declarations below.
@@ -330,7 +340,10 @@ const lastSlotsBoardByKey = new Map();
 const lastSlotsQueueByKey = new Map();
 const slotsQueue = createPlinkoQueue({
   play: (item) => playSlotsSpin(item),
-  onChange: (channelId) => broadcastSlotsQueue(channelId),
+  onChange: (channelId) => {
+    broadcastSlotsQueue(channelId);
+    broadcastGamesQueueSse(channelId);
+  },
 });
 const DEFAULT_WHEEL_OPTIONS = [
   { label: "Heads", color: "#9146FF" },
@@ -1019,6 +1032,29 @@ function broadcastPlinkoQueue(channelId) {
       client.res.write(`data: ${data}\n\n`);
     } catch (e) {
       sseClients.delete(client);
+    }
+  }
+}
+
+// Pushes live queue depth to every viewer's extension instance for this
+// channel — counts only, no viewer names (contrast with broadcastPlinkoQueue
+// / broadcastSlotsQueue above, which do include names but only reach the
+// broadcaster's own key-gated OBS overlay).
+function broadcastGamesQueueSse(channelId) {
+  const cid = String(channelId);
+  const plinkoSnap = plinkoQueue.snapshot(cid);
+  const slotsSnap = slotsQueue.snapshot(cid);
+  const data = JSON.stringify({
+    plinko: { waitingCount: plinkoSnap.waitingCount, advanceSeq: plinkoSnap.advanceSeq },
+    slots: { waitingCount: slotsSnap.waitingCount, advanceSeq: slotsSnap.advanceSeq },
+  });
+  for (const client of Array.from(gamesQueueClients)) {
+    if (!client || client.channelId !== cid) continue;
+    try {
+      client.res.write("event: games_queue\n");
+      client.res.write(`data: ${data}\n\n`);
+    } catch (e) {
+      gamesQueueClients.delete(client);
     }
   }
 }
@@ -1766,6 +1802,35 @@ app.get("/api/overlay/stream", (req, res) => {
       key,
       activeClients: sseClients.size,
     });
+  });
+});
+
+// Viewer-facing queue depth — no key, scoped only by channelId. Native
+// EventSource cannot send an Authorization header, and there is nothing
+// sensitive in this payload (aggregate counts only), so this is
+// intentionally open the same way GET /api/overlay/status is.
+app.get("/api/games/queue-stream", (req, res) => {
+  const channelId = req.query.channelId;
+  if (!channelId) return res.status(400).json({ error: "channelId required" });
+  res.setHeader("Content-Type", "text/event-stream");
+  res.setHeader("Cache-Control", "no-cache");
+  res.setHeader("Connection", "keep-alive");
+  res.flushHeaders?.();
+
+  const client = { res, channelId: String(channelId) };
+  gamesQueueClients.add(client);
+  res.write(": connected\n\n");
+
+  const plinkoSnap = plinkoQueue.snapshot(client.channelId);
+  const slotsSnap = slotsQueue.snapshot(client.channelId);
+  res.write("event: games_queue\n");
+  res.write(`data: ${JSON.stringify({
+    plinko: { waitingCount: plinkoSnap.waitingCount, advanceSeq: plinkoSnap.advanceSeq },
+    slots: { waitingCount: slotsSnap.waitingCount, advanceSeq: slotsSnap.advanceSeq },
+  })}\n\n`);
+
+  req.on("close", () => {
+    gamesQueueClients.delete(client);
   });
 });
 

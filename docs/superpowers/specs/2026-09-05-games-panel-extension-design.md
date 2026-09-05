@@ -205,7 +205,11 @@ from state it already tracks:
    time `drain()` shifts an item off the front of the queue — whether it
    gets played or is skipped for having expired. This is the one event that
    actually means "someone ahead of you cleared." `snapshot()` gains
-   `advanceSeq` alongside `waitingCount`.
+   `advanceSeq` alongside `waitingCount`, and **`enqueue()`'s return value
+   also gains the current `advanceSeq`** (read at the same moment as
+   `position`) — this is what a caller passes back to the client as
+   `advanceSeqAtJoin`. So `enqueue()`'s full return shape becomes
+   `{ accepted, position, waitingCount, advanceSeq }`.
 
 The client tracks its own position without any server-side per-viewer
 bookkeeping: at redemption it stores `position` and the `advanceSeq` at
@@ -276,7 +280,10 @@ Sounds/TTS:
 3. **Plinko**: a row of numbered column buttons (`data-col`), reusing the
    exact button-row pattern already built for the broadcaster's manual-drop
    UI in `ebs/views/utilitiesPage.js`; a "Drop — {TIER_LABELS[price]}"
-   button.
+   button. No new bounds-checking needed on `dropColumn` — `simulatePlinko`
+   already clamps it (`Math.min(nRows, Math.max(0, Number(dropColumn) || 0))`,
+   `ebs/plinko.js`), so a stale/out-of-range value from the client is
+   already handled by the existing core.
 4. **Slots**: a single "Spin — {TIER_LABELS[price]}" button, no extra
    controls (matches the Slots design doc's v1 scope — no per-reel
    picking).

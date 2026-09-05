@@ -785,7 +785,7 @@ Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>"
 - Consumes: `enqueue()`'s extended return value from Task 2 (`{ accepted, position, waiting, advanceSeq }`).
 - Produces: the `payload` object both functions already return gains an optional `.queue` field — `{ position, waitingCount, advanceSeq }` when the item was accepted into the queue, absent when rejected (queue full) or when `test: true`. Consumed by Task 7's redeem routes. Existing callers (`POST /api/plinko/drop`, `POST /api/slots/spin`) are unaffected — they already do `res.json(payload)` and simply gain one more field in the response they weren't reading before.
 
-- [ ] **Step 1: Modify `firePlinkoDrop`**
+- [x] **Step 1: Modify `firePlinkoDrop`**
 
 Find (in `firePlinkoDrop`, `server.js:1036-1053`):
 
@@ -839,7 +839,7 @@ Replace with:
   return payload;
 ```
 
-- [ ] **Step 2: Modify `fireSlotsSpin`**
+- [x] **Step 2: Modify `fireSlotsSpin`**
 
 Find (in `fireSlotsSpin`, `server.js:1177-1193`):
 
@@ -891,11 +891,11 @@ Replace with:
   return payload;
 ```
 
-- [ ] **Step 3: Verify the existing manual routes still work**
+- [x] **Step 3: Verify the existing manual routes still work**
 
 Start the dev server, log in as a test broadcaster on `/utilities`, and click the manual "Drop" button (Plinko) and "Spin" button (Slots) in the Extras UI. Expected: identical behavior to before this change (token drops / reels spin, timer updates) — this task only adds a field to the JSON response, nothing observable in the UI changes. Confirm via browser devtools Network tab that the `POST /api/plinko/drop` and `POST /api/slots/spin` responses now include a `"queue": {"position":0,...}` field.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 cd ebs && git add server.js

@@ -29,16 +29,20 @@ in our own extension" as a later phase. This is that phase.
   the Games tab, mirroring how Sounds/TTS already exist in both — via one
   shared `GamesControls.jsx` component so the viewer-facing logic isn't
   duplicated even though the two host files are.
-- **Flat access price, not tier-scaled payout.** The Bits amount a viewer
-  pays does not change the outcome distribution or the multiplier table —
-  same rule already used for Plinko/Slots sound-alert triggers ("bonus on
-  top," not "bigger bonus for more Bits"). Because of this, pricing is a
-  **single fixed tier per game that the streamer sets** (same as
-  `sound.tier` / `ttsConfig.tier` today) — not a viewer-selectable range
-  above a floor. Paying more would buy nothing, so a "streamer sets a
-  minimum, viewer can exceed it" UI was considered and dropped in favor of
-  matching the one-price-per-feature pattern already used everywhere else
-  in this codebase.
+- **Pricing is a per-game minimum tier, viewer picks any SKU at or above
+  it** — reversing an earlier "single fixed price" call once we found that
+  Bits spent anywhere in the extension already earn the standard timer
+  credit automatically (see "Bits credit vs. game bonus" below). Since a
+  higher tier already buys a bigger guaranteed baseline through that
+  existing mechanism, letting the viewer choose isn't a no-op the way it
+  would be under pure flat pricing.
+- **The game's own bonus math never scales with tier.** `computePlinkoDrop`
+  / `computeSlotsSpin` are untouched — same outcome distribution regardless
+  of which SKU was paid. Only the automatic baseline (below) scales with
+  Bits spent. This matters for the gambling-optics concern driving the kill
+  switch: the randomized part of the reward is never "better odds for more
+  Bits," only the guaranteed part is bigger — the same relationship a plain
+  chat cheer already has to the timer.
 - **Games rides the existing Pro subscription gate** (`isPro(uid)` from
   `subscription_store.js`), the same gate as TTS and video clips — no new
   Stripe plan/price.
@@ -54,8 +58,8 @@ in our own extension" as a later phase. This is that phase.
 Partial yes, and the split matters:
 
 - **Toggling/reconfiguring games already in the bundle** (on/off, which
-  games are visible, price, min tier if that's ever added) — **yes, no new
-  version.** `GET /api/ext/config` already does exactly this today for
+  games are visible, the minimum price tier) — **yes, no new version.**
+  `GET /api/ext/config` already does exactly this today for
   `tts` / `videoClips` / `communityLibrary`, fetched at runtime per channel
   (`ebs/routes_sounds.js:1256`). Games extends the same `features` object.
 - **A genuinely new game type** (new reel/board rendering and interaction
@@ -67,6 +71,31 @@ Partial yes, and the split matters:
   often.
 
 ## Architecture
+
+### Bits credit vs. game bonus — the automatic baseline
+
+This app already runs a live, per-broadcaster `channel.cheer` EventSub
+subscription (`ebs/eventsub-ws.js`), feeding `secondsFromEvent()` in
+`server.js`, which converts *any* Bits cheered on the channel into timer
+seconds at the streamer's own configured rate
+(`RULES.bits.per` / `add_seconds`, the existing "Timer Rules" page —
+`rules_store.js`, `getRules(uid)` / `setRules(uid)`). The code there notes
+explicitly that Bits spent **inside an extension** also fire a
+`channel.cheer` for the same spend, and deliberately ignores the
+extension-specific `channel.bits.use` event to avoid double-counting
+(`server.js:2298-2321`).
+
+**Consequence: any Bits a viewer uses inside our extension already earns
+the standard timer-seconds credit automatically, today, with nothing new
+to build.** This is the same mechanism that already makes a Sound Alert's
+own Bits cost pay out — the Plinko-drop-on-sound-alert trigger's "bonus on
+top of the sound's own Bits time" (per the Plinko memory) *is* this
+mechanism. Games' redeem routes plug into exactly the same relationship:
+the `useBits()` transaction pays the automatic baseline through
+`channel.cheer`, completely decoupled from and asynchronous to the redeem
+route's own `firePlinkoDrop`/`fireSlotsSpin` call, which adds the game's
+bonus on top. Neither path needs to know about the other or wait on it —
+same as it already works for sound alerts.
 
 ### Config delivery
 
@@ -97,12 +126,17 @@ Two tiers, mirroring the TTS split (`features.tts` boolean +
   richer payload the controls need, mirroring `/api/tts/public`:
 
   ```js
-  { plinko: { columns, price: sku }, slots: { price: sku } }
+  { plinko: { columns, minTier: sku }, slots: { minTier: sku } }
   ```
 
   `columns` is derived from the streamer's actual Plinko `rows` config
   (`rows + 1`), so the viewer's column picker always matches the real
-  board — never hand-maintained separately.
+  board — never hand-maintained separately. The client derives its own
+  tier-picker options from `minTier` via
+  `VALID_TIERS.slice(VALID_TIERS.indexOf(minTier))` — the same slicing
+  `ConfigApp.jsx` already does today (`ConfigApp.jsx:64`) to build a
+  tier list starting at a floor — rather than the server enumerating and
+  sending the whole eligible list.
 
 ### Gating and the launch kill switch
 
@@ -123,16 +157,24 @@ const DEFAULT_GAMES_SETTINGS = {
     slots: true,
   },
   pricing: {
-    plinko: "sound_100",   // reuses the existing VALID_TIERS catalog — no new SKUs
-    slots: "sound_100",
+    plinkoMinTier: "sound_100",  // floor — viewer may pay this SKU or any higher one
+    slotsMinTier: "sound_100",   // reuses the existing VALID_TIERS catalog — no new SKUs
   },
 };
 
 // games-global-config.json — site-wide, admin-only
 let globalGamesConfig = {
   launched: false,         // OFF by default — the "hidden until Twitch approves" lever
+  minTier: "sound_100",    // site-wide floor under the streamer's own floor,
+                            // mirrors globalTtsConfig.minTier (tts_store.js) exactly
 };
 ```
+
+`setGamesSettings(uid, patch)` enforces the site-wide floor the same way
+`setTtsSettings` already enforces `globalTtsConfig.minTier` against a
+streamer's chosen `tier` (`tts_store.js:115-122`): a patched
+`pricing.plinkoMinTier`/`slotsMinTier` is only accepted if its index in
+`VALID_TIERS` is `>=` the index of `globalGamesConfig.minTier`.
 
 `isPro(uid) || gs.granted` is computed inline at each call site (in
 `routes_sounds.js` for `/api/ext/config`, in `server.js` for the redeem/
@@ -165,10 +207,13 @@ anything calling them has to live). Each mirrors `POST /api/sounds/redeem`
 3. Recompute accessibility + visibility server-side (never trust the
    client's cached `features` flags) — 404/403 if the game isn't actually
    enabled right now.
-4. **Verify the receipt's SKU matches `gs.pricing.plinko` /
-   `gs.pricing.slots`** — stops a stale/tampered client claiming a cheaper
-   tier bought the drop, same check `routes_sounds.js:1664` already does
-   for sounds.
+4. **Verify the receipt's SKU is a valid tier at or above
+   `gs.pricing.plinkoMinTier` / `gs.pricing.slotsMinTier`**
+   (`VALID_TIERS.indexOf(receiptSku) >= VALID_TIERS.indexOf(minTier)`) —
+   stops a stale/tampered client claiming a below-floor tier bought the
+   drop. This is a floor check, not the equality check
+   `routes_sounds.js:1664` does for sounds' single fixed tier — the closer
+   precedent is `setTtsSettings`'s floor enforcement (`tts_store.js:115-122`).
 5. Dedupe by `transactionId` (existing `deduplicateTx`).
 6. Call `firePlinkoDrop({ uid, overlayKey, dropColumn, source: 'bits_redeem', viewerName })`
    / `fireSlotsSpin({ uid, overlayKey, source: 'bits_redeem', viewerName })` —
@@ -248,7 +293,10 @@ A **new SSE endpoint**, `GET /api/games/queue-stream?channelId=`
 
 `GET /api/games/settings` / `POST /api/games/settings` (broadcaster-only,
 `requireBroadcaster`), returning
-`{ settings, accessible: isPro(uid) || settings.granted, launched: globalGamesConfig.launched }`.
+`{ settings, accessible: isPro(uid) || settings.granted, launched: globalGamesConfig.launched, globalMinTier: globalGamesConfig.minTier }`
+— `globalMinTier` is what `ConfigApp.jsx` slices `VALID_TIERS` against to
+build the minimum-price `<select>` options, the same way the viewer-side
+picker slices against the streamer's own floor.
 
 A new **"Games"** section in the config UI, following the exact
 `settings.enabled` / `ttsSettings.enabled` checkbox pattern already used for
@@ -264,9 +312,12 @@ Sounds/TTS:
   (`visibility.plinko`, `visibility.slots`). No special-casing needed for
   "both off hides the section" — that's already just what
   `features.plinko === false && features.slots === false` produces.
-- **Price per game** — a `<select>` of `VALID_TIERS`, reusing
+- **Minimum price per game** — a `<select>` of `VALID_TIERS`, reusing
   `TIER_LABELS` exactly as the existing per-sound and TTS tier dropdowns
-  do. No new SKU catalog.
+  do (no new SKU catalog), constrained from below by
+  `globalGamesConfig.minTier` the same way the existing TTS tier `<select>`
+  is already constrained by `globalTtsConfig.minTier` — options below the
+  site-wide floor aren't offered.
 
 ## Viewer flow (`GamesControls.jsx`, shared by `App.jsx` and `ComponentApp.jsx`)
 
@@ -277,32 +328,42 @@ Sounds/TTS:
    real change to existing logic in both `App.jsx` and `ComponentApp.jsx`.
 2. On tab select: fetch `GET /api/games/config?channelId=`; open the one
    shared `games_queue` SSE connection.
-3. **Plinko**: a row of numbered column buttons (`data-col`), reusing the
+3. **A tier picker**, shared by both games — a `<select>` built from
+   `VALID_TIERS.slice(VALID_TIERS.indexOf(minTier))`, defaulting to
+   `minTier`, labeled with `TIER_LABELS[sku]` exactly like the existing
+   tier dropdowns. This is genuinely new viewer-facing UI: nowhere else in
+   the extension today does a *viewer* choose among tiers (TTS's tier is
+   entirely streamer-set) — the closest precedent is the *shape* of the
+   dropdown itself (`ConfigApp.jsx`'s existing tier `<select>`s), not its
+   placement.
+4. **Plinko**: a row of numbered column buttons (`data-col`), reusing the
    exact button-row pattern already built for the broadcaster's manual-drop
-   UI in `ebs/views/utilitiesPage.js`; a "Drop — {TIER_LABELS[price]}"
+   UI in `ebs/views/utilitiesPage.js`; a "Drop — {TIER_LABELS[selectedTier]}"
    button. No new bounds-checking needed on `dropColumn` — `simulatePlinko`
    already clamps it (`Math.min(nRows, Math.max(0, Number(dropColumn) || 0))`,
    `ebs/plinko.js`), so a stale/out-of-range value from the client is
    already handled by the existing core.
-4. **Slots**: a single "Spin — {TIER_LABELS[price]}" button, no extra
-   controls (matches the Slots design doc's v1 scope — no per-reel
-   picking).
-5. Click → `window.Twitch.ext.bits.useBits(price)` (synchronous, no `await`
-   before it — matches the existing TTS/sound click handlers exactly) →
-   `onTransactionComplete` → `POST /api/{plinko,slots}/redeem` with the
-   receipt (+ `dropColumn` for Plinko) → response gives
+5. **Slots**: a single "Spin — {TIER_LABELS[selectedTier]}" button, no
+   extra controls beyond the shared tier picker (matches the Slots design
+   doc's v1 scope — no per-reel picking).
+6. Click → `window.Twitch.ext.bits.useBits(selectedTier)` (synchronous, no
+   `await` before it — matches the existing TTS/sound click handlers
+   exactly) → `onTransactionComplete` → `POST /api/{plinko,slots}/redeem`
+   with the receipt (+ `dropColumn` for Plinko) — the SKU actually charged
+   comes from the receipt itself, not a separate request field, same as
+   the existing sound-redeem route. The response gives
    `{ position, advanceSeqAtJoin, waitingCount }` → UI shows "Queued — ~N
    ahead of you," live-decrementing via `games_queue`'s `advanceSeq`, down
    to "You're up!" — the extension never renders the drop/spin itself, the
    payoff plays on the broadcast, same as sound alerts today.
-6. `onTransactionCancelled` clears pending state, mirroring the existing
+7. `onTransactionCancelled` clears pending state, mirroring the existing
    TTS/sound cancel handling exactly.
 
 ## Error handling
 
 - Redeem routes: `400` missing/invalid receipt, `403`/`404` if the game
   isn't accessible/visible right now (streamer toggled it off mid-flight),
-  `400` on SKU mismatch, queue-full → `{ accepted: false, reason: 'full' }`
+  `400` on a below-floor SKU, queue-full → `{ accepted: false, reason: 'full' }`
   (mirrors the existing Plinko manual-drop full-queue handling) shown as
   "Queue is full, try again shortly" rather than a silent failure.
 - Any redeem failure **after** a completed Bits transaction is still
@@ -320,9 +381,13 @@ Sounds/TTS:
   on play-start and TTL-skip, including interleavings with concurrent
   enqueues from other viewers. `ebs/games_store.test.js` mirroring
   `tts_store.test.js`'s shape (load/get/set/persist/delete, gating field
-  handling, tier-catalog validation on `pricing.*`).
+  handling, tier-catalog validation on `pricing.*` — including that a
+  streamer-set floor below `globalGamesConfig.minTier` is rejected, same
+  as the existing `setTtsSettings` floor-enforcement test coverage).
 - **Route tests**: redeem routes mirroring `routes_sounds.js`'s existing
-  dedupe/SKU-mismatch coverage for `/api/sounds/redeem`.
+  dedupe coverage for `/api/sounds/redeem`, plus cases specific to the new
+  floor check — a receipt SKU below the streamer's configured minimum is
+  rejected, one at or above it is accepted.
 - **Manual E2E**: toggle every visibility combination and confirm the tab
   appears/disappears correctly in both surfaces; redeem a Plinko drop
   (verify the picked column reaches `dropColumn`) and a Slots spin from
@@ -334,11 +399,10 @@ Sounds/TTS:
 
 ## Explicitly out of scope for this phase
 
-- Any change to `plinko.js` / `slots.js` outcome math — flat pricing means
-  the redemption path is purely a new *trigger*, not a new *mode*.
-- Viewer-selectable price tiers / "pay more than the floor" — dropped per
-  the Decisions section above; revisit only if tier-scaled payouts are
-  ever wanted.
+- Any change to `plinko.js` / `slots.js` outcome math — the game's bonus
+  computation is purely a new *trigger* into the existing engines, not a
+  new *mode*; tier only ever affects the automatic `channel.cheer` baseline,
+  never the game's own randomness.
 - Showing other queued viewers' names/order in the extension.
 - A fourth extension surface (this covers Panel/Mobile + Component; no
   mobile-specific layout beyond what `App.jsx` already handles).

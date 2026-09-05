@@ -3,6 +3,7 @@ import ReactDOM from "react-dom/client";
 import { setupAnalytics, setAnalyticsAuth, logEvent } from "./firebase.js";
 import { BrandedFooter } from "./BrandedFooter.jsx";
 import { SplashScreen } from "./SplashScreen.jsx";
+import { GamesControls } from "./GamesControls.jsx";
 
 // App.jsx has no theme system (fixed-dark by design) — these are the same
 // four values ConfigApp.jsx's THEME_TOKENS.dark uses for SplashScreen,
@@ -282,7 +283,7 @@ function App() {
   const [soundsEnabled, setSoundsEnabled] = useState(false);
   const [bitsEnabled, setBitsEnabled] = useState(false);
   const [products, setProducts] = useState([]);
-  const pendingRef = useRef(null); // { type: "sound"|"tts", ...data }
+  const pendingRef = useRef(null); // { type: "sound"|"tts"|"plinko"|"slots", ...data }
   const [cooldowns, setCooldowns] = useState({});
   const [lastPlayed, setLastPlayed] = useState(null);
   const [previewing, setPreviewing] = useState(null);
@@ -303,6 +304,11 @@ function App() {
   const [previewingVoice, setPreviewingVoice] = useState(null);
   const [overlayConnected, setOverlayConnected] = useState(null); // null = unknown, true/false
   const [extConfig, setExtConfig] = useState({ features: { tts: true, videoClips: true, communityLibrary: true } });
+  // Games (Plinko/Slots) transaction hand-off to the shared GamesControls
+  // component — onTransactionComplete only supports one registered callback,
+  // and this file already owns it for Sounds/TTS below.
+  const [gamesPendingType, setGamesPendingType] = useState(null);
+  const [gamesPendingTx, setGamesPendingTx] = useState(null);
 
   const fetchSounds = useCallback((token, channelId) => {
     fetch(`${EBS_BASE}/api/sounds/public?channelId=${channelId}`, {
@@ -405,6 +411,13 @@ function App() {
             setTimeout(() => setTtsCooldown(false), pending.cooldownMs || 10000);
           })
           .catch((err) => setTtsError(err?.message || "TTS redemption failed"));
+      } else if (pending.type === "plinko" || pending.type === "slots") {
+        setGamesPendingType(null);
+        setGamesPendingTx({
+          type: pending.type,
+          receipt: tx.transactionReceipt,
+          dropColumn: pending.dropColumn,
+        });
       } else {
         // Sound redemption (existing logic)
         fetch(`${EBS_BASE}/api/sounds/redeem`, {
@@ -437,6 +450,7 @@ function App() {
 
     window.Twitch?.ext?.bits?.onTransactionCancelled?.(() => {
       pendingRef.current = null;
+      setGamesPendingType(null);
     });
 
     window.Twitch?.ext?.listen?.("broadcast", (_t, _c, message) => {
@@ -524,6 +538,15 @@ function App() {
     setTtsApproved(false);
     logEvent("tts_redeem_started", { voice: approval.voiceId });
     window.Twitch.ext.bits.useBits(ttsConfig.tier);
+  }
+
+  // Passed to GamesControls as onStartTransaction — synchronous, no await
+  // before useBits, same rule as handleSoundClick/handleTtsPay above.
+  function handleGamesStartTransaction(type, tier, extra) {
+    pendingRef.current = { type, tier, ...extra };
+    setGamesPendingType(type);
+    logEvent("games_redeem_started", { type, tier });
+    window.Twitch.ext.bits.useBits(tier);
   }
 
   function prefetchPreviewAudio(sound) {
@@ -630,8 +653,28 @@ function App() {
 
   const hasSounds = soundsEnabled && sounds.length > 0;
   const hasTts = ttsConfig?.enabled;
+  const hasGames = Boolean(extConfig.features?.plinko || extConfig.features?.slots);
 
-  if (!hasSounds && !hasTts) {
+  // Which tab is actually showing: prefer activeTab if that tab is
+  // available, otherwise fall back to whichever single tab is available.
+  // The fallback matters because activeTab defaults to "sounds" and a
+  // channel with only TTS or only Games never gets a tab bar to change it —
+  // its content must still show. This single derived value replaces what
+  // used to be pairwise hasSounds/hasTts checks scattered across the header
+  // caption and each tab's content block; those checks were written for a
+  // 2-tab world and stopped being correct once Games became a third option
+  // (e.g. Sounds+Games available with Games active would have shown the
+  // Sounds grid underneath it too — the same bug found and fixed in
+  // ComponentApp.jsx's copy of this logic).
+  const effectiveTab =
+    activeTab === "sounds" && hasSounds ? "sounds" :
+    activeTab === "tts" && hasTts ? "tts" :
+    activeTab === "games" && hasGames ? "games" :
+    hasSounds ? "sounds" :
+    hasTts ? "tts" :
+    "games";
+
+  if (!hasSounds && !hasTts && !hasGames) {
     return (
       <div style={{ padding: 12 }}>
         <div
@@ -661,43 +704,66 @@ function App() {
           boxShadow: "0 0 0 1px #303038 inset",
         }}
       >
-        {/* Tab bar (only show if both sounds and TTS are available) */}
-        {hasSounds && hasTts && (
+        {/* Tab bar (only show if more than one of Sounds/TTS/Games is available) */}
+        {[hasSounds, hasTts, hasGames].filter(Boolean).length > 1 && (
           <div style={{ display: "flex", gap: 4, marginBottom: 10 }}>
-            <button
-              onClick={() => setActiveTab("sounds")}
-              style={{
-                flex: 1,
-                padding: "6px 0",
-                borderRadius: 8,
-                border: "none",
-                fontSize: 13,
-                fontWeight: 600,
-                cursor: "pointer",
-                background: activeTab === "sounds" ? "#9146FF" : "#303038",
-                color: "#fff",
-                opacity: activeTab === "sounds" ? 1 : 0.7,
-              }}
-            >
-              Sounds
-            </button>
-            <button
-              onClick={() => setActiveTab("tts")}
-              style={{
-                flex: 1,
-                padding: "6px 0",
-                borderRadius: 8,
-                border: "none",
-                fontSize: 13,
-                fontWeight: 600,
-                cursor: "pointer",
-                background: activeTab === "tts" ? "#9146FF" : "#303038",
-                color: "#fff",
-                opacity: activeTab === "tts" ? 1 : 0.7,
-              }}
-            >
-              TTS
-            </button>
+            {hasSounds && (
+              <button
+                onClick={() => setActiveTab("sounds")}
+                style={{
+                  flex: 1,
+                  padding: "6px 0",
+                  borderRadius: 8,
+                  border: "none",
+                  fontSize: 13,
+                  fontWeight: 600,
+                  cursor: "pointer",
+                  background: activeTab === "sounds" ? "#9146FF" : "#303038",
+                  color: "#fff",
+                  opacity: activeTab === "sounds" ? 1 : 0.7,
+                }}
+              >
+                Sounds
+              </button>
+            )}
+            {hasTts && (
+              <button
+                onClick={() => setActiveTab("tts")}
+                style={{
+                  flex: 1,
+                  padding: "6px 0",
+                  borderRadius: 8,
+                  border: "none",
+                  fontSize: 13,
+                  fontWeight: 600,
+                  cursor: "pointer",
+                  background: activeTab === "tts" ? "#9146FF" : "#303038",
+                  color: "#fff",
+                  opacity: activeTab === "tts" ? 1 : 0.7,
+                }}
+              >
+                TTS
+              </button>
+            )}
+            {hasGames && (
+              <button
+                onClick={() => setActiveTab("games")}
+                style={{
+                  flex: 1,
+                  padding: "6px 0",
+                  borderRadius: 8,
+                  border: "none",
+                  fontSize: 13,
+                  fontWeight: 600,
+                  cursor: "pointer",
+                  background: activeTab === "games" ? "#9146FF" : "#303038",
+                  color: "#fff",
+                  opacity: activeTab === "games" ? 1 : 0.7,
+                }}
+              >
+                Games
+              </button>
+            )}
           </div>
         )}
 
@@ -705,7 +771,7 @@ function App() {
         <div style={{ display: "flex", gap: 10, alignItems: "center", marginBottom: 8 }}>
           <img src="./alert_wave.png" alt="" style={{ height: 36, width: 36, flexShrink: 0 }} />
           <div style={{ fontSize: 15, opacity: 0.85 }}>
-            {(hasTts && (!hasSounds || activeTab === "tts")) ? "Text-to-Speech" : "Sound Alerts"}
+            {effectiveTab === "tts" ? "Text-to-Speech" : effectiveTab === "games" ? "Games" : "Sound Alerts"}
           </div>
         </div>
 
@@ -768,7 +834,7 @@ function App() {
         )}
 
         {/* Sounds tab */}
-        {hasSounds && (!hasTts || activeTab === "sounds") && (
+        {effectiveTab === "sounds" && (
           <div
             style={{
               display: "grid",
@@ -800,7 +866,7 @@ function App() {
         )}
 
         {/* TTS tab */}
-        {hasTts && (!hasSounds || activeTab === "tts") && (
+        {effectiveTab === "tts" && (
           <div>
             {ttsError && (
               <div
@@ -936,6 +1002,19 @@ function App() {
             </button>
           </div>
         )}
+
+        {effectiveTab === "games" && (
+          <GamesControls
+            auth={auth}
+            features={extConfig.features}
+            bitsEnabled={bitsEnabled}
+            pendingType={gamesPendingType}
+            pendingGamesTx={gamesPendingTx}
+            onGamesTxHandled={() => setGamesPendingTx(null)}
+            onStartTransaction={handleGamesStartTransaction}
+          />
+        )}
+
         <BrandedFooter style={{ marginTop: 4 }} />
       </div>
     </div>

@@ -915,7 +915,7 @@ Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>"
 - Consumes: `firePlinkoDrop`, `fireSlotsSpin` (with Task 6's `.queue` field); `getGamesSettings`, `getGlobalGamesConfig` (Task 1); `VALID_TIERS` (Task 4's import); `getOrCreateUserKey`, `normKey` (already imported); `state.seen` (already imported via `state.js`); `fetchUserDisplayName` (already imported).
 - Produces: `POST /api/plinko/redeem`, `POST /api/slots/redeem` — called by `GamesControls.jsx` (Task 10) after a completed Bits transaction.
 
-- [ ] **Step 1: Add the extension-JWT auth helpers**
+- [x] **Step 1: Add the extension-JWT auth helpers**
 
 `server.js` has no extension-JWT auth today (Plinko/Slots' existing routes are session-only) — add the same small pattern already independently duplicated in `routes_sounds.js` and `routes_tts.js`. Add near the top of `server.js`, after the other top-level `const`s (e.g. near `const sseClients = new Set();` at line 261):
 
@@ -952,7 +952,7 @@ function requireExtensionAuth(req, res) {
 
 (If you already added these while doing Task 4 Step 2, skip this — they're the same block.)
 
-- [ ] **Step 2: Add the Plinko redeem route**
+- [x] **Step 2: Add the Plinko redeem route**
 
 Add next to `app.post("/api/plinko/drop", ...)` (`server.js:1196`):
 
@@ -1040,7 +1040,7 @@ app.post("/api/plinko/redeem", async (req, res) => {
 });
 ```
 
-- [ ] **Step 3: Add the Slots redeem route**
+- [x] **Step 3: Add the Slots redeem route**
 
 Add next to `app.post("/api/slots/spin", ...)` (`server.js:1220`):
 
@@ -1122,7 +1122,7 @@ app.post("/api/slots/redeem", async (req, res) => {
 });
 ```
 
-- [ ] **Step 4: Verify manually**
+- [x] **Step 4: Verify manually**
 
 This route needs a real (or crafted-for-testing) extension viewer JWT and a real (or crafted) Bits transaction receipt JWT, both signed with `EXTENSION_SECRET`. Write a throwaway script (do not commit it) to mint both and hit the route, mirroring how `sub_dedup.test.js` or similar scripts in this repo fabricate JWTs for local testing — check `ebs/.env` for `EXTENSION_SECRET`, then:
 
@@ -1148,7 +1148,7 @@ Expected: `{"accepted":true,"position":0,"advanceSeqAtJoin":0,"waitingCount":1}`
 
 Then test the floor rejection: mint a receipt with `sku: "sound_10"` while `plinkoMinTier` is `"sound_100"` — expect `400 {"error":"Bits amount is below the minimum for this game"}`.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 cd ebs && git add server.js

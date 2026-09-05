@@ -592,7 +592,7 @@ Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>"
 
 The broadcaster-facing `ConfigApp.jsx` UI that calls these routes is built in Task 13.
 
-- [ ] **Step 1: Add imports**
+- [x] **Step 1: Add imports**
 
 In `ebs/server.js`, extend the existing `import { loadSubscriptions } from "./subscription_store.js";` (around line 91) to also import `isPro`:
 
@@ -612,7 +612,7 @@ import {
 import { VALID_TIERS } from "./tiers.js";
 ```
 
-- [ ] **Step 2: Add a broadcaster-auth helper**
+- [x] **Step 2: Add a broadcaster-auth helper**
 
 Near `resolveTimerUserIdFromRequest` (`server.js:1281`), add a new function — this is genuinely new for `server.js`'s inline routes (Plinko/Slots today only ever check `req.session.isAdmin`), because `ConfigApp.jsx` authenticates via an extension JWT with `role: "broadcaster"`, not a website session:
 
@@ -639,7 +639,7 @@ function requireGamesBroadcaster(req, res) {
 
 This calls `verifyExtensionJwt`, which Task 7 adds to this file — **do Task 7's Step 1 (the `jwt` import + `EXT_SECRET` + `verifyExtensionJwt`/`requireExtensionAuth` helpers) before this step** if working through tasks out of order. If following this plan in order, skip ahead momentarily: add that block now (copy it verbatim from Task 7 Step 1) rather than duplicating it later.
 
-- [ ] **Step 3: Add the settings + config routes**
+- [x] **Step 3: Add the settings + config routes**
 
 Add next to the existing `/api/plinko/config` / `/api/slots/config` routes (`server.js:855`, right after the `POST /api/slots/config` handler):
 
@@ -683,7 +683,7 @@ app.get("/api/games/config", (req, res) => {
 });
 ```
 
-- [ ] **Step 4: Verify manually**
+- [x] **Step 4: Verify manually**
 
 With the dev server running:
 
@@ -695,7 +695,7 @@ Expected: `401 {"error":"Extension auth required"}` without the header; with a v
 
 For the settings routes, since they require broadcaster session/JWT auth that's hard to fake from curl, verify via the running EBS admin session (log in as a test broadcaster on the dashboard, then in the browser console on that page): `fetch('/api/games/settings', {credentials:'include'}).then(r=>r.json()).then(console.log)` — expect the default settings shape from Task 1.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 cd ebs && git add server.js

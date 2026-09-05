@@ -5,6 +5,7 @@ import connectPgSimple from "connect-pg-simple";
 import { db, sessionDb } from "./db.js";
 import { wrapStoreWithReadCache } from "./session_read_cache.js";
 import { v4 as uuidv4 } from "uuid";
+import jwt from "jsonwebtoken";
 import { RULES } from "./rules.js";
 import { connectEventSubWS } from "./eventsub-ws.js";
 import { broadcastToChannel, sendExtensionChatMessage, sendBroadcasterChatMessage } from "./broadcast.js";
@@ -64,7 +65,13 @@ import { mountGoalRoutes } from "./routes_goals.js";
 import { logger, requestLogger, setLoggerContext } from "./logger.js";
 import { getRules, setRules, loadRules } from "./rules_store.js";
 import { getPlinkoConfig, setPlinkoConfig, loadPlinkoConfig } from "./plinko_store.js";
-import { loadGamesSettings } from "./games_store.js";
+import {
+  loadGamesSettings,
+  getGamesSettings,
+  setGamesSettings,
+  getGlobalGamesConfig,
+} from "./games_store.js";
+import { VALID_TIERS } from "./tiers.js";
 import { computePlinkoDrop } from "./plinko.js";
 import { getSlotsConfig, setSlotsConfig, loadSlotsConfig } from "./slots_store.js";
 import { computeSlotsSpin, SLOTS_DURATION_MS } from "./slots.js";
@@ -89,7 +96,7 @@ import { mountAdminRoutes } from "./routes_admin.js";
 import { mountAdminSoundRoutes } from "./routes_admin_sounds.js";
 import { loadSoundAlerts, listSounds, getSoundSettings, setSoundSettings, getSoundByChannelPointsRewardId } from "./sounds_store.js";
 import { loadBans, isBanned } from "./bans.js";
-import { loadSubscriptions } from "./subscription_store.js";
+import { loadSubscriptions, isPro } from "./subscription_store.js";
 import { mountStripeWebhookRoute, mountStripeRoutes } from "./routes_stripe.js";
 import { mountEventSubWebhookRoute, ensureStreamStatusWebhookSubs, removeStreamStatusWebhookSubs } from "./eventsub_webhook.js";
 import { mountTtsRoutes, registerAudioFile } from "./routes_tts.js";
@@ -256,6 +263,33 @@ function getBroadcasterConnection(userId) {
 // Helper to get all active broadcaster IDs
 function getAllActiveBroadcasters() {
   return Array.from(broadcasterConnections.keys());
+}
+
+// Extension JWT auth for the Games routes (redeem, viewer config, broadcaster
+// settings) — server.js has no extension-JWT auth today since Plinko/Slots'
+// existing routes are session-only; this mirrors the pattern already
+// independently duplicated in routes_sounds.js / routes_tts.js.
+const EXT_SECRET = process.env.EXTENSION_SECRET
+  ? Buffer.from(process.env.EXTENSION_SECRET, "base64")
+  : null;
+
+function verifyExtensionJwt(req) {
+  if (!EXT_SECRET) return null;
+  const authHeader = req.headers.authorization;
+  if (!authHeader) return null;
+  const token = authHeader.replace("Bearer ", "");
+  try {
+    return jwt.verify(token, EXT_SECRET, { algorithms: ["HS256"] });
+  } catch {
+    return null;
+  }
+}
+
+function requireExtensionAuth(req, res) {
+  const claims = verifyExtensionJwt(req);
+  if (claims) return claims;
+  res.status(401).json({ error: "Extension auth required" });
+  return null;
 }
 
 // Server-Sent Events (SSE) clients for external overlays
@@ -902,6 +936,44 @@ app.post("/api/slots/config", (req, res) => {
   }
 });
 
+app.get("/api/games/settings", (req, res) => {
+  const uid = requireGamesBroadcaster(req, res);
+  if (!uid) return;
+  const settings = getGamesSettings(uid);
+  const glob = getGlobalGamesConfig();
+  res.json({
+    settings,
+    accessible: isPro(uid) || settings.granted,
+    launched: glob.launched,
+    globalMinTier: glob.minTier,
+  });
+});
+
+app.post("/api/games/settings", (req, res) => {
+  const uid = requireGamesBroadcaster(req, res);
+  if (!uid) return;
+  const updated = setGamesSettings(uid, req.body || {});
+  logger.info("games_settings_updated", { userId: uid });
+  res.json({ settings: updated });
+});
+
+// Viewer-facing config — enough for the extension's tier picker and Plinko
+// column picker to match the streamer's real board, without exposing
+// anything broadcaster-only.
+app.get("/api/games/config", (req, res) => {
+  const claims = requireExtensionAuth(req, res);
+  if (!claims) return;
+  const channelId = req.query.channelId || claims.channel_id;
+  if (!channelId) return res.status(400).json({ error: "channelId required" });
+  const uid = String(channelId);
+  const gs = getGamesSettings(uid);
+  const plinkoCfg = getPlinkoConfig(uid);
+  res.json({
+    plinko: { columns: plinkoCfg.rows + 1, minTier: gs.pricing.plinkoMinTier },
+    slots: { minTier: gs.pricing.slotsMinTier },
+  });
+});
+
 // Write a plinko_drop event to every browser source on this overlay key.
 function fanOutPlinkoDrop(overlayKey, boardId, payload) {
   for (const client of Array.from(sseClients)) {
@@ -1293,6 +1365,25 @@ function resolveTimerUserIdFromRequest(req) {
   }
   // No fallback — without a session or valid key, return null so callers
   // can reject the request instead of silently routing to the wrong timer.
+  return null;
+}
+
+// Broadcaster auth for the Games settings routes — supports both the EBS
+// website session (dashboard) and an extension JWT with role "broadcaster"
+// (ConfigApp.jsx, running inside the Twitch config iframe). Mirrors the
+// requireBroadcaster() already duplicated in routes_sounds.js / routes_tts.js;
+// this file has no such helper today since Plinko/Slots' existing routes are
+// session-only.
+function requireGamesBroadcaster(req, res) {
+  if (req?.session?.isAdmin) {
+    const uid = req.session?.managingAs || req.session?.twitchUser?.id;
+    if (uid) return String(uid);
+  }
+  const claims = verifyExtensionJwt(req);
+  if (claims && claims.role === "broadcaster") {
+    return String(claims.channel_id);
+  }
+  res.status(401).json({ error: "Broadcaster auth required" });
   return null;
 }
 

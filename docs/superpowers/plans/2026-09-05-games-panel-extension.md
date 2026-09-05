@@ -1362,7 +1362,7 @@ Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>"
 - Consumes: `deleteGamesSettings` from `./games_store.js`.
 - Produces: nothing new consumed elsewhere — this closes out the GDPR-deletion contract every other per-broadcaster store already has.
 
-- [ ] **Step 1: Add the import and deletion step**
+- [x] **Step 1: Add the import and deletion step**
 
 In `ebs/user_data_deletion.js`, add to the imports (next to `import { deleteSlotsConfig } from "./slots_store.js";`):
 
@@ -1377,7 +1377,7 @@ Add next to the existing `8c. Slots board config` step:
   if (deleteGamesSettings(uid)) deleted.push("games");
 ```
 
-- [ ] **Step 2: Add the gitignore entry**
+- [x] **Step 2: Add the gitignore entry**
 
 In `.gitignore`, add next to `ebs/overlay-slots.json`:
 
@@ -1387,11 +1387,11 @@ ebs/overlay-games-settings.json
 
 (`games-global-config.json` is intentionally **not** added — `tts-global-config.json` isn't gitignored either; this repo treats site-wide admin config files as trackable, unlike per-broadcaster ones. Don't "fix" that inconsistency here — it's out of scope for this plan.)
 
-- [ ] **Step 3: Verify manually**
+- [x] **Step 3: Verify manually**
 
 Run the existing account-deletion flow (find the admin "Delete my data" endpoint/button already wired to `deleteAllUserData`) for a test broadcaster that has `games_store.js` settings set, and confirm the response's `deleted` array includes `"games"`, and that `getGamesSettings(uid)` afterward returns the default settings again.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add ebs/user_data_deletion.js .gitignore

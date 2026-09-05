@@ -1212,7 +1212,7 @@ Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>"
 - Consumes: `plinkoQueue.snapshot(channelId)` / `slotsQueue.snapshot(channelId)` (Task 2's `advanceSeq`).
 - Produces: `GET /api/games/queue-stream?channelId=` — an SSE stream viewers' extension instances open, `event: games_queue`, `{ plinko: { waitingCount, advanceSeq }, slots: { waitingCount, advanceSeq } }`. Consumed by `GamesControls.jsx` (Task 10).
 
-- [ ] **Step 1: Add a separate client registry**
+- [x] **Step 1: Add a separate client registry**
 
 Near `const sseClients = new Set();` (`server.js:261`), add:
 
@@ -1225,7 +1225,7 @@ Near `const sseClients = new Set();` (`server.js:261`), add:
 const gamesQueueClients = new Set();
 ```
 
-- [ ] **Step 2: Add the broadcast function**
+- [x] **Step 2: Add the broadcast function**
 
 Add near `broadcastPlinkoQueue` / `broadcastSlotsQueue` (`server.js:918`, `1071`):
 
@@ -1254,7 +1254,7 @@ function broadcastGamesQueueSse(channelId) {
 }
 ```
 
-- [ ] **Step 3: Wire it into both queues' `onChange`**
+- [x] **Step 3: Wire it into both queues' `onChange`**
 
 Find (`server.js:287-299`):
 
@@ -1298,7 +1298,7 @@ const slotsQueue = createPlinkoQueue({
 });
 ```
 
-- [ ] **Step 4: Add the SSE route**
+- [x] **Step 4: Add the SSE route**
 
 Add near `app.get("/api/overlay/stream", ...)` (`server.js:1339`), after it:
 
@@ -1333,7 +1333,7 @@ app.get("/api/games/queue-stream", (req, res) => {
 });
 ```
 
-- [ ] **Step 5: Verify manually**
+- [x] **Step 5: Verify manually**
 
 ```bash
 curl -N "http://localhost:8080/api/games/queue-stream?channelId=12345"
@@ -1341,7 +1341,7 @@ curl -N "http://localhost:8080/api/games/queue-stream?channelId=12345"
 
 Expected: an initial `event: games_queue` with zeroed counts, held open. While that curl is running, trigger a Plinko redeem (Task 7's manual test) for the same `channelId` — expect a second `event: games_queue` to arrive on the open connection with `plinko.waitingCount`/`advanceSeq` reflecting the change.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 cd ebs && git add server.js

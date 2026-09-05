@@ -961,11 +961,25 @@ app.post("/api/plinko/redeem", async (req, res) => {
   const claims = requireExtensionAuth(req, res);
   if (!claims) return;
 
-  const { receipt, channelId, dropColumn } = req.body || {};
-  if (!receipt || !channelId) {
-    return res.status(400).json({ error: "receipt and channelId are required" });
+  // The channel this redemption acts on is the viewer's own authenticated
+  // channel context (Twitch sets claims.channel_id to whichever channel's
+  // extension instance authorized this JWT) — never a client-supplied
+  // value. Trusting a body-supplied channelId here would let a viewer on
+  // channel A redirect their own real Bits transaction to fire a drop,
+  // credit a timer, and touch the queue on an unrelated channel B. (This
+  // was the original shape of this route — fixed after an automated
+  // security review caught it as a cross-channel IDOR; verified live that
+  // the exploit path is closed and that a receipt legitimately issued for
+  // a different channel is rejected.)
+  const uid = String(claims.channel_id || "");
+  if (!uid) {
+    return res.status(401).json({ error: "Channel context required" });
   }
-  const uid = String(channelId);
+
+  const { receipt, dropColumn } = req.body || {};
+  if (!receipt) {
+    return res.status(400).json({ error: "receipt is required" });
+  }
 
   let txClaims;
   try {
@@ -976,6 +990,17 @@ app.post("/api/plinko/redeem", async (req, res) => {
   const receiptData = txClaims.data || txClaims;
   const txId = receiptData.transactionId || receiptData.transactionID || receiptData.id;
   const viewerUserId = claims.user_id;
+
+  // Defense in depth: if the receipt itself carries a channel claim (Bits
+  // transaction receipts are channel-scoped by nature), it must match the
+  // channel we're about to act on.
+  const receiptChannel = String(
+    txClaims.channel_id || txClaims.channelId ||
+    receiptData.channel_id || receiptData.channelId || ""
+  );
+  if (receiptChannel && receiptChannel !== uid) {
+    return res.status(400).json({ error: "Receipt channel mismatch" });
+  }
 
   const gs = getGamesSettings(uid);
   const glob = getGlobalGamesConfig();
@@ -1049,11 +1074,18 @@ app.post("/api/slots/redeem", async (req, res) => {
   const claims = requireExtensionAuth(req, res);
   if (!claims) return;
 
-  const { receipt, channelId } = req.body || {};
-  if (!receipt || !channelId) {
-    return res.status(400).json({ error: "receipt and channelId are required" });
+  // See the identical comment in POST /api/plinko/redeem — the acting
+  // channel is always the viewer's own authenticated context, never a
+  // client-supplied value.
+  const uid = String(claims.channel_id || "");
+  if (!uid) {
+    return res.status(401).json({ error: "Channel context required" });
   }
-  const uid = String(channelId);
+
+  const { receipt } = req.body || {};
+  if (!receipt) {
+    return res.status(400).json({ error: "receipt is required" });
+  }
 
   let txClaims;
   try {
@@ -1064,6 +1096,14 @@ app.post("/api/slots/redeem", async (req, res) => {
   const receiptData = txClaims.data || txClaims;
   const txId = receiptData.transactionId || receiptData.transactionID || receiptData.id;
   const viewerUserId = claims.user_id;
+
+  const receiptChannel = String(
+    txClaims.channel_id || txClaims.channelId ||
+    receiptData.channel_id || receiptData.channelId || ""
+  );
+  if (receiptChannel && receiptChannel !== uid) {
+    return res.status(400).json({ error: "Receipt channel mismatch" });
+  }
 
   const gs = getGamesSettings(uid);
   const glob = getGlobalGamesConfig();
@@ -1141,10 +1181,14 @@ Then, with the broadcaster `12345` set to `granted: true` and `globalGamesConfig
 ```bash
 curl -s -X POST http://localhost:8080/api/plinko/redeem \
   -H "Authorization: Bearer <viewerToken>" -H "Content-Type: application/json" \
-  -d '{"receipt":"<receipt>","channelId":"12345","dropColumn":3}'
+  -d '{"receipt":"<receipt>","dropColumn":3}'
 ```
 
+(No `channelId` in the body — the server derives the acting channel from `viewerToken`'s own `channel_id` claim, per the IDOR fix made after this task was first implemented; see the comment atop the route.)
+
 Expected: `{"accepted":true,"position":0,"advanceSeqAtJoin":0,"waitingCount":1}` (or similar — first drop plays immediately, position 0) and a token visibly drops on `/overlay/plinko?key=...` if you have that browser source open. Re-running the exact same curl command (same `txId`) should return `{"accepted":true,"duplicate":true}` without a second drop.
+
+Also verify the channel binding itself: mint a `receipt` whose `channel_id` claim differs from `viewerToken`'s `channel_id` — expect `400 {"error":"Receipt channel mismatch"}`.
 
 Then test the floor rejection: mint a receipt with `sku: "sound_10"` while `plinkoMinTier` is `"sound_100"` — expect `400 {"error":"Bits amount is below the minimum for this game"}`.
 
@@ -1467,9 +1511,11 @@ export function GamesControls({
     if (!pendingGamesTx || !auth) return;
     const { type, receipt, dropColumn: col } = pendingGamesTx;
     const url = type === "plinko" ? `${EBS_BASE}/api/plinko/redeem` : `${EBS_BASE}/api/slots/redeem`;
-    const body = type === "plinko"
-      ? { receipt, channelId: auth.channelId, dropColumn: col }
-      : { receipt, channelId: auth.channelId };
+    // No channelId in the body — the server derives the acting channel from
+    // the viewer's own authenticated JWT (claims.channel_id), never from a
+    // client-supplied value (fixed post-Task-7 after a cross-channel IDOR
+    // was found; see POST /api/plinko/redeem's comment in Task 7 above).
+    const body = type === "plinko" ? { receipt, dropColumn: col } : { receipt };
     fetch(url, {
       method: "POST",
       headers: { Authorization: `Bearer ${auth.token}`, "Content-Type": "application/json" },

@@ -203,19 +203,32 @@ anything calling them has to live). Each mirrors `POST /api/sounds/redeem`
 (`ebs/routes_sounds.js:1625`) closely:
 
 1. `verifyExtensionJwt` — reject unauthenticated.
-2. Verify the Bits transaction receipt JWT.
-3. Recompute accessibility + visibility server-side (never trust the
+2. **Bind `uid` to `claims.channel_id`, never to a client-supplied
+   `channelId`.** Every downstream step (accessibility, floor check,
+   `firePlinkoDrop`/`fireSlotsSpin`'s target, overlay-key resolution) keys
+   off `uid` — trusting a request-body value here lets a viewer authenticated
+   on channel A redirect their own real Bits transaction to act on an
+   unrelated channel B. (This surfaced as a cross-channel IDOR during
+   implementation, after the route was first built taking `channelId` from
+   the body per the sound/TTS precedent below — fixed by switching to the
+   JWT's own claim, which this app already treats as authoritative
+   elsewhere. Sound/TTS's existing redeem routes have the same
+   body-`channelId` shape and were not in scope to change here.)
+3. Verify the Bits transaction receipt JWT; if it carries its own channel
+   claim (real receipts are channel-scoped), it must match `uid` — defense
+   in depth against a receipt genuinely issued for a different channel.
+4. Recompute accessibility + visibility server-side (never trust the
    client's cached `features` flags) — 404/403 if the game isn't actually
    enabled right now.
-4. **Verify the receipt's SKU is a valid tier at or above
+5. **Verify the receipt's SKU is a valid tier at or above
    `gs.pricing.plinkoMinTier` / `gs.pricing.slotsMinTier`**
    (`VALID_TIERS.indexOf(receiptSku) >= VALID_TIERS.indexOf(minTier)`) —
    stops a stale/tampered client claiming a below-floor tier bought the
    drop. This is a floor check, not the equality check
    `routes_sounds.js:1664` does for sounds' single fixed tier — the closer
    precedent is `setTtsSettings`'s floor enforcement (`tts_store.js:115-122`).
-5. Dedupe by `transactionId` (existing `deduplicateTx`).
-6. Call `firePlinkoDrop({ uid, overlayKey, dropColumn, source: 'bits_redeem', viewerName })`
+6. Dedupe by `transactionId` (existing `deduplicateTx`).
+7. Call `firePlinkoDrop({ uid, overlayKey, dropColumn, source: 'bits_redeem', viewerName })`
    / `fireSlotsSpin({ uid, overlayKey, source: 'bits_redeem', viewerName })` —
    unchanged internals, same queue, same `addSeconds` choke-point, same OBS
    SSE fan-out.
@@ -223,12 +236,15 @@ anything calling them has to live). Each mirrors `POST /api/sounds/redeem`
 Request/response:
 
 ```
-POST /api/plinko/redeem  { receipt, channelId, dropColumn }
-POST /api/slots/redeem   { receipt, channelId }
+POST /api/plinko/redeem  { receipt, dropColumn }
+POST /api/slots/redeem   { receipt }
   → 200 { accepted: true, position, advanceSeqAtJoin, waitingCount }
   → 200 { accepted: false, reason: 'full' }
-  → 400 / 403 / 404 on the failure modes above
+  → 400 / 401 / 404 on the failure modes above
 ```
+
+No `channelId` in either request — the acting channel comes entirely from
+the authenticated JWT (see point 2 above).
 
 `firePlinkoDrop` / `fireSlotsSpin` need a small change: return the
 `queue.enqueue()` result (`{ accepted, position, waitingCount }`, see below)

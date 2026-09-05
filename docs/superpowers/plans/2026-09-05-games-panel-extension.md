@@ -2109,7 +2109,7 @@ Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>"
 - Consumes: `GamesControls` (Task 10). This file (`index.html` + `mobile.html`'s entry point) duplicates its own independent Sounds/TTS/Bits implementation, structured slightly differently from `ComponentApp.jsx`'s copy (an `if/else` in `onTransactionComplete` rather than an early-return `if` block) — every step below gives this file's own exact surrounding code, not a cross-reference to Task 11.
 - Produces: viewers see the same third "Games" tab in the Panel and Mobile views.
 
-- [ ] **Step 1: Import the component**
+- [x] **Step 1: Import the component**
 
 Near the top of `App.jsx`, add:
 
@@ -2117,7 +2117,7 @@ Near the top of `App.jsx`, add:
 import { GamesControls } from "./GamesControls.jsx";
 ```
 
-- [ ] **Step 2: Add games-transaction state**
+- [x] **Step 2: Add games-transaction state**
 
 Near the existing `extConfig` state declaration (`App.jsx:305`), add:
 
@@ -2129,7 +2129,7 @@ Near the existing `extConfig` state declaration (`App.jsx:305`), add:
   const [gamesPendingTx, setGamesPendingTx] = useState(null);
 ```
 
-- [ ] **Step 3: Update the `pendingRef` comment**
+- [x] **Step 3: Update the `pendingRef` comment**
 
 Find (`App.jsx:285`):
 
@@ -2143,7 +2143,7 @@ Replace with:
   const pendingRef = useRef(null); // { type: "sound"|"tts"|"plinko"|"slots", ...data }
 ```
 
-- [ ] **Step 4: Extend the `onTransactionComplete` handler**
+- [x] **Step 4: Extend the `onTransactionComplete` handler**
 
 Find (`App.jsx:373-436`):
 
@@ -2290,7 +2290,7 @@ Replace the `if (pending.type === "tts") { ... } else { ... }` shape with `if / 
     });
 ```
 
-- [ ] **Step 5: Extend `onTransactionCancelled`**
+- [x] **Step 5: Extend `onTransactionCancelled`**
 
 Find (`App.jsx:438-440`):
 
@@ -2309,7 +2309,7 @@ Replace with:
     });
 ```
 
-- [ ] **Step 6: Add `handleGamesStartTransaction`**
+- [x] **Step 6: Add `handleGamesStartTransaction`**
 
 Near `handleTtsPay` (`App.jsx:514-527`), add:
 
@@ -2324,7 +2324,7 @@ Near `handleTtsPay` (`App.jsx:514-527`), add:
   }
 ```
 
-- [ ] **Step 7: Extend the tab-bar gating**
+- [x] **Step 7: Extend the tab-bar gating**
 
 Find (`App.jsx:631-634`):
 
@@ -2456,7 +2456,7 @@ Replace with:
         )}
 ```
 
-- [ ] **Step 8: Render the Games panel**
+- [x] **Step 8: Render the Games panel**
 
 Find the TTS tab block's closing (`App.jsx:803` onward — the block opened with `{hasTts && (!hasSounds || activeTab === "tts") && (`). After that block's matching closing `)}`, add a sibling block:
 
@@ -2474,11 +2474,11 @@ Find the TTS tab block's closing (`App.jsx:803` onward — the block opened with
         )}
 ```
 
-- [ ] **Step 9: Verify manually**
+- [x] **Step 9: Verify manually**
 
 `cd extension && npm run dev`, open `preview-panel.html`. Same checklist as Task 11 Step 8, confirming the Panel view: Games tab appears/disappears correctly alongside Sounds/TTS, tier picker and column buttons render, a redemption queues and counts down, and toggling visibility off hides the tab on reload. Also open `mobile.html` and spot-check the same, since it shares this exact file.
 
-- [ ] **Step 10: Commit**
+- [x] **Step 10: Commit**
 
 ```bash
 cd extension && git add src/App.jsx

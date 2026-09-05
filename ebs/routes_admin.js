@@ -6,6 +6,7 @@ import { getBan, banUser, unbanUser } from "./bans.js";
 import { getLogEntries } from "./event_log.js";
 import { getSubscription, isPro } from "./subscription_store.js";
 import { getTtsSettings, setTtsSettings, getGlobalTtsConfig, setGlobalTtsConfig } from "./tts_store.js";
+import { getGlobalGamesConfig, setGlobalGamesConfig } from "./games_store.js";
 import { getBannerConfig, setBannerConfig } from "./banner_store.js";
 import { fetchLiveStreamStatus } from "./twitch_api.js";
 import { backfillUserProfile, ensureBroadcasterLanguage } from "./user_profiles.js";
@@ -428,6 +429,25 @@ export function mountAdminRoutes(app, ctx) {
       return res.status(403).json({ error: "Access denied" });
     }
     const updated = setGlobalTtsConfig(req.body || {});
+    res.json({ ok: true, config: updated });
+  });
+
+  // Get the site-wide Games launch config
+  app.get("/api/admin/games-config", (req, res) => {
+    if (!req.session?.isAdmin || !isSuperAdmin(req)) {
+      return res.status(403).json({ error: "Access denied" });
+    }
+    const config = getGlobalGamesConfig();
+    const tiers = VALID_TIERS.map((sku) => ({ sku, label: TIER_LABELS[sku], cost: TIER_COSTS[sku] }));
+    res.json({ config, tiers });
+  });
+
+  // Update the site-wide Games launch config — this is the kill switch
+  app.post("/api/admin/games-config", (req, res) => {
+    if (!req.session?.isAdmin || !isSuperAdmin(req)) {
+      return res.status(403).json({ error: "Access denied" });
+    }
+    const updated = setGlobalGamesConfig(req.body || {});
     res.json({ ok: true, config: updated });
   });
 

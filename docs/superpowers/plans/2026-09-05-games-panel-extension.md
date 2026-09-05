@@ -322,7 +322,7 @@ Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>"
 - Consumes: nothing new.
 - Produces (used by Tasks 6, 7, 8): `enqueue()`'s resolved value gains two fields — full shape becomes `{ accepted: true, waiting, position, advanceSeq }` on success (unchanged `{ accepted: false, reason: 'full' }` on rejection). `snapshot()`'s return gains `advanceSeq` (a number, `0` for a channel with no queue at all).
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Add to the end of `ebs/plinko_queue.test.js` (append — do not remove existing tests):
 
@@ -378,12 +378,12 @@ test('snapshot reports advanceSeq 0 for a channel that has never queued anything
 });
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `cd ebs && node --test plinko_queue.test.js`
 Expected: FAIL — `result.position` is `undefined`, assertions fail
 
-- [ ] **Step 3: Implement the additions**
+- [x] **Step 3: Implement the additions**
 
 In `ebs/plinko_queue.js`, modify `enqueue`, `drain`, and `snapshot`:
 
@@ -466,12 +466,12 @@ In `ebs/plinko_queue.js`, modify `enqueue`, `drain`, and `snapshot`:
 
 (Only these three functions change; `pub`, `size`, and the module's exports stay as they are.)
 
-- [ ] **Step 4: Run tests to verify they pass**
+- [x] **Step 4: Run tests to verify they pass**
 
 Run: `cd ebs && node --test plinko_queue.test.js`
 Expected: PASS (all tests, old and new — 16 total)
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 cd ebs && git add plinko_queue.js plinko_queue.test.js

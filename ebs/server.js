@@ -1395,7 +1395,7 @@ app.post("/api/plinko/redeem", async (req, res) => {
 
   const gs = getGamesSettings(uid);
   const glob = getGlobalGamesConfig();
-  const accessible = glob.launched && (isPro(uid) || gs.granted);
+  const accessible = glob.launched.plinko && (isPro(uid) || gs.granted);
   if (!accessible || !gs.visibility.enabled || !gs.visibility.plinko) {
     return res.status(404).json({ error: "Plinko is not available on this channel" });
   }
@@ -1513,7 +1513,7 @@ app.post("/api/slots/redeem", async (req, res) => {
 
   const gs = getGamesSettings(uid);
   const glob = getGlobalGamesConfig();
-  const accessible = glob.launched && (isPro(uid) || gs.granted);
+  const accessible = glob.launched.slots && (isPro(uid) || gs.granted);
   if (!accessible || !gs.visibility.enabled || !gs.visibility.slots) {
     return res.status(404).json({ error: "Slots is not available on this channel" });
   }

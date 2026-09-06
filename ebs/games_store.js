@@ -23,8 +23,13 @@ const DEFAULT_GAMES_SETTINGS = {
 };
 
 // Site-wide, admin-only — independent of any one broadcaster's settings.
+// `launched` is per-game so the site can go live with e.g. Plinko while
+// keeping Slots off, rather than one switch gating both together.
 let globalGamesConfig = {
-  launched: false,
+  launched: {
+    plinko: false,
+    slots: false,
+  },
   minTier: "sound_100",
 };
 
@@ -44,7 +49,8 @@ export async function loadGamesSettings() {
   try {
     const raw = await readFile(GAMES_GLOBAL_PATH, "utf-8");
     const parsed = JSON.parse(raw);
-    if (typeof parsed.launched === "boolean") globalGamesConfig.launched = parsed.launched;
+    if (typeof parsed.launched?.plinko === "boolean") globalGamesConfig.launched.plinko = parsed.launched.plinko;
+    if (typeof parsed.launched?.slots === "boolean") globalGamesConfig.launched.slots = parsed.launched.slots;
     if (typeof parsed.minTier === "string" && VALID_TIERS.includes(parsed.minTier)) {
       globalGamesConfig.minTier = parsed.minTier;
     }
@@ -120,12 +126,16 @@ export function setGamesSettings(uid, patch = {}) {
 }
 
 export function getGlobalGamesConfig() {
-  return { ...globalGamesConfig };
+  // Deep clone, not a shallow spread — `launched` is nested now, and a
+  // shallow copy would hand callers a live reference to it, letting a
+  // careless mutation elsewhere corrupt the real config.
+  return cloneSettings(globalGamesConfig);
 }
 
 export function setGlobalGamesConfig(patch = {}) {
-  if (typeof patch.launched === "boolean") {
-    globalGamesConfig.launched = patch.launched;
+  if (patch.launched && typeof patch.launched === "object") {
+    if (typeof patch.launched.plinko === "boolean") globalGamesConfig.launched.plinko = patch.launched.plinko;
+    if (typeof patch.launched.slots === "boolean") globalGamesConfig.launched.slots = patch.launched.slots;
   }
   if (typeof patch.minTier === "string" && VALID_TIERS.includes(patch.minTier)) {
     globalGamesConfig.minTier = patch.minTier;

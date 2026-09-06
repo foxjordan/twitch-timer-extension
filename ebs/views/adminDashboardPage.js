@@ -250,9 +250,12 @@ export function renderAdminDashboardPage(options = {}) {
       <div class="section-page" data-section="games">
       <div class="table-card">
         <h2>Games (Plinko/Slots)</h2>
-        <div style="font-size:12px; color:var(--text-muted); margin-bottom:12px;">Site-wide kill switch for the Games mini-games. While off, no broadcaster's viewers can see or play Plinko/Slots, regardless of that broadcaster's own Games settings. Turn this on only once the 1.1.0 extension version has been approved by Twitch.</div>
+        <div style="font-size:12px; color:var(--text-muted); margin-bottom:12px;">Site-wide kill switch for the Games mini-games, per game — e.g. launch Plinko while keeping Slots off. While a game is off here, no broadcaster's viewers can see or play it, regardless of that broadcaster's own Games settings, and the whole Games section stays hidden from a broadcaster's config panel until at least one game is launched. Turn these on only once the 1.1.0 extension version has been approved by Twitch.</div>
+        <label style="display:flex; align-items:center; gap:6px; font-size:13px; font-weight:normal; margin-bottom:6px;">
+          <input type="checkbox" id="gamesPlinkoLaunched"> Plinko launched (available site-wide)
+        </label>
         <label style="display:flex; align-items:center; gap:6px; font-size:13px; font-weight:normal; margin-bottom:10px;">
-          <input type="checkbox" id="gamesLaunched"> Launched (Games available site-wide)
+          <input type="checkbox" id="gamesSlotsLaunched"> Slots launched (available site-wide)
         </label>
         <label for="gamesMinTier" style="display:block; font-size:13px; font-weight:600; margin-bottom:6px;">Global minimum Bits tier</label>
         <select id="gamesMinTier"></select>
@@ -1235,7 +1238,8 @@ export function renderAdminDashboardPage(options = {}) {
         fetchBannerConfig();
 
         // ===== Games =====
-        var gamesLaunchedEl = document.getElementById('gamesLaunched');
+        var gamesPlinkoLaunchedEl = document.getElementById('gamesPlinkoLaunched');
+        var gamesSlotsLaunchedEl = document.getElementById('gamesSlotsLaunched');
         var gamesMinTierSelect = document.getElementById('gamesMinTier');
         var gamesSaveBtn = document.getElementById('gamesSaveBtn');
         var gamesSaveStatus = document.getElementById('gamesSaveStatus');
@@ -1258,7 +1262,8 @@ export function renderAdminDashboardPage(options = {}) {
             .then(function(data) {
               if (data.error || !data.config) return;
               gamesCurrentConfig = data.config;
-              gamesLaunchedEl.checked = !!data.config.launched;
+              gamesPlinkoLaunchedEl.checked = !!data.config.launched?.plinko;
+              gamesSlotsLaunchedEl.checked = !!data.config.launched?.slots;
               renderGamesTierSelect(data.tiers || []);
             })
             .catch(function() {});
@@ -1279,7 +1284,10 @@ export function renderAdminDashboardPage(options = {}) {
             credentials: 'same-origin',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-              launched: gamesLaunchedEl.checked,
+              launched: {
+                plinko: gamesPlinkoLaunchedEl.checked,
+                slots: gamesSlotsLaunchedEl.checked,
+              },
               minTier: gamesMinTierSelect.value,
             })
           })

@@ -89,13 +89,31 @@ test('getGlobalGamesConfig defaults to not-launched with a sound_100 floor', () 
   // file — checked first via a distinct uid-free assertion isn't possible
   // since setGlobalGamesConfig mutates module state; assert the shape instead.
   const g = getGlobalGamesConfig();
-  assert.equal(typeof g.launched, 'boolean');
+  assert.equal(g.launched.plinko, false);
+  assert.equal(g.launched.slots, false);
   assert.ok(g.minTier);
 });
 
-test('setGlobalGamesConfig updates launched and minTier, and persists', async () => {
-  const updated = setGlobalGamesConfig({ launched: true, minTier: 'sound_50' });
-  assert.equal(updated.launched, true);
+test('getGlobalGamesConfig returns a copy, not shared mutable state', () => {
+  const first = getGlobalGamesConfig();
+  first.launched.plinko = true;
+  const second = getGlobalGamesConfig();
+  assert.equal(second.launched.plinko, false);
+});
+
+test('setGlobalGamesConfig launches Plinko and Slots independently', async () => {
+  const updated = setGlobalGamesConfig({ launched: { plinko: true } });
+  assert.equal(updated.launched.plinko, true);
+  assert.equal(updated.launched.slots, false); // untouched by a plinko-only patch
+
+  const updated2 = setGlobalGamesConfig({ launched: { slots: true } });
+  assert.equal(updated2.launched.plinko, true); // still on from the earlier patch
+  assert.equal(updated2.launched.slots, true);
+  await persistGlobalGamesConfig();
+});
+
+test('setGlobalGamesConfig updates minTier and persists', async () => {
+  const updated = setGlobalGamesConfig({ minTier: 'sound_50' });
   assert.equal(updated.minTier, 'sound_50');
   await persistGlobalGamesConfig();
 });

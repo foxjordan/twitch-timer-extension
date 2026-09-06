@@ -1261,14 +1261,17 @@ export function mountSoundRoutes(app, deps = {}) {
     const soundSettings = getSoundSettings(uid);
     const gs = getGamesSettings(uid);
     const globalGames = getGlobalGamesConfig();
-    const gamesAccessible = globalGames.launched && (isPro(uid) || gs.granted);
+    // Pro/grant status is shared across both games; launch status is now
+    // independent per game (site can go live with Plinko while Slots stays
+    // off), so each feature flag checks its own launched.* bit.
+    const gamesAccessible = isPro(uid) || gs.granted;
     res.json({
       features: {
         tts: true,           // toggled per-channel via TTS settings — placeholder for now
         videoClips: Boolean(soundSettings?.videoClipsEnabled),
         communityLibrary: true,
-        plinko: gamesAccessible && gs.visibility.enabled && gs.visibility.plinko,
-        slots: gamesAccessible && gs.visibility.enabled && gs.visibility.slots,
+        plinko: gamesAccessible && globalGames.launched.plinko && gs.visibility.enabled && gs.visibility.plinko,
+        slots: gamesAccessible && globalGames.launched.slots && gs.visibility.enabled && gs.visibility.slots,
       },
       banner: getBannerConfig(),
     });

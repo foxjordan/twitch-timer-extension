@@ -105,7 +105,8 @@ function ConfigApp() {
   const [ttsBannedWordsText, setTtsBannedWordsText] = useState("");
   const [gamesSettings, setGamesSettingsState] = useState(null);
   const [gamesAccessible, setGamesAccessible] = useState(false);
-  const [gamesLaunched, setGamesLaunched] = useState(false);
+  const [gamesPlinkoLaunched, setGamesPlinkoLaunched] = useState(false);
+  const [gamesSlotsLaunched, setGamesSlotsLaunched] = useState(false);
   const [gamesGlobalMinTier, setGamesGlobalMinTier] = useState("sound_100");
   const [previewingVoice, setPreviewingVoice] = useState(null);
   const [extConfig, setExtConfig] = useState({ features: { tts: true, videoClips: true, communityLibrary: true } });
@@ -240,7 +241,8 @@ function ConfigApp() {
         .then((data) => {
           if (data.settings) setGamesSettingsState(data.settings);
           if (typeof data.accessible === "boolean") setGamesAccessible(data.accessible);
-          if (typeof data.launched === "boolean") setGamesLaunched(data.launched);
+          if (typeof data.launched?.plinko === "boolean") setGamesPlinkoLaunched(data.launched.plinko);
+          if (typeof data.launched?.slots === "boolean") setGamesSlotsLaunched(data.launched.slots);
           if (data.globalMinTier) setGamesGlobalMinTier(data.globalMinTier);
         })
         .catch(() => {});
@@ -1309,17 +1311,15 @@ function ConfigApp() {
         </div>
       )}
 
-      {gamesSettings && (
+      {/* Hidden entirely until at least one game is launched site-wide —
+          before that there's nothing here a broadcaster could act on, and
+          showing a "coming soon" card just invites support questions. */}
+      {gamesSettings && (gamesPlinkoLaunched || gamesSlotsLaunched) && (
         <div style={styles.card}>
           <h3 style={styles.subHeading}>Games</h3>
           {!gamesAccessible && (
             <div style={{ fontSize: 11, opacity: 0.5, marginBottom: 8 }}>
               Games require a Pro plan or admin grant.
-            </div>
-          )}
-          {gamesAccessible && !gamesLaunched && (
-            <div style={{ fontSize: 11, opacity: 0.5, marginBottom: 8 }}>
-              Games aren't visible to viewers yet — coming soon.
             </div>
           )}
           <div style={styles.ttsGrid}>
@@ -1340,7 +1340,7 @@ function ConfigApp() {
                 <input
                   type="checkbox"
                   checked={gamesSettings.visibility.plinko}
-                  disabled={!gamesAccessible}
+                  disabled={!gamesAccessible || !gamesPlinkoLaunched}
                   onChange={(e) =>
                     handleGamesSettingsUpdate({ visibility: { ...gamesSettings.visibility, plinko: e.target.checked } })
                   }
@@ -1350,7 +1350,7 @@ function ConfigApp() {
                 <span>Plinko minimum Bits</span>
                 <select
                   value={gamesSettings.pricing.plinkoMinTier}
-                  disabled={!gamesAccessible}
+                  disabled={!gamesAccessible || !gamesPlinkoLaunched}
                   onChange={(e) =>
                     handleGamesSettingsUpdate({ pricing: { ...gamesSettings.pricing, plinkoMinTier: e.target.value } })
                   }
@@ -1361,6 +1361,9 @@ function ConfigApp() {
                   ))}
                 </select>
               </label>
+              {gamesAccessible && !gamesPlinkoLaunched && (
+                <div style={{ fontSize: 11, opacity: 0.5 }}>Plinko isn't visible to viewers yet — coming soon.</div>
+              )}
             </div>
             <div>
               <label style={styles.row}>
@@ -1368,7 +1371,7 @@ function ConfigApp() {
                 <input
                   type="checkbox"
                   checked={gamesSettings.visibility.slots}
-                  disabled={!gamesAccessible}
+                  disabled={!gamesAccessible || !gamesSlotsLaunched}
                   onChange={(e) =>
                     handleGamesSettingsUpdate({ visibility: { ...gamesSettings.visibility, slots: e.target.checked } })
                   }
@@ -1378,7 +1381,7 @@ function ConfigApp() {
                 <span>Slots minimum Bits</span>
                 <select
                   value={gamesSettings.pricing.slotsMinTier}
-                  disabled={!gamesAccessible}
+                  disabled={!gamesAccessible || !gamesSlotsLaunched}
                   onChange={(e) =>
                     handleGamesSettingsUpdate({ pricing: { ...gamesSettings.pricing, slotsMinTier: e.target.value } })
                   }
@@ -1389,6 +1392,9 @@ function ConfigApp() {
                   ))}
                 </select>
               </label>
+              {gamesAccessible && !gamesSlotsLaunched && (
+                <div style={{ fontSize: 11, opacity: 0.5 }}>Slots isn't visible to viewers yet — coming soon.</div>
+              )}
             </div>
           </div>
         </div>

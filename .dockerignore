@@ -11,3 +11,5 @@ ebs/.env
 ebs/.env.local
 ebs/.env.*.local
 .git
+.worktrees
+.superpowers

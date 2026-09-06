@@ -176,6 +176,7 @@ export function renderAdminDashboardPage(options = {}) {
           <button class="sidebar-nav-item active" data-section="overview">Overview</button>
           <button class="sidebar-nav-item" data-section="health">Server Health</button>
           <button class="sidebar-nav-item" data-section="banner">Banner</button>
+          <button class="sidebar-nav-item" data-section="games">Games</button>
           <button class="sidebar-nav-item" data-section="tts-config">TTS Config</button>
           <button class="sidebar-nav-item" data-section="test-alerts">Test Alerts</button>
           <button class="sidebar-nav-item" data-section="library-moderation">Library Moderation</button>
@@ -242,6 +243,23 @@ export function renderAdminDashboardPage(options = {}) {
         <div>
           <button class="btn-save" id="bannerSaveBtn">Save Banner</button>
           <span id="bannerSaveStatus" class="tts-status" style="display:none; margin-left: 10px;"></span>
+        </div>
+      </div>
+      </div>
+
+      <div class="section-page" data-section="games">
+      <div class="table-card">
+        <h2>Games (Plinko/Slots)</h2>
+        <div style="font-size:12px; color:var(--text-muted); margin-bottom:12px;">Site-wide kill switch for the Games mini-games. While off, no broadcaster's viewers can see or play Plinko/Slots, regardless of that broadcaster's own Games settings. Turn this on only once the 1.1.0 extension version has been approved by Twitch.</div>
+        <label style="display:flex; align-items:center; gap:6px; font-size:13px; font-weight:normal; margin-bottom:10px;">
+          <input type="checkbox" id="gamesLaunched"> Launched (Games available site-wide)
+        </label>
+        <label for="gamesMinTier" style="display:block; font-size:13px; font-weight:600; margin-bottom:6px;">Global minimum Bits tier</label>
+        <select id="gamesMinTier"></select>
+        <div style="font-size:11px; color:var(--text-muted); margin:6px 0 10px;">The floor every broadcaster's own Plinko/Slots minimum is clamped to — no broadcaster can set a lower minimum than this, even from their own Games settings.</div>
+        <div>
+          <button class="btn-save" id="gamesSaveBtn">Save Games Config</button>
+          <span id="gamesSaveStatus" class="tts-status" style="display:none; margin-left: 10px;"></span>
         </div>
       </div>
       </div>
@@ -1215,6 +1233,72 @@ export function renderAdminDashboardPage(options = {}) {
         });
 
         fetchBannerConfig();
+
+        // ===== Games =====
+        var gamesLaunchedEl = document.getElementById('gamesLaunched');
+        var gamesMinTierSelect = document.getElementById('gamesMinTier');
+        var gamesSaveBtn = document.getElementById('gamesSaveBtn');
+        var gamesSaveStatus = document.getElementById('gamesSaveStatus');
+        var gamesCurrentConfig = {};
+
+        function renderGamesTierSelect(tiers) {
+          gamesMinTierSelect.textContent = '';
+          tiers.forEach(function(t) {
+            var opt = document.createElement('option');
+            opt.value = t.sku;
+            opt.textContent = t.label;
+            if (t.sku === gamesCurrentConfig.minTier) opt.selected = true;
+            gamesMinTierSelect.appendChild(opt);
+          });
+        }
+
+        function fetchGamesConfig() {
+          fetch('/api/admin/games-config', { credentials: 'same-origin' })
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+              if (data.error || !data.config) return;
+              gamesCurrentConfig = data.config;
+              gamesLaunchedEl.checked = !!data.config.launched;
+              renderGamesTierSelect(data.tiers || []);
+            })
+            .catch(function() {});
+        }
+
+        function showGamesStatus(text, ok) {
+          gamesSaveStatus.textContent = text;
+          gamesSaveStatus.style.display = 'inline-block';
+          gamesSaveStatus.style.background = ok ? '#10b98133' : '#ef444433';
+          gamesSaveStatus.style.color = ok ? '#10b981' : '#ef4444';
+          if (ok) setTimeout(function() { gamesSaveStatus.style.display = 'none'; }, 3000);
+        }
+
+        gamesSaveBtn.addEventListener('click', function() {
+          gamesSaveBtn.disabled = true;
+          fetch('/api/admin/games-config', {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              launched: gamesLaunchedEl.checked,
+              minTier: gamesMinTierSelect.value,
+            })
+          })
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+              gamesSaveBtn.disabled = false;
+              if (data.error) showGamesStatus('Error: ' + data.error, false);
+              else {
+                gamesCurrentConfig = data.config || gamesCurrentConfig;
+                showGamesStatus('Saved!', true);
+              }
+            })
+            .catch(function() {
+              gamesSaveBtn.disabled = false;
+              showGamesStatus('Save failed', false);
+            });
+        });
+
+        fetchGamesConfig();
 
         // ===== Library Moderation =====
         var libraryModerationListEl = document.getElementById('libraryModerationList');

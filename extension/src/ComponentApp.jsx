@@ -781,7 +781,9 @@ function ComponentApp() {
 
   const hasSounds = soundsEnabled && sounds.length > 0;
   const hasTts = ttsConfig?.enabled;
-  const hasGames = Boolean(extConfig.features?.plinko || extConfig.features?.slots);
+  const hasGames = Boolean(
+    extConfig.features?.plinko || extConfig.features?.slots,
+  );
 
   // Which tab is actually showing: prefer activeTab if that tab is
   // available, otherwise fall back to whichever single tab is available.
@@ -794,12 +796,17 @@ function ComponentApp() {
   // once Games became a third option (e.g. Sounds+Games available with
   // Games active would have shown the Sounds grid underneath it too).
   const effectiveTab =
-    activeTab === "sounds" && hasSounds ? "sounds" :
-    activeTab === "tts" && hasTts ? "tts" :
-    activeTab === "games" && hasGames ? "games" :
-    hasSounds ? "sounds" :
-    hasTts ? "tts" :
-    "games";
+    activeTab === "sounds" && hasSounds
+      ? "sounds"
+      : activeTab === "tts" && hasTts
+        ? "tts"
+        : activeTab === "games" && hasGames
+          ? "games"
+          : hasSounds
+            ? "sounds"
+            : hasTts
+              ? "tts"
+              : "games";
 
   // No sounds, TTS, or Games
   if (!hasSounds && !hasTts && !hasGames) {
@@ -838,7 +845,7 @@ function ComponentApp() {
             {effectiveTab === "tts"
               ? "Text-to-Speech"
               : effectiveTab === "games"
-                ? "Games"
+                ? "Games On Stream"
                 : "Sound Alerts"}
           </span>
           {/* Only show scroll buttons on the sounds tab */}
@@ -932,7 +939,7 @@ function ComponentApp() {
                   opacity: activeTab === "games" ? 1 : 0.7,
                 }}
               >
-                Games
+                Games On Stream
               </button>
             )}
           </div>

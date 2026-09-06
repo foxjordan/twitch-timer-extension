@@ -90,10 +90,16 @@ function SoundCard({
     <div
       onClick={() => {
         if (disabled) return;
-        if (showSendPrompt) { onDismissSample(); return; }
+        if (showSendPrompt) {
+          onDismissSample();
+          return;
+        }
         onRedeem(sound);
       }}
-      onMouseEnter={() => { setHovered(true); onHover?.(sound); }}
+      onMouseEnter={() => {
+        setHovered(true);
+        onHover?.(sound);
+      }}
       onMouseLeave={() => setHovered(false)}
       style={{
         display: "flex",
@@ -144,45 +150,66 @@ function SoundCard({
             <img
               src="./camera_icon.png"
               alt=""
-              style={{ width: "60%", height: "60%", objectFit: "contain", opacity: 0.6 }}
+              style={{
+                width: "60%",
+                height: "60%",
+                objectFit: "contain",
+                opacity: 0.6,
+              }}
             />
           ) : (
             <img
               src="./megaphone.png"
               alt=""
-              style={{ width: "60%", height: "60%", objectFit: "contain", opacity: 0.6 }}
+              style={{
+                width: "60%",
+                height: "60%",
+                objectFit: "contain",
+                opacity: 0.6,
+              }}
             />
           )}
         </div>
         {/* Preview overlay \u2014 visible on hover or while sampling */}
-        {(hovered || isPreviewPlaying) && !disabled && !showSendPrompt && !["clip","video"].includes(sound.type || "sound") && (
-          <div
-            data-preview="true"
-            onClick={(e) => {
-              e.stopPropagation();
-              onPreview(e, sound);
-            }}
-            style={{
-              position: "absolute",
-              inset: 0,
-              display: "flex",
-              flexDirection: "column",
-              alignItems: "center",
-              justifyContent: "center",
-              gap: 3,
-              background: "rgba(0,0,0,0.55)",
-              borderRadius: 8,
-              cursor: "pointer",
-            }}
-          >
-            <span style={{ fontSize: 18, color: "#fff", lineHeight: 1 }}>
-              {isPreviewPlaying ? "\u25A0" : "\u25B6"}
-            </span>
-            <span style={{ fontSize: 10, color: "#fff", fontWeight: 600, opacity: 0.9, letterSpacing: "0.02em" }}>
-              {isPreviewPlaying ? "Sampling\u2026" : "Sample"}
-            </span>
-          </div>
-        )}
+        {(hovered || isPreviewPlaying) &&
+          !disabled &&
+          !showSendPrompt &&
+          !["clip", "video"].includes(sound.type || "sound") && (
+            <div
+              data-preview="true"
+              onClick={(e) => {
+                e.stopPropagation();
+                onPreview(e, sound);
+              }}
+              style={{
+                position: "absolute",
+                inset: 0,
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: 3,
+                background: "rgba(0,0,0,0.55)",
+                borderRadius: 8,
+                cursor: "pointer",
+              }}
+            >
+              <span style={{ fontSize: 18, color: "#fff", lineHeight: 1 }}>
+                {isPreviewPlaying ? "\u25A0" : "\u25B6"}
+              </span>
+              <span
+                style={{
+                  fontSize: 10,
+                  color: "#fff",
+                  fontWeight: 600,
+                  opacity: 0.9,
+                  letterSpacing: "0.02em",
+                }}
+              >
+                {isPreviewPlaying ? "Sampling\u2026" : "Sample"}
+              </span>
+            </div>
+          )}
         {/* Send-alert prompt after sample finishes */}
         {showSendPrompt && !isPreviewPlaying && (
           <div
@@ -200,9 +227,15 @@ function SoundCard({
               padding: 4,
             }}
           >
-            <span style={{ fontSize: 10, color: "#bf94ff", fontWeight: 700 }}>Like it?</span>
+            <span style={{ fontSize: 10, color: "#bf94ff", fontWeight: 700 }}>
+              Like it?
+            </span>
             <button
-              onClick={(e) => { e.stopPropagation(); onRedeem(sound); onDismissSample(); }}
+              onClick={(e) => {
+                e.stopPropagation();
+                onRedeem(sound);
+                onDismissSample();
+              }}
               style={{
                 background: "#9146FF",
                 color: "#fff",
@@ -218,7 +251,10 @@ function SoundCard({
               Use {getCost(sound.tier)} Bits
             </button>
             <button
-              onClick={(e) => { e.stopPropagation(); onDismissSample(); }}
+              onClick={(e) => {
+                e.stopPropagation();
+                onDismissSample();
+              }}
               style={{
                 background: "transparent",
                 color: "rgba(255,255,255,0.5)",
@@ -303,7 +339,9 @@ function App() {
   const [ttsCooldown, setTtsCooldown] = useState(false);
   const [previewingVoice, setPreviewingVoice] = useState(null);
   const [overlayConnected, setOverlayConnected] = useState(null); // null = unknown, true/false
-  const [extConfig, setExtConfig] = useState({ features: { tts: true, videoClips: true, communityLibrary: true } });
+  const [extConfig, setExtConfig] = useState({
+    features: { tts: true, videoClips: true, communityLibrary: true },
+  });
   // Games (Plinko/Slots) transaction hand-off to the shared GamesControls
   // component — onTransactionComplete only supports one registered callback,
   // and this file already owns it for Sounds/TTS below.
@@ -366,7 +404,9 @@ function App() {
         headers: { Authorization: `Bearer ${authData.token}` },
       })
         .then((r) => r.json())
-        .then((data) => { if (data.features) setExtConfig(data); })
+        .then((data) => {
+          if (data.features) setExtConfig(data);
+        })
         .catch(() => {});
 
       // Check overlay connection status
@@ -408,7 +448,10 @@ function App() {
             setTimeout(() => setLastPlayed(null), 3000);
             // Start cooldown
             setTtsCooldown(true);
-            setTimeout(() => setTtsCooldown(false), pending.cooldownMs || 10000);
+            setTimeout(
+              () => setTtsCooldown(false),
+              pending.cooldownMs || 10000,
+            );
           })
           .catch((err) => setTtsError(err?.message || "TTS redemption failed"));
       } else if (pending.type === "plinko" || pending.type === "slots") {
@@ -551,13 +594,17 @@ function App() {
 
   function prefetchPreviewAudio(sound) {
     const currentAuth = authRef.current;
-    if (!currentAuth || ["clip","video"].includes(sound.type || "sound")) return;
+    if (!currentAuth || ["clip", "video"].includes(sound.type || "sound"))
+      return;
     if (previewBlobsRef.current[sound.id]) return;
     // fetch() uses connect-src, not media-src — no CSP issue with external domains
-    fetch(`${EBS_BASE}/api/sounds/preview/${sound.id}?channelId=${currentAuth.channelId}`, {
-      headers: { Authorization: `Bearer ${currentAuth.token}` },
-    })
-      .then((r) => r.ok ? r.blob() : Promise.reject(r.status))
+    fetch(
+      `${EBS_BASE}/api/sounds/preview/${sound.id}?channelId=${currentAuth.channelId}`,
+      {
+        headers: { Authorization: `Bearer ${currentAuth.token}` },
+      },
+    )
+      .then((r) => (r.ok ? r.blob() : Promise.reject(r.status)))
       .then((blob) => {
         previewBlobsRef.current[sound.id] = URL.createObjectURL(blob);
         console.log("[preview] blob ready for", sound.id);
@@ -569,7 +616,7 @@ function App() {
     e.stopPropagation();
     const currentAuth = authRef.current;
     if (!currentAuth) return;
-    if (["clip","video"].includes(sound.type || "sound")) return;
+    if (["clip", "video"].includes(sound.type || "sound")) return;
 
     if (previewAudioRef.current) {
       previewAudioRef.current.pause();
@@ -598,7 +645,10 @@ function App() {
       setPreviewing(null);
       previewAudioRef.current = null;
       setJustSampled(sound.id);
-      setTimeout(() => setJustSampled((prev) => (prev === sound.id ? null : prev)), 6000);
+      setTimeout(
+        () => setJustSampled((prev) => (prev === sound.id ? null : prev)),
+        6000,
+      );
     };
     audio.onerror = (e) => {
       console.error("[preview] audio error", e, audio.error);
@@ -631,14 +681,24 @@ function App() {
     fetch(`${EBS_BASE}/api/tts/preview/${encodeURIComponent(voiceId)}`, {
       headers: { Authorization: `Bearer ${currentAuth.token}` },
     })
-      .then((r) => { if (!r.ok) throw new Error(); return r.blob(); })
+      .then((r) => {
+        if (!r.ok) throw new Error();
+        return r.blob();
+      })
       .then((blob) => {
         const url = URL.createObjectURL(blob);
         audio.src = url;
-        audio.onended = () => { setPreviewingVoice(null); previewAudioRef.current = null; URL.revokeObjectURL(url); };
+        audio.onended = () => {
+          setPreviewingVoice(null);
+          previewAudioRef.current = null;
+          URL.revokeObjectURL(url);
+        };
         return audio.play();
       })
-      .catch(() => { setPreviewingVoice(null); previewAudioRef.current = null; });
+      .catch(() => {
+        setPreviewingVoice(null);
+        previewAudioRef.current = null;
+      });
   }
 
   function getCost(tier) {
@@ -653,7 +713,9 @@ function App() {
 
   const hasSounds = soundsEnabled && sounds.length > 0;
   const hasTts = ttsConfig?.enabled;
-  const hasGames = Boolean(extConfig.features?.plinko || extConfig.features?.slots);
+  const hasGames = Boolean(
+    extConfig.features?.plinko || extConfig.features?.slots,
+  );
 
   // Which tab is actually showing: prefer activeTab if that tab is
   // available, otherwise fall back to whichever single tab is available.
@@ -667,12 +729,17 @@ function App() {
   // Sounds grid underneath it too — the same bug found and fixed in
   // ComponentApp.jsx's copy of this logic).
   const effectiveTab =
-    activeTab === "sounds" && hasSounds ? "sounds" :
-    activeTab === "tts" && hasTts ? "tts" :
-    activeTab === "games" && hasGames ? "games" :
-    hasSounds ? "sounds" :
-    hasTts ? "tts" :
-    "games";
+    activeTab === "sounds" && hasSounds
+      ? "sounds"
+      : activeTab === "tts" && hasTts
+        ? "tts"
+        : activeTab === "games" && hasGames
+          ? "games"
+          : hasSounds
+            ? "sounds"
+            : hasTts
+              ? "tts"
+              : "games";
 
   if (!hasSounds && !hasTts && !hasGames) {
     return (
@@ -686,9 +753,7 @@ function App() {
             textAlign: "center",
           }}
         >
-          <div style={{ fontSize: 15, opacity: 0.5 }}>
-            No alerts available
-          </div>
+          <div style={{ fontSize: 15, opacity: 0.5 }}>No alerts available</div>
         </div>
       </div>
     );
@@ -761,17 +826,32 @@ function App() {
                   opacity: activeTab === "games" ? 1 : 0.7,
                 }}
               >
-                Games
+                Games on Stream
               </button>
             )}
           </div>
         )}
 
         {/* Header */}
-        <div style={{ display: "flex", gap: 10, alignItems: "center", marginBottom: 8 }}>
-          <img src="./alert_wave.png" alt="" style={{ height: 36, width: 36, flexShrink: 0 }} />
+        <div
+          style={{
+            display: "flex",
+            gap: 10,
+            alignItems: "center",
+            marginBottom: 8,
+          }}
+        >
+          <img
+            src="./alert_wave.png"
+            alt=""
+            style={{ height: 36, width: 36, flexShrink: 0 }}
+          />
           <div style={{ fontSize: 15, opacity: 0.85 }}>
-            {effectiveTab === "tts" ? "Text-to-Speech" : effectiveTab === "games" ? "Games" : "Sound Alerts"}
+            {effectiveTab === "tts"
+              ? "Text-to-Speech"
+              : effectiveTab === "games"
+                ? "Games On Stream"
+                : "Sound Alerts"}
           </div>
         </div>
 
@@ -788,7 +868,8 @@ function App() {
               color: "#fca5a5",
             }}
           >
-            The streamer's alert overlay is not currently active. Alerts may not play right now.
+            The streamer's alert overlay is not currently active. Alerts may not
+            play right now.
           </div>
         )}
 
@@ -886,7 +967,14 @@ function App() {
 
             {/* Voice selector */}
             <div style={{ marginBottom: 8 }}>
-              <label style={{ fontSize: 12, opacity: 0.7, display: "block", marginBottom: 4 }}>
+              <label
+                style={{
+                  fontSize: 12,
+                  opacity: 0.7,
+                  display: "block",
+                  marginBottom: 4,
+                }}
+              >
                 Voice
               </label>
               <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
@@ -932,14 +1020,27 @@ function App() {
 
             {/* Message input */}
             <div style={{ marginBottom: 8 }}>
-              <label style={{ fontSize: 12, opacity: 0.7, display: "block", marginBottom: 4 }}>
-                Message ({ttsMessage.length}/{ttsConfig.maxMessageLength || 300})
+              <label
+                style={{
+                  fontSize: 12,
+                  opacity: 0.7,
+                  display: "block",
+                  marginBottom: 4,
+                }}
+              >
+                Message ({ttsMessage.length}/{ttsConfig.maxMessageLength || 300}
+                )
               </label>
               <textarea
                 value={ttsMessage}
                 onChange={(e) => {
-                  setTtsMessage(e.target.value.slice(0, (ttsConfig.maxMessageLength || 300)));
-                  if (ttsApproved) { setTtsApproved(false); ttsApprovalRef.current = null; }
+                  setTtsMessage(
+                    e.target.value.slice(0, ttsConfig.maxMessageLength || 300),
+                  );
+                  if (ttsApproved) {
+                    setTtsApproved(false);
+                    ttsApprovalRef.current = null;
+                  }
                 }}
                 maxLength={ttsConfig.maxMessageLength || 300}
                 rows={3}
@@ -963,17 +1064,28 @@ function App() {
             {/* Submit button — two-step: validate first, then pay synchronously */}
             <button
               onClick={ttsApproved ? handleTtsPay : handleTtsValidate}
-              disabled={!bitsEnabled || ttsValidating || ttsCooldown || !ttsMessage.trim()}
+              disabled={
+                !bitsEnabled ||
+                ttsValidating ||
+                ttsCooldown ||
+                !ttsMessage.trim()
+              }
               style={{
                 width: "100%",
                 padding: "8px 0",
                 borderRadius: 8,
                 border: "none",
-                background: ttsValidating || ttsCooldown ? "#555" : ttsApproved ? "#10B981" : "#9146FF",
+                background:
+                  ttsValidating || ttsCooldown
+                    ? "#555"
+                    : ttsApproved
+                      ? "#10B981"
+                      : "#9146FF",
                 color: "#fff",
                 fontSize: 14,
                 fontWeight: 600,
-                cursor: ttsValidating || ttsCooldown ? "not-allowed" : "pointer",
+                cursor:
+                  ttsValidating || ttsCooldown ? "not-allowed" : "pointer",
                 opacity: !bitsEnabled || !ttsMessage.trim() ? 0.5 : 1,
                 display: "flex",
                 alignItems: "center",
@@ -986,7 +1098,9 @@ function App() {
                   width: 10,
                   height: 10,
                   borderRadius: "50%",
-                  background: ttsApproved ? "#fff" : "linear-gradient(135deg, #9146FF, #772CE8)",
+                  background: ttsApproved
+                    ? "#fff"
+                    : "linear-gradient(135deg, #9146FF, #772CE8)",
                   border: "1px solid rgba(255,255,255,0.3)",
                   display: "inline-block",
                   flexShrink: 0,

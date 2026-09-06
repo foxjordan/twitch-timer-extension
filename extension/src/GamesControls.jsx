@@ -3,10 +3,70 @@ import { VALID_TIERS, TIER_LABELS } from "./tiers.js";
 
 const EBS_BASE = import.meta.env.VITE_EBS_BASE || "https://livestreamerhub.com";
 
+// Shared dark-theme <select> styling — replaces the browser-default white
+// dropdown (jarring against the rest of the panel's dark UI) with something
+// that matches the app's actual palette. Reused by the Bits-tier picker
+// below and by Plinko's column picker.
+const selectStyle = {
+  width: "100%",
+  boxSizing: "border-box",
+  padding: "8px 10px",
+  borderRadius: 8,
+  background: "#303038",
+  border: "1px solid #46464f",
+  color: "#efeff1",
+  fontSize: 13,
+  marginBottom: 8,
+  appearance: "none",
+  WebkitAppearance: "none",
+  backgroundImage:
+    "url(\"data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6'><path d='M0 0l5 6 5-6z' fill='%23efeff1'/></svg>\")",
+  backgroundRepeat: "no-repeat",
+  backgroundPosition: "right 10px center",
+};
+
+// Shared "play" button (Drop Token / Spin) — a subtle gradient instead of
+// flat purple, matching the gradient already used for the header avatar dot
+// in App.jsx/ComponentApp.jsx.
+function playButtonStyle(disabled) {
+  return {
+    width: "100%",
+    padding: "9px 0",
+    borderRadius: 8,
+    border: "none",
+    fontSize: 13,
+    fontWeight: 700,
+    cursor: disabled ? "default" : "pointer",
+    background: "linear-gradient(135deg, #9146FF, #772CE8)",
+    color: "#fff",
+    opacity: disabled ? 0.5 : 1,
+    boxShadow: disabled ? "none" : "0 2px 8px #9146ff33",
+  };
+}
+
+// One icon-toggle card in the Plinko/Slots game switcher.
+function gameToggleStyle(active) {
+  return {
+    flex: 1,
+    textAlign: "center",
+    padding: "10px 4px",
+    borderRadius: 10,
+    border: "none",
+    cursor: "pointer",
+    color: "#fff",
+    background: active ? "#9146FF22" : "#26262b",
+    boxShadow: active ? "0 0 0 1.5px #9146FF inset" : "none",
+    opacity: active ? 1 : 0.55,
+  };
+}
+
 function tierOptions(minTier) {
   const idx = VALID_TIERS.indexOf(minTier);
   const startIdx = idx >= 0 ? idx : 0;
-  return VALID_TIERS.slice(startIdx).map((sku) => ({ sku, label: TIER_LABELS[sku] }));
+  return VALID_TIERS.slice(startIdx).map((sku) => ({
+    sku,
+    label: TIER_LABELS[sku],
+  }));
 }
 
 // When both games are enabled they share one tier picker, so the floor it
@@ -17,7 +77,8 @@ function tierOptions(minTier) {
 // the moment they click "Spin" instead of "Drop".
 function sharedMinTier(hasPlinko, hasSlots, config) {
   const candidates = [];
-  if (hasPlinko && config?.plinko?.minTier) candidates.push(config.plinko.minTier);
+  if (hasPlinko && config?.plinko?.minTier)
+    candidates.push(config.plinko.minTier);
   if (hasSlots && config?.slots?.minTier) candidates.push(config.slots.minTier);
   return candidates.reduce((highest, t) => {
     if (!highest) return t;
@@ -37,7 +98,11 @@ export function GamesControls({
   const [config, setConfig] = useState(null); // { plinko: {columns, minTier}, slots: {minTier} }
   const [selectedTier, setSelectedTier] = useState("");
   const [dropColumn, setDropColumn] = useState(0);
-  const [queue, setQueue] = useState({ plinko: { waitingCount: 0, advanceSeq: 0 }, slots: { waitingCount: 0, advanceSeq: 0 } });
+  const [gameChoice, setGameChoice] = useState("plinko"); // which game the icon toggle has selected, when both are available
+  const [queue, setQueue] = useState({
+    plinko: { waitingCount: 0, advanceSeq: 0 },
+    slots: { waitingCount: 0, advanceSeq: 0 },
+  });
   const [pendingPlay, setPendingPlay] = useState(null); // { type, position, advanceSeqAtJoin, remaining } | null
   const [error, setError] = useState(null);
 
@@ -60,7 +125,9 @@ export function GamesControls({
 
   useEffect(() => {
     if (!auth) return;
-    const es = new EventSource(`${EBS_BASE}/api/games/queue-stream?channelId=${auth.channelId}`);
+    const es = new EventSource(
+      `${EBS_BASE}/api/games/queue-stream?channelId=${auth.channelId}`,
+    );
     es.addEventListener("games_queue", (e) => {
       try {
         setQueue(JSON.parse(e.data));
@@ -74,7 +141,10 @@ export function GamesControls({
   useEffect(() => {
     if (!pendingPlay) return;
     const snap = pendingPlay.type === "plinko" ? queue.plinko : queue.slots;
-    const remaining = Math.max(0, pendingPlay.position - (snap.advanceSeq - pendingPlay.advanceSeqAtJoin));
+    const remaining = Math.max(
+      0,
+      pendingPlay.position - (snap.advanceSeq - pendingPlay.advanceSeqAtJoin),
+    );
     if (remaining !== pendingPlay.remaining) {
       setPendingPlay({ ...pendingPlay, remaining });
     }
@@ -94,7 +164,10 @@ export function GamesControls({
   useEffect(() => {
     if (!pendingGamesTx || !auth) return;
     const { type, receipt, dropColumn: col } = pendingGamesTx;
-    const url = type === "plinko" ? `${EBS_BASE}/api/plinko/redeem` : `${EBS_BASE}/api/slots/redeem`;
+    const url =
+      type === "plinko"
+        ? `${EBS_BASE}/api/plinko/redeem`
+        : `${EBS_BASE}/api/slots/redeem`;
     // No channelId in the body — the server derives the acting channel from
     // the viewer's own authenticated JWT (claims.channel_id), never from a
     // client-supplied value (a cross-channel IDOR was found and fixed here
@@ -102,13 +175,20 @@ export function GamesControls({
     const body = type === "plinko" ? { receipt, dropColumn: col } : { receipt };
     fetch(url, {
       method: "POST",
-      headers: { Authorization: `Bearer ${auth.token}`, "Content-Type": "application/json" },
+      headers: {
+        Authorization: `Bearer ${auth.token}`,
+        "Content-Type": "application/json",
+      },
       body: JSON.stringify(body),
     })
       .then((r) => r.json())
       .then((data) => {
         if (!data.accepted) {
-          setError(data.reason === "full" ? "Queue is full, try again shortly" : "Could not start — try again");
+          setError(
+            data.reason === "full"
+              ? "Queue is full, try again shortly"
+              : "Could not start — try again",
+          );
           return;
         }
         setError(null);
@@ -141,17 +221,47 @@ export function GamesControls({
   const options = tierOptions(minTier);
   const columns = config.plinko?.columns || 10;
 
+  // Which game is actually showing: the icon toggle's choice when both are
+  // available, otherwise whichever single game is — same "one derived value
+  // instead of scattered pairwise checks" pattern App.jsx/ComponentApp.jsx
+  // use for effectiveTab, and for the same reason: it's the only value that
+  // stays correct once there's a third combination (here, "just one game")
+  // to account for.
+  const effectiveGame = hasPlinko && hasSlots ? gameChoice : hasPlinko ? "plinko" : "slots";
+
   return (
     <div>
       {error && (
-        <div style={{ padding: "6px 10px", borderRadius: 8, background: "#c0392b22", border: "1px solid #c0392b44", fontSize: 12, marginBottom: 8, color: "#e74c3c" }}>
+        <div
+          style={{
+            padding: "6px 10px",
+            borderRadius: 8,
+            background: "#c0392b22",
+            border: "1px solid #c0392b44",
+            fontSize: 12,
+            marginBottom: 8,
+            color: "#e74c3c",
+          }}
+        >
           {error}
         </div>
       )}
 
       {pendingPlay && (
-        <div style={{ padding: "6px 10px", borderRadius: 8, background: "#9146FF22", border: "1px solid #9146FF44", fontSize: 12, marginBottom: 8, textAlign: "center" }}>
-          {pendingPlay.remaining > 0 ? `Queued — ~${pendingPlay.remaining} ahead of you` : "You're up!"}
+        <div
+          style={{
+            padding: "6px 10px",
+            borderRadius: 8,
+            background: "#9146FF22",
+            border: "1px solid #9146FF44",
+            fontSize: 12,
+            marginBottom: 8,
+            textAlign: "center",
+          }}
+        >
+          {pendingPlay.remaining > 0
+            ? `Queued — ~${pendingPlay.remaining} ahead of you`
+            : "You're up!"}
         </div>
       )}
 
@@ -161,85 +271,99 @@ export function GamesControls({
         </div>
       )}
 
-      {bitsEnabled && options.length > 0 && (
-        <div style={{ marginBottom: 8 }}>
-          <select
-            value={selectedTier}
-            onChange={(e) => setSelectedTier(e.target.value)}
-            style={{ width: "100%", padding: 6, borderRadius: 8 }}
-          >
-            {options.map((opt) => (
-              <option key={opt.sku} value={opt.sku}>{opt.label}</option>
-            ))}
-          </select>
-        </div>
-      )}
-
-      {hasPlinko && (
-        <div style={{ marginBottom: 10 }}>
-          <div style={{ display: "flex", gap: 4, flexWrap: "wrap", marginBottom: 8 }}>
-            {Array.from({ length: columns }, (_, i) => (
-              <button
-                key={i}
-                onClick={() => setDropColumn(i)}
-                style={{
-                  flex: "1 0 auto",
-                  minWidth: 28,
-                  padding: "6px 0",
-                  borderRadius: 6,
-                  border: "none",
-                  fontSize: 12,
-                  fontWeight: 600,
-                  cursor: "pointer",
-                  background: dropColumn === i ? "#9146FF" : "#303038",
-                  color: "#fff",
-                }}
-              >
-                {i}
-              </button>
-            ))}
-          </div>
-          <button
-            onClick={() => handlePlay("plinko")}
-            disabled={!bitsEnabled || pendingType === "plinko"}
-            style={{
-              width: "100%",
-              padding: "8px 0",
-              borderRadius: 8,
-              border: "none",
-              fontSize: 13,
-              fontWeight: 600,
-              cursor: bitsEnabled ? "pointer" : "default",
-              background: "#9146FF",
-              color: "#fff",
-              opacity: !bitsEnabled || pendingType === "plinko" ? 0.5 : 1,
-            }}
-          >
-            {`Drop — ${TIER_LABELS[selectedTier] || selectedTier}`}
+      {hasPlinko && hasSlots && (
+        <div style={{ display: "flex", gap: 8, marginBottom: 10 }}>
+          <button onClick={() => setGameChoice("plinko")} style={gameToggleStyle(effectiveGame === "plinko")}>
+            <div style={{ fontSize: 20 }}>🎯</div>
+            <div style={{ fontSize: 10, fontWeight: 700, marginTop: 4, letterSpacing: 0.3 }}>
+              PLINKO
+            </div>
+          </button>
+          <button onClick={() => setGameChoice("slots")} style={gameToggleStyle(effectiveGame === "slots")}>
+            <div style={{ fontSize: 20 }}>🎰</div>
+            <div style={{ fontSize: 10, fontWeight: 700, marginTop: 4, letterSpacing: 0.3 }}>
+              SLOTS
+            </div>
           </button>
         </div>
       )}
 
-      {hasSlots && (
-        <button
-          onClick={() => handlePlay("slots")}
-          disabled={!bitsEnabled || pendingType === "slots"}
-          style={{
-            width: "100%",
-            padding: "8px 0",
-            borderRadius: 8,
-            border: "none",
-            fontSize: 13,
-            fontWeight: 600,
-            cursor: bitsEnabled ? "pointer" : "default",
-            background: "#9146FF",
-            color: "#fff",
-            opacity: !bitsEnabled || pendingType === "slots" ? 0.5 : 1,
-          }}
+      {bitsEnabled && options.length > 0 && (
+        <select
+          value={selectedTier}
+          onChange={(e) => setSelectedTier(e.target.value)}
+          style={selectStyle}
         >
-          {`Spin — ${TIER_LABELS[selectedTier] || selectedTier}`}
-        </button>
+          {options.map((opt) => (
+            <option key={opt.sku} value={opt.sku}>
+              {opt.label}
+            </option>
+          ))}
+        </select>
       )}
+
+      {effectiveGame === "plinko" ? (
+        <Plinko
+          columns={columns}
+          dropColumn={dropColumn}
+          setDropColumn={setDropColumn}
+          handlePlay={handlePlay}
+          bitsEnabled={bitsEnabled}
+          pendingType={pendingType}
+          selectedTier={selectedTier}
+        />
+      ) : (
+        <Slots
+          handlePlay={handlePlay}
+          bitsEnabled={bitsEnabled}
+          pendingType={pendingType}
+          selectedTier={selectedTier}
+        />
+      )}
+    </div>
+  );
+}
+
+function Plinko({
+  columns,
+  dropColumn,
+  setDropColumn,
+  handlePlay,
+  bitsEnabled,
+  pendingType,
+  selectedTier,
+}) {
+  const disabled = !bitsEnabled || pendingType === "plinko";
+  return (
+    <div>
+      <div style={{ fontSize: 11, opacity: 0.6, marginBottom: 5 }}>
+        Drop into column
+      </div>
+      <select
+        value={dropColumn}
+        onChange={(e) => setDropColumn(Number(e.target.value))}
+        style={selectStyle}
+      >
+        {Array.from({ length: columns }, (_, i) => (
+          <option key={i} value={i}>
+            {`Column ${i + 1}`}
+          </option>
+        ))}
+      </select>
+      <button onClick={() => handlePlay("plinko")} disabled={disabled} style={playButtonStyle(disabled)}>
+        {`Drop Token — ${TIER_LABELS[selectedTier] || selectedTier}`}
+      </button>
+    </div>
+  );
+}
+
+function Slots({ handlePlay, bitsEnabled, pendingType, selectedTier }) {
+  const disabled = !bitsEnabled || pendingType === "slots";
+  return (
+    <div>
+      <button onClick={() => handlePlay("slots")} disabled={disabled} style={playButtonStyle(disabled)}>
+        {`Spin — ${TIER_LABELS[selectedTier] || selectedTier}`}
+      </button>
     </div>
   );
 }

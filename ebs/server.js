@@ -3299,29 +3299,49 @@ setInterval(async () => {
     checkBonusSchedule(uid);
   }
 
-  // Broadcast to Twitch Extension PubSub for ALL active broadcasters, in
-  // parallel — sequential awaits here don't scale with broadcaster count.
-  await Promise.allSettled(
-    Array.from(broadcasterConnections.keys()).map(async (userId) => {
-      try {
-        const remaining = getRemainingSeconds(userId);
-        const hype = state.users.get(String(userId))?.hypeActive;
-
-        await broadcastToChannel({
-          broadcasterId: userId,
-          type: "timer_tick",
-          payload: { userId, remaining, hype, capReached: capReached(userId) },
-        });
-      } catch (err) {
-        observability.lastBroadcastErrorAt = new Date().toISOString();
-        logger.error("broadcast_failed", {
-          broadcasterId: userId,
-          reason: err?.message,
-          type: "timer_tick",
-        });
-      }
-    }),
-  );
+  // DISABLED 2026-09-06 — this used to broadcast a "timer_tick" PubSub
+  // message to every connected broadcaster's extension, once a second,
+  // unconditionally, regardless of whether anyone was viewing it. It
+  // has no consumer: every real timer_tick consumer (the OBS overlay
+  // page, routes_timer.js's stream endpoints) uses the SSE fan-out
+  // below instead, which is untouched by this change. A repo-wide
+  // search (including full git history) found no extension code that
+  // ever calls window.Twitch.ext.listen(...) — the deployed
+  // Panel/Component/Config bundle has never received this broadcast.
+  // With 40+ active broadcasters this meant 40+ synchronous JWT signs
+  // plus 40+ real HTTPS calls to Twitch's PubSub API every single
+  // second, forever — confirmed via production request-timing logs
+  // (see docs/superpowers/specs/2026-09-06-timer-tick-pubsub-removal-design.md)
+  // to be the dominant cause of multi-second event-loop stalls that
+  // were hitting every endpoint on the server, not just this one.
+  // If a future extension version needs a live PubSub-pushed timer
+  // again, restore this block — but scope it to broadcasters who
+  // actually have a viewer with the extension open, not everyone with
+  // an open EventSub connection (that list is sized for a different
+  // purpose — detecting follows/raids/bits/subs — and is much larger
+  // than "someone is currently watching the timer").
+  //
+  // await Promise.allSettled(
+  //   Array.from(broadcasterConnections.keys()).map(async (userId) => {
+  //     try {
+  //       const remaining = getRemainingSeconds(userId);
+  //       const hype = state.users.get(String(userId))?.hypeActive;
+  //
+  //       await broadcastToChannel({
+  //         broadcasterId: userId,
+  //         type: "timer_tick",
+  //         payload: { userId, remaining, hype, capReached: capReached(userId) },
+  //       });
+  //     } catch (err) {
+  //       observability.lastBroadcastErrorAt = new Date().toISOString();
+  //       logger.error("broadcast_failed", {
+  //         broadcasterId: userId,
+  //         reason: err?.message,
+  //         type: "timer_tick",
+  //       });
+  //     }
+  //   }),
+  // );
 
   // Fan-out to SSE clients (already handles per-user correctly!)
   for (const client of Array.from(sseClients)) {

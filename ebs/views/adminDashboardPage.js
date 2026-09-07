@@ -147,6 +147,12 @@ export function renderAdminDashboardPage(options = {}) {
       .log-toolbar button { background: #9146ff; color: #fff; border: none; padding: 6px 14px; border-radius: 8px; font-size: 12px; font-weight: 600; cursor: pointer; }
       .log-toolbar button:hover { background: #7c3aed; }
       .log-toolbar .log-status { font-size: 12px; color: var(--text-muted); }
+      .log-broadcaster-picker { position: relative; min-width: 260px; }
+      .log-broadcaster-picker input[type="text"] { width: 100%; box-sizing: border-box; padding: 6px 10px; border-radius: 8px; border: 1px solid var(--surface-border); background: var(--surface-muted); color: var(--text-color); font-size: 13px; }
+      .log-broadcaster-results { position: absolute; top: calc(100% + 4px); left: 0; right: 0; max-height: 260px; overflow-y: auto; background: var(--surface-color); border: 1px solid var(--surface-border); border-radius: 8px; box-shadow: 0 8px 24px rgba(0,0,0,0.25); z-index: 20; }
+      .log-broadcaster-result { padding: 7px 10px; font-size: 13px; cursor: pointer; }
+      .log-broadcaster-result:hover, .log-broadcaster-result.active { background: var(--accent-color); color: #fff; }
+      .log-broadcaster-result-empty { padding: 7px 10px; font-size: 13px; color: var(--text-muted); }
       .analytics-sku-badge { display:inline-block; padding:1px 7px; border-radius:999px; font-size:11px; font-weight:600; margin-right:4px; }
       .analytics-sku-sound { background:#9146ff33; color:#bf94ff; }
       .analytics-sku-tts   { background:#0ea5e933; color:#38bdf8; }
@@ -388,9 +394,11 @@ export function renderAdminDashboardPage(options = {}) {
       <div class="table-card">
         <h2>Event Logs</h2>
         <div class="log-toolbar">
-          <select id="logBroadcaster">
-            <option value="">Select a broadcaster...</option>
-          </select>
+          <div class="log-broadcaster-picker">
+            <input type="text" id="logBroadcasterSearch" placeholder="Search broadcasters by name or ID..." autocomplete="off" />
+            <input type="hidden" id="logBroadcaster" value="" />
+            <div id="logBroadcasterResults" class="log-broadcaster-results" hidden></div>
+          </div>
           <button id="logRefreshBtn">Refresh</button>
           <span class="log-status" id="logStatus"></span>
         </div>
@@ -2137,27 +2145,122 @@ export function renderAdminDashboardPage(options = {}) {
         });
 
         // ===== Event Logs =====
+        // logBroadcaster is a hidden input, not a <select> — a plain dropdown
+        // became unusable once there were more than a handful of registered
+        // broadcasters. logBroadcasterSearch is the visible text box; picking
+        // a result sets logBroadcaster.value and dispatches 'change' on it,
+        // so every existing consumer of logBroadcaster.value/'change' below
+        // (fetchLogEntries, the refresh button) needed no changes at all.
         var logBroadcaster = document.getElementById('logBroadcaster');
+        var logBroadcasterSearch = document.getElementById('logBroadcasterSearch');
+        var logBroadcasterResults = document.getElementById('logBroadcasterResults');
+        var logBroadcasterFiltered = [];
+        var logBroadcasterActiveIdx = -1;
         var logRefreshBtn = document.getElementById('logRefreshBtn');
         var logStatus = document.getElementById('logStatus');
         var logContainer = document.getElementById('logContainer');
         var logEmpty = document.getElementById('logEmpty');
 
-        function populateLogBroadcasters() {
-          var currentVal = logBroadcaster.value;
-          logBroadcaster.textContent = '';
-          var defaultOpt = document.createElement('option');
-          defaultOpt.value = '';
-          defaultOpt.textContent = 'Select a broadcaster...';
-          logBroadcaster.appendChild(defaultOpt);
-          cachedBroadcasters.forEach(function(u) {
-            var opt = document.createElement('option');
-            opt.value = u.userId;
-            opt.textContent = (u.displayName || u.login || u.userId) + ' (' + u.userId + ')';
-            if (u.userId === currentVal) opt.selected = true;
-            logBroadcaster.appendChild(opt);
+        function logBroadcasterLabel(u) {
+          return (u.displayName || u.login || u.userId) + ' (' + u.userId + ')';
+        }
+
+        function renderLogBroadcasterResults(query) {
+          var q = String(query || '').trim().toLowerCase();
+          logBroadcasterFiltered = !q ? cachedBroadcasters.slice() : cachedBroadcasters.filter(function(u) {
+            return (u.displayName || '').toLowerCase().indexOf(q) !== -1 ||
+              (u.login || '').toLowerCase().indexOf(q) !== -1 ||
+              String(u.userId || '').indexOf(q) !== -1;
+          });
+          logBroadcasterActiveIdx = -1;
+          logBroadcasterResults.textContent = '';
+          if (!logBroadcasterFiltered.length) {
+            var empty = document.createElement('div');
+            empty.className = 'log-broadcaster-result-empty';
+            empty.textContent = q ? 'No matches' : 'No broadcasters yet';
+            logBroadcasterResults.appendChild(empty);
+            return;
+          }
+          // Cap what actually renders — with hundreds of broadcasters,
+          // rendering every match on every keystroke recreates the original
+          // unusable-list problem in a different shape. Narrowing the query
+          // gets the rest.
+          logBroadcasterFiltered.slice(0, 50).forEach(function(u) {
+            var row = document.createElement('div');
+            row.className = 'log-broadcaster-result';
+            row.textContent = logBroadcasterLabel(u);
+            // mousedown (fires before the search box's blur) + preventDefault
+            // keeps focus on the input so blur never closes the panel out
+            // from under the click.
+            row.addEventListener('mousedown', function(e) {
+              e.preventDefault();
+              selectLogBroadcaster(u);
+            });
+            logBroadcasterResults.appendChild(row);
           });
         }
+
+        function selectLogBroadcaster(u) {
+          logBroadcaster.value = u.userId;
+          logBroadcasterSearch.value = logBroadcasterLabel(u);
+          logBroadcasterResults.hidden = true;
+          logBroadcaster.dispatchEvent(new Event('change'));
+        }
+
+        function populateLogBroadcasters() {
+          // If the previously-selected broadcaster dropped out of a refreshed
+          // list (renamed lookup key, deleted, etc.), clear the selection
+          // rather than silently keep showing a stale one.
+          var currentVal = logBroadcaster.value;
+          if (currentVal && !cachedBroadcasters.some(function(u) { return u.userId === currentVal; })) {
+            logBroadcaster.value = '';
+            logBroadcasterSearch.value = '';
+          }
+          renderLogBroadcasterResults(logBroadcasterSearch.value);
+        }
+
+        logBroadcasterSearch.addEventListener('input', function() {
+          // Typing implicitly clears the current selection until a result is
+          // picked again — a search box shouldn't snap back to its last value.
+          if (logBroadcaster.value) {
+            logBroadcaster.value = '';
+            logBroadcaster.dispatchEvent(new Event('change'));
+          }
+          logBroadcasterResults.hidden = false;
+          renderLogBroadcasterResults(logBroadcasterSearch.value);
+        });
+        logBroadcasterSearch.addEventListener('focus', function() {
+          logBroadcasterResults.hidden = false;
+          renderLogBroadcasterResults(logBroadcasterSearch.value);
+        });
+        logBroadcasterSearch.addEventListener('blur', function() {
+          logBroadcasterResults.hidden = true;
+        });
+        logBroadcasterSearch.addEventListener('keydown', function(e) {
+          var rows = logBroadcasterResults.querySelectorAll('.log-broadcaster-result');
+          if (!rows.length) return;
+          if (e.key === 'ArrowDown') {
+            e.preventDefault();
+            logBroadcasterActiveIdx = Math.min(logBroadcasterActiveIdx + 1, rows.length - 1);
+          } else if (e.key === 'ArrowUp') {
+            e.preventDefault();
+            logBroadcasterActiveIdx = Math.max(logBroadcasterActiveIdx - 1, 0);
+          } else if (e.key === 'Enter') {
+            e.preventDefault();
+            if (logBroadcasterActiveIdx >= 0 && logBroadcasterFiltered[logBroadcasterActiveIdx]) {
+              selectLogBroadcaster(logBroadcasterFiltered[logBroadcasterActiveIdx]);
+            }
+            return;
+          } else if (e.key === 'Escape') {
+            logBroadcasterResults.hidden = true;
+            return;
+          } else {
+            return;
+          }
+          rows.forEach(function(r, i) { r.classList.toggle('active', i === logBroadcasterActiveIdx); });
+          var activeRow = rows[logBroadcasterActiveIdx];
+          if (activeRow) activeRow.scrollIntoView({ block: 'nearest' });
+        });
 
         function formatLogTime(ts) {
           var d = ts ? new Date(ts) : new Date();

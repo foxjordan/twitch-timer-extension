@@ -2184,6 +2184,14 @@ export function renderAdminDashboardPage(options = {}) {
             var ttsBy = e.viewerDisplayName || '';
             return { type: 'TTS Alert', detail: (ttsBy ? ttsBy + ': ' : '') + (e.message || 'TTS'), color: '#9146ff', seconds: null };
           }
+          if (src === 'plinko_drop') {
+            var pMult = e.multiplier ? ' (x' + e.multiplier + ')' : '';
+            return { type: 'Plinko', detail: (who || 'Someone') + ' dropped a token' + pMult, color: '#9146ff', seconds: actual > 0 ? '+' + actual + 's' : null };
+          }
+          if (src === 'slots_spin') {
+            var sMult = e.multiplier ? ' (x' + e.multiplier + ')' : '';
+            return { type: 'Slots', detail: (who || 'Someone') + ' spun the reels' + sMult, color: '#9146ff', seconds: actual > 0 ? '+' + actual + 's' : null };
+          }
 
           var detail = '';
           if (src === 'channel.cheer' || src === 'channel.bits.use') {

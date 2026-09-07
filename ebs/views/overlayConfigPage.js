@@ -840,6 +840,16 @@ export function renderOverlayConfigPage(options = {}) {
               return '<div class="log-line"><span class="log-time">' + tStr + '</span><span class="log-text" style="color:#9146FF">' +
                 'Sound Alert – ' + escHtml(snd) + viewer + escHtml(bitsNote) +
                 '</span></div>';
+            } else if (src === 'plinko_drop') {
+              var pMult = e.multiplier ? ' (x' + e.multiplier + ')' : '';
+              return '<div class="log-line"><span class="log-time">' + tStr + '</span><span class="log-text" style="color:#9146FF">' +
+                'Plinko – ' + escHtml(who || 'Someone') + ' dropped a token' + pMult + ': +' + actual + 's' +
+                '</span></div>';
+            } else if (src === 'slots_spin') {
+              var sMult = e.multiplier ? ' (x' + e.multiplier + ')' : '';
+              return '<div class="log-line"><span class="log-time">' + tStr + '</span><span class="log-text" style="color:#9146FF">' +
+                'Slots – ' + escHtml(who || 'Someone') + ' spun the reels' + sMult + ': +' + actual + 's' +
+                '</span></div>';
             }
             var hypeInfo = hype !== 1 ? (' (base ' + base + 's ×' + hype + ')') : '';
             return '<div class="log-line"><span class="log-time">' + tStr + '</span><span class="log-text">' +

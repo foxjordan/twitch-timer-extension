@@ -17,6 +17,7 @@ import { synthesizeSpeech } from "./tts_provider.js";
 import { VALID_TIERS, TIER_LABELS, TIER_COSTS } from "./tiers.js";
 import { shapeFeatureUsage } from "./feature_usage.js";
 import { SUPER_ADMIN_IDS, isSuperAdminId } from "./super_admin.js";
+import { ANALYTICS_EXCLUDED_CHANNEL_IDS } from "./analytics_exclusions.js";
 import { logger } from "./logger.js";
 import crypto from "crypto";
 import path from "path";
@@ -604,6 +605,7 @@ export function mountAdminRoutes(app, ctx) {
           WHERE event_name = 'config_loaded'
             AND ($1::timestamptz IS NULL OR created_at >= $1)
             AND ($2::timestamptz IS NULL OR created_at < $2)
+            AND channel_id != ALL($3::text[])
         ),
         completed AS (
           SELECT DISTINCT channel_id
@@ -611,13 +613,14 @@ export function mountAdminRoutes(app, ctx) {
           WHERE event_name IN ('sound_uploaded', 'clip_created', 'video_uploaded', 'sound_added_from_library')
             AND ($1::timestamptz IS NULL OR created_at >= $1)
             AND ($2::timestamptz IS NULL OR created_at < $2)
+            AND channel_id != ALL($3::text[])
         )
         SELECT loaded.channel_id,
                (completed.channel_id IS NOT NULL) AS did_complete
           FROM loaded
           LEFT JOIN completed ON completed.channel_id = loaded.channel_id
       `,
-        [from, to],
+        [from, to, ANALYTICS_EXCLUDED_CHANNEL_IDS],
       );
 
       const byLanguage = new Map();
@@ -670,18 +673,20 @@ export function mountAdminRoutes(app, ctx) {
            AND params ->> 'feature' IS NOT NULL
            AND ($1::timestamptz IS NULL OR created_at >= $1)
            AND ($2::timestamptz IS NULL OR created_at < $2)
+           AND channel_id != ALL($3::text[])
          GROUP BY 1, 2`;
 
       const [curRes, prevRes, activeRes] = await Promise.all([
-        db.query(aggSql, [from, to]),
-        prevFrom ? db.query(aggSql, [prevFrom, prevTo]) : Promise.resolve({ rows: [] }),
+        db.query(aggSql, [from, to, ANALYTICS_EXCLUDED_CHANNEL_IDS]),
+        prevFrom ? db.query(aggSql, [prevFrom, prevTo, ANALYTICS_EXCLUDED_CHANNEL_IDS]) : Promise.resolve({ rows: [] }),
         db.query(
           `SELECT COUNT(DISTINCT channel_id)::int AS n
              FROM client_events
             WHERE event_name IN ('page_view', 'feature_view', 'feature_use')
               AND ($1::timestamptz IS NULL OR created_at >= $1)
-              AND ($2::timestamptz IS NULL OR created_at < $2)`,
-          [from, to],
+              AND ($2::timestamptz IS NULL OR created_at < $2)
+              AND channel_id != ALL($3::text[])`,
+          [from, to, ANALYTICS_EXCLUDED_CHANNEL_IDS],
         ),
       ]);
 
@@ -709,7 +714,7 @@ export function mountAdminRoutes(app, ctx) {
     }
     try {
       const { from, to } = parseDateRange(req);
-      const range = [from, to];
+      const range = [from, to, ANALYTICS_EXCLUDED_CHANNEL_IDS];
       const [soundRes, ttsRes, skuRes, streamerRes] = await Promise.all([
         db.query(
           `
@@ -721,6 +726,7 @@ export function mountAdminRoutes(app, ctx) {
           FROM sound_alert_events
           WHERE ($1::timestamptz IS NULL OR created_at >= $1)
             AND ($2::timestamptz IS NULL OR created_at < $2)
+            AND channel_id != ALL($3::text[])
         `,
           range,
         ),
@@ -734,6 +740,7 @@ export function mountAdminRoutes(app, ctx) {
           FROM tts_events
           WHERE ($1::timestamptz IS NULL OR created_at >= $1)
             AND ($2::timestamptz IS NULL OR created_at < $2)
+            AND channel_id != ALL($3::text[])
         `,
           range,
         ),
@@ -746,12 +753,14 @@ export function mountAdminRoutes(app, ctx) {
              WHERE event_kind = 'played' AND bits_amount IS NOT NULL
                AND ($1::timestamptz IS NULL OR created_at >= $1)
                AND ($2::timestamptz IS NULL OR created_at < $2)
+               AND channel_id != ALL($3::text[])
             UNION ALL
             SELECT bits_amount, 'tts' AS src
               FROM tts_events
              WHERE event_kind = 'played' AND bits_amount IS NOT NULL
                AND ($1::timestamptz IS NULL OR created_at >= $1)
                AND ($2::timestamptz IS NULL OR created_at < $2)
+               AND channel_id != ALL($3::text[])
           ) combined
           GROUP BY bits_amount, src
           ORDER BY count DESC
@@ -774,12 +783,14 @@ export function mountAdminRoutes(app, ctx) {
              WHERE event_kind = 'played'
                AND ($1::timestamptz IS NULL OR created_at >= $1)
                AND ($2::timestamptz IS NULL OR created_at < $2)
+               AND channel_id != ALL($3::text[])
             UNION ALL
             SELECT channel_id, bits_amount, 'tts' AS src
               FROM tts_events
              WHERE event_kind = 'played'
                AND ($1::timestamptz IS NULL OR created_at >= $1)
                AND ($2::timestamptz IS NULL OR created_at < $2)
+               AND channel_id != ALL($3::text[])
           ) combined
           GROUP BY channel_id
           ORDER BY total_bits DESC

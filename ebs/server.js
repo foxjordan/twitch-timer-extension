@@ -81,6 +81,7 @@ import {
   addLogEntry,
   getLogEntries,
   getLogEntryById,
+  getLogEntriesByType,
   clearLogEntries,
 } from "./event_log.js";
 import {
@@ -949,6 +950,29 @@ app.post("/api/slots/config", (req, res) => {
   }
 });
 
+// Recent Plinko drops / Slots spins for this broadcaster — backs the Extras
+// page's history list (and its Replay button, via entry.payload — see the
+// `payload` field added to the addLogEntry() calls in playPlinkoDrop() /
+// playSlotsSpin() above). Session-authenticated like the config routes
+// above, not the extension-JWT auth the viewer-facing routes use.
+app.get("/api/plinko/history", async (req, res) => {
+  if (!req?.session?.isAdmin)
+    return res.status(401).json({ error: "Admin login required" });
+  const uid = resolveTimerUserIdFromRequest(req);
+  if (!uid) return res.status(400).json({ error: "No broadcaster in session" });
+  const entries = await getLogEntriesByType(uid, "plinko_drop", 20);
+  res.json({ entries });
+});
+
+app.get("/api/slots/history", async (req, res) => {
+  if (!req?.session?.isAdmin)
+    return res.status(401).json({ error: "Admin login required" });
+  const uid = resolveTimerUserIdFromRequest(req);
+  if (!uid) return res.status(400).json({ error: "No broadcaster in session" });
+  const entries = await getLogEntriesByType(uid, "slots_spin", 20);
+  res.json({ entries });
+});
+
 app.get("/api/games/settings", (req, res) => {
   const uid = requireGamesBroadcaster(req, res);
   if (!uid) return;
@@ -1089,6 +1113,10 @@ function playPlinkoDrop(item) {
           userName:
             item.viewerName && item.viewerName !== "Streamer" ? item.viewerName : undefined,
           userId: uid,
+          // Full animation payload, so the Extras page's history list can
+          // Replay this exact drop later (same path/bins/board look) via
+          // animatePreview(entry.payload) — the same function live drops use.
+          payload,
         });
         broadcastToChannel({
           broadcasterId: uid,
@@ -1247,6 +1275,10 @@ function playSlotsSpin(item) {
           userName:
             item.viewerName && item.viewerName !== "Streamer" ? item.viewerName : undefined,
           userId: uid,
+          // Full animation payload, so the Extras page's history list can
+          // Replay this exact spin later (same reels/board look) via
+          // animatePreview(entry.payload) — the same function live spins use.
+          payload,
         });
         broadcastToChannel({
           broadcasterId: uid,

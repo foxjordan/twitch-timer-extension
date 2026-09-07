@@ -167,6 +167,13 @@ export function renderUtilitiesPage(options = {}) {
       .plinko-field select { width: 100%; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--input-border); background: var(--input-bg); color: var(--text-color); font: inherit; }
       .plinko-queue { border: 1px solid var(--surface-border); border-radius: 10px; padding: 10px 12px; font-size: 13px; display:flex; flex-direction: column; gap: 4px; }
       .plinko-queue-next { color: var(--text-muted); }
+      .plinko-history { border: 1px solid var(--surface-border); border-radius: 10px; padding: 10px 12px; font-size: 13px; display:flex; flex-direction: column; gap: 6px; }
+      .plinko-history h4 { margin: 0; font-size: 13px; }
+      .plinko-history-row { display:flex; align-items:center; justify-content: space-between; gap: 10px; }
+      .plinko-history-info { color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      .plinko-history-row button { background: var(--secondary-button-bg); color: var(--secondary-button-text); border: 1px solid var(--secondary-button-border); border-radius: 8px; padding: 4px 10px; cursor: pointer; font-size: 12px; font-weight: 600; flex-shrink: 0; }
+      .plinko-history-row button:disabled { opacity: 0.5; cursor: default; }
+      .plinko-history-empty { color: var(--text-muted); }
       .global-footer { margin-top: 24px; padding-top: 18px; border-top: 1px solid var(--surface-border); display:flex; flex-wrap: wrap; gap: 12px; justify-content: center; font-size: 14px; color: var(--text-muted); }
       .global-footer a { color: var(--text-muted); text-decoration: none; }
       .global-footer a:hover { color: var(--accent-color); }
@@ -324,6 +331,10 @@ export function renderUtilitiesPage(options = {}) {
               <span id="plinkoCopyStatus" class="plinko-hint"></span>
             </div>
             <p class="plinko-hint">Set the Browser Source to <strong>560&nbsp;&times;&nbsp;680</strong> (portrait). The board fills that exactly and scales cleanly to any size with the same shape.</p>
+            <div class="plinko-history">
+              <h4>Recent drops</h4>
+              <div id="plinkoHistoryList"><span class="plinko-history-empty">Loading&hellip;</span></div>
+            </div>
           </div>
         </div>
       </div>
@@ -437,6 +448,10 @@ export function renderUtilitiesPage(options = {}) {
               <span id="slotsCopyStatus" class="plinko-hint"></span>
             </div>
             <p class="plinko-hint">Set the Browser Source to <strong>540&nbsp;&times;&nbsp;220</strong>.</p>
+            <div class="plinko-history">
+              <h4>Recent spins</h4>
+              <div id="slotsHistoryList"><span class="plinko-history-empty">Loading&hellip;</span></div>
+            </div>
           </div>
         </div>
       </div>
@@ -1371,6 +1386,7 @@ export function renderUtilitiesPage(options = {}) {
           var queuePanel = document.getElementById('plinkoQueuePanel');
           var queueNow = document.getElementById('plinkoQueueNow');
           var queueNext = document.getElementById('plinkoQueueNext');
+          var historyList = document.getElementById('plinkoHistoryList');
           var pctx = previewCanvas ? previewCanvas.getContext('2d') : null;
 
           var STYLE_DEFAULTS = { panel: true, panelColor: '#0f0f12', panelOpacity: 0.82, pegs: true, pegColor: '#ffffff', textColor: '#f8fafc', showStatus: true, pegSound: true, pegSoundVolume: 0.35, winSound: true, winSoundVolume: 0.5 };
@@ -1733,12 +1749,79 @@ export function renderUtilitiesPage(options = {}) {
               ? 'Up next: ' + names.join(', ') + (extra > 0 ? ' +' + extra + ' more' : '') + '  (' + snap.waitingCount + ' waiting)'
               : '';
           }
+          /* ---- history (recent real drops, from the event log) + Replay ---- */
+          function renderHistory(entries) {
+            if (!historyList) return;
+            historyList.textContent = '';
+            if (!entries || !entries.length) {
+              var empty = document.createElement('span');
+              empty.className = 'plinko-history-empty';
+              empty.textContent = 'No drops yet.';
+              historyList.appendChild(empty);
+              return;
+            }
+            entries.forEach(function (e) {
+              var row = document.createElement('div');
+              row.className = 'plinko-history-row';
+
+              var info = document.createElement('span');
+              info.className = 'plinko-history-info';
+              var d = e.ts ? new Date(e.ts) : new Date();
+              var tStr = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+              var who = e.userName || 'Someone';
+              var secs = Number(e.actualSeconds || e.appliedSeconds || 0);
+              var mult = e.multiplier ? ' ×' + e.multiplier : '';
+              info.textContent = tStr + ' · ' + who + mult + (secs > 0 ? ' · +' + secs + 's' : '');
+              row.appendChild(info);
+
+              var replayBtn = document.createElement('button');
+              replayBtn.type = 'button';
+              replayBtn.textContent = 'Replay';
+              if (!e.payload) {
+                replayBtn.disabled = true;
+              } else {
+                replayBtn.addEventListener('click', function () { animatePreview(e.payload); });
+              }
+              row.appendChild(replayBtn);
+
+              historyList.appendChild(row);
+            });
+          }
+          function fetchHistory() {
+            fetch('/api/plinko/history', { credentials: 'same-origin' })
+              .then(function (r) { return r.ok ? r.json() : null; })
+              .then(function (data) { renderHistory(data && data.entries); })
+              .catch(function () { renderHistory(null); });
+          }
+          fetchHistory();
+
           function connectPlinkoStream() {
             if (!overlayShareKey) return;
             var url = '/api/overlay/stream?key=' + encodeURIComponent(overlayShareKey) + '&boardId=' + encodeURIComponent(PLINKO_BOARD_ID);
             var es = new EventSource(url);
             es.addEventListener('plinko_drop', function (ev) {
-              try { animatePreview(JSON.parse(ev.data)); } catch (e) {}
+              try {
+                var data = JSON.parse(ev.data);
+                // The overlay stream replays the last known drop on every new
+                // connection (so the OBS overlay can resume mid-animation
+                // after a brief reconnect) — but this preview page opens a
+                // fresh connection every time the Extras tab is visited, so
+                // without this check it would immediately replay whatever
+                // the last drop ever was, no matter how long ago. Only
+                // animate if it's still genuinely in flight.
+                var elapsed = Date.now() - new Date(data.triggeredAt || 0).getTime();
+                if (elapsed >= 0 && elapsed < (data.durationMs || 0)) {
+                  animatePreview(data);
+                  if (!data.test) {
+                    // The log entry for this drop is written server-side
+                    // once the token lands (durationMs after it started,
+                    // not when the SSE event fired) — wait for that before
+                    // refetching. Only genuinely fresh drops (the branch
+                    // above) produce a new entry; a stale replay wouldn't.
+                    setTimeout(fetchHistory, (data.durationMs || 0) + 500);
+                  }
+                }
+              } catch (e) {}
             });
             es.addEventListener('plinko_queue', function (ev) {
               try { renderQueue(JSON.parse(ev.data)); } catch (e) {}
@@ -1787,9 +1870,11 @@ export function renderUtilitiesPage(options = {}) {
           var queuePanel = document.getElementById('slotsQueuePanel');
           var queueNow = document.getElementById('slotsQueueNow');
           var queueNext = document.getElementById('slotsQueueNext');
+          var historyList = document.getElementById('slotsHistoryList');
           var copyBtn = document.getElementById('slotsCopyBtn');
           var copyStatus = document.getElementById('slotsCopyStatus');
           var prevReels = [document.getElementById('slotsPrev0'), document.getElementById('slotsPrev1'), document.getElementById('slotsPrev2')];
+          var previewBusy = false;
           var stylePanel = document.getElementById('slotsStylePanel');
           var stylePanelColor = document.getElementById('slotsStylePanelColor');
           var stylePanelOpacity = document.getElementById('slotsStylePanelOpacity');
@@ -2103,7 +2188,8 @@ export function renderUtilitiesPage(options = {}) {
           }
 
           function animatePreview(payload) {
-            if (!payload || !Array.isArray(payload.reels)) return;
+            if (previewBusy || !payload || !Array.isArray(payload.reels)) return;
+            previewBusy = true;
             applyPreviewStyle();
             playBg();
             var syms = Array.isArray(payload.symbols) ? payload.symbols : symbols.map(function (s) { return s.emote; });
@@ -2134,18 +2220,76 @@ export function renderUtilitiesPage(options = {}) {
                 playReelStop();
                 var img = prevReels[i].querySelector('img');
                 if (img) { img.style.transform = 'scale(1.22)'; setTimeout(function () { img.style.transform = 'scale(1)'; }, 150); }
-                if (i === 2) { stopBg(); if (matchKind !== 'none') playWin(); else playLose(); }
+                if (i === 2) { previewBusy = false; stopBg(); if (matchKind !== 'none') playWin(); else playLose(); }
               }, STOP[i]);
             });
             setTimeout(renderPreviewIdle, 4200);
           }
+
+          /* ---- history (recent real spins, from the event log) + Replay ---- */
+          function renderHistory(entries) {
+            if (!historyList) return;
+            historyList.textContent = '';
+            if (!entries || !entries.length) {
+              var empty = document.createElement('span');
+              empty.className = 'plinko-history-empty';
+              empty.textContent = 'No spins yet.';
+              historyList.appendChild(empty);
+              return;
+            }
+            entries.forEach(function (e) {
+              var row = document.createElement('div');
+              row.className = 'plinko-history-row';
+
+              var info = document.createElement('span');
+              info.className = 'plinko-history-info';
+              var d = e.ts ? new Date(e.ts) : new Date();
+              var tStr = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+              var who = e.userName || 'Someone';
+              var secs = Number(e.actualSeconds || e.appliedSeconds || 0);
+              var mult = e.multiplier ? ' ×' + e.multiplier : '';
+              info.textContent = tStr + ' · ' + who + mult + (secs > 0 ? ' · +' + secs + 's' : '');
+              row.appendChild(info);
+
+              var replayBtn = document.createElement('button');
+              replayBtn.type = 'button';
+              replayBtn.textContent = 'Replay';
+              if (!e.payload) {
+                replayBtn.disabled = true;
+              } else {
+                replayBtn.addEventListener('click', function () { animatePreview(e.payload); });
+              }
+              row.appendChild(replayBtn);
+
+              historyList.appendChild(row);
+            });
+          }
+          function fetchHistory() {
+            fetch('/api/slots/history', { credentials: 'same-origin' })
+              .then(function (r) { return r.ok ? r.json() : null; })
+              .then(function (data) { renderHistory(data && data.entries); })
+              .catch(function () { renderHistory(null); });
+          }
+          fetchHistory();
 
           function connectSlotsStream() {
             if (!overlayShareKey) return;
             var url = '/api/overlay/stream?key=' + encodeURIComponent(overlayShareKey) + '&boardId=' + encodeURIComponent(SLOTS_BOARD_ID);
             var es = new EventSource(url);
             es.addEventListener('slots_spin', function (ev) {
-              try { animatePreview(JSON.parse(ev.data)); } catch (e) {}
+              try {
+                var data = JSON.parse(ev.data);
+                // Same replayed-on-connect issue as Plinko: only animate if
+                // this spin is still genuinely in flight, not whatever the
+                // last spin ever was.
+                var elapsed = Date.now() - new Date(data.triggeredAt || 0).getTime();
+                if (elapsed >= 0 && elapsed < (data.durationMs || 0)) {
+                  animatePreview(data);
+                  if (!data.test) {
+                    setTimeout(fetchHistory, (data.durationMs || 0) + 500);
+                  }
+                }
+              } catch (e) {}
             });
             es.addEventListener('slots_queue', function (ev) {
               try { renderQueue(JSON.parse(ev.data)); } catch (e) {}

@@ -54,6 +54,23 @@ export async function getLogEntryById(alertId) {
   }
 }
 
+// Scoped to one user AND one type — backs "recent Plinko drops"/"recent Slots
+// spins" history lists, where pulling the general (mixed-type) log and
+// filtering client-side would silently miss older entries once enough other
+// event types (cheers, follows, sound alerts, ...) push them past READ_LIMIT.
+export async function getLogEntriesByType(userId, type, limit = 20) {
+  try {
+    const r = await db.query(
+      "SELECT id, user_id, ts, type, data FROM event_log WHERE user_id = $1 AND type = $2 ORDER BY ts DESC LIMIT $3",
+      [String(userId), String(type), Math.max(1, Math.min(Number(limit) || 20, READ_LIMIT))],
+    );
+    return r.rows.map(rowToEntry);
+  } catch (err) {
+    logger.error("event_log_list_by_type_failed", { message: err?.message });
+    return [];
+  }
+}
+
 // userId omitted -> the super-admin cross-user read (still capped).
 export async function getLogEntries(userId) {
   try {

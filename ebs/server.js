@@ -1146,16 +1146,24 @@ function firePlinkoDrop({
   test = false,
   source = "manual",
   viewerName = "",
+  bits = 0,
 }) {
   const cfg = getPlinkoConfig(uid);
   const col = Number.isFinite(dropColumn)
     ? Math.max(0, Math.min(cfg.rows, Math.round(dropColumn)))
     : Math.floor(Math.random() * (cfg.rows + 1));
   const seed = uuidv4();
-  const { path: dropPath, binIndex, multiplier, secondsToAdd } = computePlinkoDrop(cfg, {
+  const { path: dropPath, binIndex, multiplier } = computePlinkoDrop(cfg, {
     dropColumn: col,
     seed,
   });
+  // A real Bits redemption uses the countdown timer's own Bits rule (same
+  // math as a chat cheer, Sound Alerts, TTS — see bitsInExtensionSeconds)
+  // as the multiplier's base, not Base Time. Base Time only applies to a
+  // manual/test drop from the Extras page, where there's no real Bits
+  // spend to convert.
+  const baseSeconds = bits > 0 ? bitsInExtensionSeconds(uid, bits) : cfg.baseSeconds;
+  const secondsToAdd = Math.floor(baseSeconds * multiplier);
   const durationMs = Math.max(2000, Math.min(12000, 1400 + cfg.rows * 420));
   const payload = {
     dropId: seed,
@@ -1168,7 +1176,7 @@ function firePlinkoDrop({
     path: dropPath,
     binIndex,
     multiplier,
-    baseSeconds: cfg.baseSeconds,
+    baseSeconds,
     // Intended amount — actually credited when the token lands, so the overlay's
     // "+time" and the subathon clock move together.
     secondsAdded: test ? 0 : secondsToAdd,
@@ -1193,7 +1201,7 @@ function firePlinkoDrop({
     binIndex,
     multiplier,
     dropColumn: col,
-    baseSeconds: cfg.baseSeconds,
+    baseSeconds,
     viewerName: viewerName || "Someone",
     source,
   });
@@ -1306,10 +1314,18 @@ function fireSlotsSpin({
   test = false,
   source = "manual",
   viewerName = "",
+  bits = 0,
 }) {
   const cfg = getSlotsConfig(uid);
   const seed = uuidv4();
-  const { reels, matchKind, multiplier, secondsToAdd } = computeSlotsSpin(cfg, { seed });
+  const { reels, matchKind, multiplier } = computeSlotsSpin(cfg, { seed });
+  // A real Bits redemption uses the countdown timer's own Bits rule (same
+  // math as a chat cheer, Sound Alerts, TTS — see bitsInExtensionSeconds)
+  // as the multiplier's base, not Base Time. Base Time only applies to a
+  // manual/test spin from the Extras page, where there's no real Bits
+  // spend to convert.
+  const baseSeconds = bits > 0 ? bitsInExtensionSeconds(uid, bits) : cfg.baseSeconds;
+  const secondsToAdd = Math.floor(baseSeconds * multiplier);
   const durationMs = SLOTS_DURATION_MS;
   const payload = {
     spinId: seed,
@@ -1318,7 +1334,7 @@ function fireSlotsSpin({
     symbols: cfg.symbols.map((s) => s.emote),
     matchKind,
     multiplier,
-    baseSeconds: cfg.baseSeconds,
+    baseSeconds,
     style: cfg.style,
     // Intended amount — actually credited when the reels stop, so the overlay's
     // "+time" and the subathon clock move together.
@@ -1343,7 +1359,7 @@ function fireSlotsSpin({
     secondsToAdd,
     matchKind,
     multiplier,
-    baseSeconds: cfg.baseSeconds,
+    baseSeconds,
     viewerName: viewerName || "Someone",
     source,
   });
@@ -1462,6 +1478,10 @@ app.post("/api/plinko/redeem", async (req, res) => {
     dropColumn: Number.isFinite(rawColumn) ? rawColumn : undefined,
     source: "bits_redeem",
     viewerName,
+    // The actual Bits amount from the verified receipt — this is what pays
+    // the automatic timer-seconds credit (bitsInExtensionSeconds), not the
+    // board's Base Time. See docs/superpowers/specs/2026-09-07-games-bits-timer-credit-design.md.
+    bits: Number(String(receiptSku).replace("sound_", "")) || 0,
   });
 
   if (!payload.queue) {
@@ -1578,6 +1598,10 @@ app.post("/api/slots/redeem", async (req, res) => {
     overlayKey,
     source: "bits_redeem",
     viewerName,
+    // The actual Bits amount from the verified receipt — this is what pays
+    // the automatic timer-seconds credit (bitsInExtensionSeconds), not the
+    // board's Base Time. See docs/superpowers/specs/2026-09-07-games-bits-timer-credit-design.md.
+    bits: Number(String(receiptSku).replace("sound_", "")) || 0,
   });
 
   if (!payload.queue) {
@@ -2146,6 +2170,30 @@ mountGoalRoutes(app, {
   onGoalsChanged: (uid) => broadcastGoalSnapshot(uid),
 });
 
+// Converts a Bits-in-Extensions spend into timer seconds, using the same
+// per-broadcaster RULES.bits.per/add_seconds rule — and the same fractional-
+// bits carry-forward pool — as a real chat cheer. channel.bits.use never
+// fires channel.cheer (confirmed empirically, not just from Twitch's own
+// docs, which are inconsistent on this exact point), so this is the only
+// place that math actually runs for Bits spent inside the extension.
+// Mutates the shared bitsCarry pool as a side effect; callers apply the
+// returned seconds however fits their own timing (immediately for Sound
+// Alerts/TTS below, as the multiplier's base for a Games drop/spin).
+function bitsInExtensionSeconds(timerUid, bits) {
+  const n = Number(bits) || 0;
+  if (n <= 0) return 0;
+  const RULES = getRules(timerUid);
+  const per = Math.max(1, Number(RULES.bits?.per || 0));
+  const addSec = Math.max(0, Number(RULES.bits?.add_seconds || 0));
+  if (addSec <= 0) return 0;
+  const userState = state.users.get(timerUid) || { bitsCarry: 0 };
+  userState.bitsCarry = Math.max(0, Math.floor((userState.bitsCarry || 0) + n));
+  state.users.set(timerUid, userState);
+  const units = Math.floor(userState.bitsCarry / per);
+  userState.bitsCarry = userState.bitsCarry % per;
+  return units * addSec;
+}
+
 // Shared by both trigger paths: a real Bits redemption (routes_sounds.js's
 // notify(), passing `tier`) and a Channel Points redemption (the EventSub
 // handler below, passing `channelPointsAmount` instead) — same overlay
@@ -2227,21 +2275,11 @@ function handleSoundAlert({ channelId, soundId, soundName, tier, txId, viewerUse
     if (bits > 0) {
       logEntry.bitsAmount = bits;
       const timerUid = String(channelId);
-      const RULES = getRules(timerUid);
-      const per = Math.max(1, Number(RULES.bits?.per || 0));
-      const addSec = Math.max(0, Number(RULES.bits?.add_seconds || 0));
-      if (addSec > 0) {
-        const userState = state.users.get(timerUid) || { bitsCarry: 0 };
-        userState.bitsCarry = Math.max(0, Math.floor((userState.bitsCarry || 0) + bits));
-        state.users.set(timerUid, userState);
-        const units = Math.floor(userState.bitsCarry / per);
-        userState.bitsCarry = userState.bitsCarry % per;
-        if (units > 0) {
-          const secs = units * addSec;
-          addSeconds(timerUid, secs);
-          logEntry.secondsAdded = secs;
-          logger.info("bits_in_ext_timer_add", { userId: timerUid, bits, seconds: secs, source: "sound_alert" });
-        }
+      const secs = bitsInExtensionSeconds(timerUid, bits);
+      if (secs > 0) {
+        addSeconds(timerUid, secs);
+        logEntry.secondsAdded = secs;
+        logger.info("bits_in_ext_timer_add", { userId: timerUid, bits, seconds: secs, source: "sound_alert" });
       }
     }
   }
@@ -2411,20 +2449,10 @@ mountTtsRoutes(app, {
       const bits = Number(tier.replace("sound_", "")) || 0;
       if (bits > 0) {
         const timerUid = String(channelId);
-        const RULES = getRules(timerUid);
-        const per = Math.max(1, Number(RULES.bits?.per || 0));
-        const addSec = Math.max(0, Number(RULES.bits?.add_seconds || 0));
-        if (addSec > 0) {
-          const userState = state.users.get(timerUid) || { bitsCarry: 0 };
-          userState.bitsCarry = Math.max(0, Math.floor((userState.bitsCarry || 0) + bits));
-          state.users.set(timerUid, userState);
-          const units = Math.floor(userState.bitsCarry / per);
-          userState.bitsCarry = userState.bitsCarry % per;
-          if (units > 0) {
-            const secs = units * addSec;
-            addSeconds(timerUid, secs);
-            logger.info("bits_in_ext_timer_add", { userId: timerUid, bits, seconds: secs, source: "tts_alert" });
-          }
+        const secs = bitsInExtensionSeconds(timerUid, bits);
+        if (secs > 0) {
+          addSeconds(timerUid, secs);
+          logger.info("bits_in_ext_timer_add", { userId: timerUid, bits, seconds: secs, source: "tts_alert" });
         }
       }
     }

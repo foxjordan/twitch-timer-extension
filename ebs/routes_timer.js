@@ -9,6 +9,7 @@ export function mountTimerRoutes(app, ctx) {
     state,
     getRemainingSeconds,
     addSeconds,
+    removeSeconds,
     setHype,
     setBonusTime,
     pauseTimer,
@@ -110,6 +111,11 @@ export function mountTimerRoutes(app, ctx) {
       appliedSeconds: seconds,
       actualSeconds: actual,
       hypeMultiplier: Number(meta.hypeMultiplier || 1) || 1,
+      // Set when this add was triggered from an event log row (e.g. "Add
+      // anyway" on a deduped sub, or an "Apply multiplier" top-up) — lets the
+      // log cross-reference back to the entry it acted on. Absent for a
+      // plain manual add typed in by the streamer.
+      relatedEventId: meta.relatedEventId ? String(meta.relatedEventId) : undefined,
       userId: uid,
     });
     logger.info('timer_added', {
@@ -127,6 +133,42 @@ export function mountTimerRoutes(app, ctx) {
       paused: state.users.get(String(uid))?.paused,
     });
     res.json({ remaining, added: actual });
+  });
+
+  app.post('/api/timer/remove', async (req, res) => {
+    const uid = resolveUid(req);
+    if (!uid) return res.status(401).json({ error: 'Session expired — please log in again' });
+    const seconds = Number(req.body?.seconds ?? 60);
+    const meta = (req.body && typeof req.body.meta === 'object' && req.body.meta) || {};
+    const before = getRemainingSeconds(uid);
+    const remaining = removeSeconds(uid, seconds);
+    const actual = Math.max(0, before - remaining);
+    addLogEntry({
+      type: 'manual_remove',
+      source: String(meta.source || ''),
+      label: String(meta.label || ''),
+      requestedSeconds: Number(meta.requestedSeconds ?? seconds) || seconds,
+      baseSeconds: seconds,
+      appliedSeconds: seconds,
+      actualSeconds: actual,
+      relatedEventId: meta.relatedEventId ? String(meta.relatedEventId) : undefined,
+      userId: uid,
+    });
+    logger.info('timer_removed', {
+      requestId: req.requestId,
+      removed: actual,
+      requested: seconds,
+      userId: uid,
+    });
+    markTimerMutation();
+    await emitToChannel(uid, 'timer_add', {
+      userId: String(uid),
+      secondsAdded: -actual,
+      newRemaining: remaining,
+      hype: state.users.get(String(uid))?.hypeActive,
+      paused: state.users.get(String(uid))?.paused,
+    });
+    res.json({ remaining, removed: actual });
   });
 
   app.get('/api/timer/state', (req, res) => {

@@ -180,6 +180,28 @@ export function addSeconds(uid = DEFAULT_USER_ID, sec = 0) {
   return getRemainingSeconds(uid);
 }
 
+// Corrective counterpart to addSeconds — e.g. reverting a mistakenly-added
+// event from the event log ("Remove" action). Unlike addSeconds this is never
+// capped by maxTotalSeconds/capForcedOn (those gate further additions, not a
+// correction) and it floors at "no time remaining" instead of no-op'ing on a
+// value it can't fully apply.
+export function removeSeconds(uid = DEFAULT_USER_ID, sec = 0) {
+  const s = ensure(uid);
+  const now = Date.now();
+  const toRemove = Math.floor(Number(sec) || 0);
+  if (toRemove <= 0) return getRemainingSeconds(uid);
+
+  if (s.paused) {
+    s.pauseRemaining = Math.max(0, Math.floor(s.pauseRemaining - toRemove));
+  } else {
+    const floor = Math.max(now, s.timerExpiryEpochMs - toRemove * 1000);
+    s.timerExpiryEpochMs = floor;
+  }
+  s.additionsTotal = Math.max(0, Math.floor(s.additionsTotal - toRemove));
+  persistTimerState().catch(() => {});
+  return getRemainingSeconds(uid);
+}
+
 export function setHype(uid = DEFAULT_USER_ID, active) {
   const s = ensure(uid);
   s.hypeActive = active;

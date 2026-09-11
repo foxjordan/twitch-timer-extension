@@ -168,6 +168,19 @@ export function renderOverlayConfigPage(options = {}) {
       .hint { font-size: 12px; color: var(--text-muted); }
       .log-box { margin-top: 8px; padding: 8px; background: var(--log-bg); border: 1px solid var(--log-border); border-radius: 8px; max-height: 160px; overflow-y: auto; font-size: 12px; }
       .log-line { margin-bottom: 4px; white-space: nowrap; text-overflow: ellipsis; overflow: hidden; }
+      /* A row with actions available (credit/multiplier/remove) reads as clickable
+         text — dotted underline + accent color, not a full hyperlink look — and opens
+         the actions modal rather than cramming controls into the log itself. */
+      .log-line-clickable { cursor: pointer; }
+      .log-line-clickable:hover, .log-line-clickable:focus-visible { background: var(--surface-muted, rgba(145,71,255,0.12)); outline: none; }
+      .log-line-clickable .log-text { color: var(--accent-color); text-decoration: underline; text-decoration-style: dotted; text-underline-offset: 2px; }
+      /* Log action modal — same .modal-backdrop/.modal-box shell used on the Sound Alerts page. */
+      .modal-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,0.6); display: flex; align-items: center; justify-content: center; z-index: 200; padding: 20px; box-sizing: border-box; }
+      .modal-box { background: var(--surface-color); border: 1px solid var(--surface-border); border-radius: 14px; width: 100%; max-width: 420px; max-height: 90vh; display: flex; flex-direction: column; overflow: hidden; }
+      .modal-header { display: flex; align-items: center; justify-content: space-between; padding: 16px 20px; border-bottom: 1px solid var(--surface-border); flex-shrink: 0; }
+      .modal-close { background: transparent; color: var(--text-muted); font-size: 20px; line-height: 1; padding: 4px 8px; border-radius: 6px; }
+      .modal-close:hover { background: var(--surface-muted, #1a1a1e); color: var(--text-color); }
+      .modal-body { padding: 20px; overflow-y: auto; flex: 1; }
       .log-time { color: var(--text-muted); margin-right: 6px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
       .log-text { color: var(--text-color); opacity: 0.9; }
       .global-footer { margin: 24px 16px 24px; padding: 12px 0; border-top: 1px solid var(--surface-border); text-align: center; font-size: 13px; color: var(--text-muted); }
@@ -617,6 +630,17 @@ export function renderOverlayConfigPage(options = {}) {
           </div>
         </div>
       </div>
+
+      <div id="logActionBackdrop" class="modal-backdrop" style="display:none;">
+        <div class="modal-box">
+          <div class="modal-header">
+            <div style="font-weight:600;">Event actions</div>
+            <button id="logActionCloseBtn" class="modal-close" type="button" aria-label="Close">&times;</button>
+          </div>
+          <div id="logActionBody" class="modal-body"></div>
+        </div>
+      </div>
+
       <div class="panel" style="margin-top:16px;">
         <div style="padding: 12px; font-size: 15px; font-weight: 600;">Debug Utils</div>
         <div style="padding: 0 12px 12px;">
@@ -767,6 +791,12 @@ export function renderOverlayConfigPage(options = {}) {
         try { await fetch('/api/timer/add', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) }); } catch(e) {}
       }
 
+      async function removeTime(secs, meta) {
+        const payload = { seconds: secs };
+        if (meta && typeof meta === 'object') payload.meta = meta;
+        try { await fetch('/api/timer/remove', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) }); } catch(e) {}
+      }
+
       async function setHypeActive(active) {
         try {
           await fetch('/api/hype', {
@@ -777,13 +807,126 @@ export function renderOverlayConfigPage(options = {}) {
         } catch (e) {}
       }
 
+      // Event types a streamer can retroactively multiply/remove from — the
+      // EventSub-driven contributions. Deliberately excludes manual_add/remove
+      // (would let corrections stack on corrections) and Plinko/Slots/sound
+      // alerts (they have their own Replay-style controls).
+      var LOG_ACTIONABLE_TYPES = {
+        'channel.subscribe': true,
+        'channel.subscription.message': true,
+        'channel.subscription.gift': true,
+        'channel.cheer': true,
+        'channel.charity_campaign.donate': true,
+        'channel.raid': true,
+        'channel.follow': true,
+        'streamelements_tip': true,
+      };
+
+      // Each of credit/multiplier/remove is a one-shot action per log entry —
+      // re-derived every render from the log itself (which manual_add/remove
+      // entries reference this one via relatedEventId) rather than tracked
+      // separately, so it survives reloads/polls with no extra state.
+      function buildActionedMap(entries) {
+        var map = {};
+        (entries || []).forEach(function(e) {
+          if ((e.type === 'manual_add' || e.type === 'manual_remove') && e.relatedEventId) {
+            if (!map[e.relatedEventId]) map[e.relatedEventId] = {};
+            map[e.relatedEventId][e.source || ''] = true;
+          }
+        });
+        return map;
+      }
+
+      // Text for a duplicate-sub row — used both in the log line itself and (with
+      // the action controls) in the modal, so it's built once and shared.
+      function subDedupedSummary(e) {
+        var tierLabel = e.subTier ? ' Tier ' + String(e.subTier).replace(/^0+/, '') : '';
+        var giftNote = e.isGift ? ' (gift)' : '';
+        var monthsNote = e.durationMonths
+          ? ' — looks like a ' + e.durationMonths + '-month resub'
+          : (e.cumulativeMonths ? ' — month ' + e.cumulativeMonths + (e.streakMonths ? ' (streak ' + e.streakMonths + ')' : '') : '');
+        var suppressed = Number(e.suppressedSeconds || 0);
+        var who = e.userName || 'Someone';
+        return 'Duplicate sub event — ' + escHtml(who) + tierLabel + giftNote + escHtml(monthsNote) + ' (suppressed ' + suppressed + 's)';
+      }
+
+      // Whether a row opens the actions modal. Only entries that can actually be
+      // acted on look/behave clickable — everything else renders as plain text.
+      function isActionableEntry(e) {
+        if (e.type === 'sub_deduped') return Number(e.suppressedSeconds || 0) > 0;
+        return Boolean(LOG_ACTIONABLE_TYPES[e.type]) && Number(e.appliedSeconds || 0) > 0;
+      }
+
+      // Wraps a row's time+text in the div, adding the clickable affordance
+      // (class/data-id/keyboard support) only when the entry has actions to show.
+      function logRowHtml(e, tStr, textHtml) {
+        if (!isActionableEntry(e)) {
+          return '<div class="log-line"><span class="log-time">' + tStr + '</span><span class="log-text">' + textHtml + '</span></div>';
+        }
+        return '<div class="log-line log-line-clickable" data-id="' + escHtml(e.id) + '" role="button" tabindex="0">' +
+          '<span class="log-time">' + tStr + '</span><span class="log-text">' + textHtml + '</span></div>';
+      }
+
+      // Builds the modal body for whichever entry was clicked, using the latest
+      // actioned-state map (rebuilt on every renderLog call, so it's always as
+      // fresh as the last poll).
+      function renderLogActionModalBody(entry, actioned) {
+        var acted = actioned[entry.id] || {};
+        if (entry.type === 'sub_deduped') {
+          var suppressed = Number(entry.suppressedSeconds || 0);
+          var html = '<p style="margin:0 0 16px;">' + subDedupedSummary(entry) + '</p>';
+          if (suppressed > 0) {
+            html += acted['event_log_credit']
+              ? '<p class="hint">Already credited.</p>'
+              : '<button type="button" class="log-action" data-action="credit" data-id="' + escHtml(entry.id) +
+                '" data-seconds="' + suppressed + '">Add ' + suppressed + 's anyway</button>';
+          }
+          return html;
+        }
+
+        var applied = Number(entry.appliedSeconds || 0);
+        var actual = Number(entry.actualSeconds || applied);
+        var html = '<p style="margin:0 0 16px;">' + escHtml(entry.type || 'Event') + ' — +' + actual + 's applied.</p>';
+
+        html += '<div style="margin-bottom:16px;">';
+        html += acted['event_log_multiplier']
+          ? '<p class="hint">A multiplier has already been applied to this event.</p>'
+          : '<label class="hint" style="display:block;margin-bottom:6px;">Apply a multiplier</label>' +
+            '<div style="display:flex;gap:8px;align-items:center;">' +
+            '<input type="number" id="logModalMultInput" min="0.1" step="0.1" placeholder="2" style="width:70px;">' +
+            '<button type="button" class="secondary log-action" data-action="multiplier" data-id="' + escHtml(entry.id) +
+            '" data-applied="' + applied + '" data-type="' + escHtml(entry.type || '') + '">Apply</button></div>';
+        html += '</div>';
+
+        html += '<div>';
+        html += acted['event_log_remove']
+          ? '<p class="hint">Time has already been removed for this event.</p>'
+          : '<label class="hint" style="display:block;margin-bottom:6px;">Remove time</label>' +
+            '<div style="display:flex;gap:8px;align-items:center;">' +
+            '<input type="number" id="logModalRemoveInput" min="0" step="1" value="' + applied + '" style="width:70px;">' +
+            '<button type="button" class="secondary log-action" data-action="remove" data-id="' + escHtml(entry.id) + '">Remove</button></div>';
+        html += '</div>';
+
+        return html;
+      }
+
+      // Populated by renderLog and read back when a clicked row opens the actions
+      // modal — always as fresh as the last poll, no separate fetch needed.
+      var logEntriesById = {};
+      var logActionedMap = {};
+
       function renderLog(entries) {
         const box = document.getElementById('eventLog');
         if (!box) return;
         if (!entries || !entries.length) {
           box.textContent = 'No entries yet.';
+          logEntriesById = {};
+          logActionedMap = {};
           return;
         }
+        logActionedMap = buildActionedMap(entries);
+        logEntriesById = {};
+        entries.forEach(function(e) { logEntriesById[e.id] = e; });
         box.innerHTML = entries
           .slice()
           .reverse()
@@ -830,7 +973,9 @@ export function renderOverlayConfigPage(options = {}) {
               detail = 'Hype Train progress';
             } else if (src === 'channel.hype_train.end') {
               detail = 'Hype Train ended';
-            } else if (src === 'manual_start' || src === 'manual_add' || src === 'manual_clear' || src === 'manual_restart') {
+            } else if (src === 'sub_deduped') {
+              return logRowHtml(e, tStr, subDedupedSummary(e));
+            } else if (src === 'manual_start' || src === 'manual_add' || src === 'manual_remove' || src === 'manual_clear' || src === 'manual_restart') {
               detail = label || (e.source || 'Manual');
             } else if (src === 'sound_alert') {
               var snd = e.soundName || 'Sound';
@@ -852,15 +997,16 @@ export function renderOverlayConfigPage(options = {}) {
                 '</span></div>';
             }
             var hypeInfo = hype !== 1 ? (' (base ' + base + 's ×' + hype + ')') : '';
-            return '<div class="log-line"><span class="log-time">' + tStr + '</span><span class="log-text">' +
-              src + (detail ? ' – ' + detail : '') + ': +' + actual + 's' + hypeInfo + capNote +
-              '</span></div>';
+            return logRowHtml(e, tStr, src + (detail ? ' – ' + detail : '') + ': +' + actual + 's' + hypeInfo + capNote);
           })
           .join('');
       }
 
       async function fetchLog() {
         try {
+          // The multiplier/remove inputs now live in the actions modal, outside
+          // #eventLog — a poll rebuilding the log's innerHTML can no longer wipe
+          // an in-progress edit, so this just re-renders unconditionally.
           const r = await fetch('/api/events/log', { cache: 'no-store' });
           if (!r.ok) return;
           const j = await r.json();
@@ -1674,6 +1820,101 @@ export function renderOverlayConfigPage(options = {}) {
             flashButton(clearLogBtn);
             try { await fetch('/api/events/log/clear', { method: 'POST' }); } catch (err) {}
             renderLog([]);
+          });
+        }
+
+        // Event log actions modal (credit a deduped sub, apply a multiplier,
+        // remove time). A clickable row just opens it; the actions themselves
+        // live in #logActionBody, well outside #eventLog's polling rebuild.
+        const eventLogBox = document.getElementById('eventLog');
+        const logActionBackdrop = document.getElementById('logActionBackdrop');
+        const logActionBody = document.getElementById('logActionBody');
+        const logActionCloseBtn = document.getElementById('logActionCloseBtn');
+
+        function closeLogActionModal() {
+          if (logActionBackdrop) logActionBackdrop.style.display = 'none';
+          if (logActionBody) logActionBody.innerHTML = '';
+        }
+
+        function openLogActionModal(entryId) {
+          const entry = logEntriesById[entryId];
+          if (!entry || !logActionBackdrop || !logActionBody) return;
+          logActionBody.innerHTML = renderLogActionModalBody(entry, logActionedMap);
+          logActionBackdrop.style.display = 'flex';
+        }
+
+        if (eventLogBox) {
+          eventLogBox.addEventListener('click', function(ev) {
+            const row = ev.target.closest('.log-line-clickable');
+            if (row) openLogActionModal(row.getAttribute('data-id'));
+          });
+          // role="button" rows need keyboard activation too.
+          eventLogBox.addEventListener('keydown', function(ev) {
+            if (ev.key !== 'Enter' && ev.key !== ' ') return;
+            const row = ev.target.closest('.log-line-clickable');
+            if (!row) return;
+            ev.preventDefault();
+            openLogActionModal(row.getAttribute('data-id'));
+          });
+        }
+
+        if (logActionCloseBtn) logActionCloseBtn.addEventListener('click', closeLogActionModal);
+        if (logActionBackdrop) {
+          logActionBackdrop.addEventListener('click', function(ev) {
+            if (ev.target === logActionBackdrop) closeLogActionModal();
+          });
+        }
+        document.addEventListener('keydown', function(ev) {
+          if (ev.key === 'Escape' && logActionBackdrop && logActionBackdrop.style.display !== 'none') closeLogActionModal();
+        });
+
+        if (logActionBody) {
+          logActionBody.addEventListener('click', async function(ev) {
+            const btn = ev.target.closest('.log-action');
+            if (!btn || btn.disabled) return;
+            const action = btn.getAttribute('data-action');
+            const id = btn.getAttribute('data-id');
+            if (!id) return;
+
+            if (action === 'credit') {
+              const seconds = Number(btn.getAttribute('data-seconds')) || 0;
+              if (seconds <= 0) return;
+              if (!confirm('Add ' + seconds + 's to the timer for this deduped sub?')) return;
+              btn.disabled = true;
+              await addTime(seconds, { source: 'event_log_credit', label: 'Credited a deduped sub', relatedEventId: id });
+              closeLogActionModal();
+              fetchLog();
+              return;
+            }
+
+            if (action === 'multiplier') {
+              const input = document.getElementById('logModalMultInput');
+              const multiplier = Number(input && input.value);
+              const applied = Number(btn.getAttribute('data-applied')) || 0;
+              if (!Number.isFinite(multiplier) || multiplier <= 0) { if (input) input.focus(); return; }
+              const delta = Math.round(applied * (multiplier - 1));
+              if (delta === 0) return;
+              const verb = delta > 0 ? 'add' : 'remove';
+              if (!confirm('Apply a ' + multiplier + 'x multiplier — this will ' + verb + ' ' + Math.abs(delta) + 's on the timer?')) return;
+              btn.disabled = true;
+              const meta = { source: 'event_log_multiplier', label: multiplier + 'x applied to ' + (btn.getAttribute('data-type') || 'event'), relatedEventId: id };
+              if (delta > 0) await addTime(delta, meta); else await removeTime(-delta, meta);
+              closeLogActionModal();
+              fetchLog();
+              return;
+            }
+
+            if (action === 'remove') {
+              const input = document.getElementById('logModalRemoveInput');
+              const seconds = Number(input && input.value) || 0;
+              if (seconds <= 0) { if (input) input.focus(); return; }
+              if (!confirm('Remove ' + seconds + 's from the timer for this event?')) return;
+              btn.disabled = true;
+              await removeTime(seconds, { source: 'event_log_remove', label: 'Removed via event log', relatedEventId: id });
+              closeLogActionModal();
+              fetchLog();
+              return;
+            }
           });
         }
 

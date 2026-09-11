@@ -21,14 +21,16 @@ const DEFAULT_TTL_MS = 30 * 60 * 1000; // 30 min — huge margin over observed d
 const DEFAULT_GIFT_TTL_MS = 5 * 60 * 1000; // gift recipients: just long enough to absorb a "thanks!" message
 
 export function createSubDedup({ ttlMs = DEFAULT_TTL_MS, giftTtlMs = DEFAULT_GIFT_TTL_MS } = {}) {
-  const seen = new Map(); // `${broadcaster}:${userId}` -> expiryEpochMs
+  const seen = new Map(); // `${broadcaster}:${userId}` -> { expiry: epochMs, tier: string }
 
   /**
-   * @param {{ broadcaster:string, userId:string, subType:string, isGift?:boolean, now?:number }} evt
+   * @param {{ broadcaster:string, userId:string, subType:string, isGift?:boolean, tier?:string, now?:number }} evt
    * @returns {{ deduped: boolean }} deduped:true => this event is a duplicate of
-   *   an already-counted subscription; skip it (and log a sub_deduped line).
+   *   an already-counted subscription at the same tier; skip it (and log a
+   *   sub_deduped line). A tier change (e.g. Tier 1 -> Tier 3 upgrade) inside the
+   *   TTL is a different subscription value, not a duplicate, and is credited.
    */
-  function evaluate({ broadcaster, userId, subType, isGift = false, now = Date.now() }) {
+  function evaluate({ broadcaster, userId, subType, isGift = false, tier, now = Date.now() }) {
     if (subType !== 'channel.subscribe' && subType !== 'channel.subscription.message') {
       return { deduped: false };
     }
@@ -37,22 +39,24 @@ export function createSubDedup({ ttlMs = DEFAULT_TTL_MS, giftTtlMs = DEFAULT_GIF
 
     const key = `${broadcaster}:${id}`;
     const prev = seen.get(key);
-    const active = typeof prev === 'number' && prev > now;
+    const active = Boolean(prev) && typeof prev.expiry === 'number' && prev.expiry > now;
+    const tierKey = tier != null ? String(tier) : '';
+    const sameTier = active && prev.tier === tierKey;
 
     // (Re)arm the guard for this subscriber. Gift recipients get a short guard:
     // it only needs to swallow their immediate "thanks for the gift" resub
     // message, not a real sub they might buy for themselves later in the stream.
-    seen.set(key, now + (isGift ? giftTtlMs : ttlMs));
+    seen.set(key, { expiry: now + (isGift ? giftTtlMs : ttlMs), tier: tierKey });
 
     // A gift recipient's own channel.subscribe adds no time (secondsFromEvent
     // returns 0 for is_gift); recording it above is all we need.
     if (isGift) return { deduped: false };
 
-    return { deduped: active };
+    return { deduped: sameTier };
   }
 
   function sweep(now = Date.now()) {
-    for (const [k, exp] of seen) if (exp <= now) seen.delete(k);
+    for (const [k, v] of seen) if (v.expiry <= now) seen.delete(k);
   }
 
   return {

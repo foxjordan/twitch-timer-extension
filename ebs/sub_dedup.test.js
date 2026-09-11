@@ -83,6 +83,31 @@ test('an event with no usable user id falls through to counting', () => {
   assert.equal(d.evaluate({ broadcaster: 'b1', userId: '', subType: SUBSCRIBE, now: 1000 }).deduped, false);
 });
 
+test('a tier upgrade inside the TTL is not deduped — it is a different subscription value', () => {
+  const d = createSubDedup();
+  assert.equal(d.evaluate({ broadcaster: 'b1', userId: 'u1', subType: SUBSCRIBE, tier: '1000', now: 0 }).deduped, false);
+  // upgrades Tier 1 -> Tier 3 two minutes later, still well inside the 30 min TTL
+  assert.equal(d.evaluate({ broadcaster: 'b1', userId: 'u1', subType: SUBSCRIBE, tier: '3000', now: 2 * MIN }).deduped, false);
+});
+
+test('a repeat at the same (already-upgraded) tier is still deduped', () => {
+  const d = createSubDedup();
+  d.evaluate({ broadcaster: 'b1', userId: 'u1', subType: SUBSCRIBE, tier: '3000', now: 0 });
+  assert.equal(d.evaluate({ broadcaster: 'b1', userId: 'u1', subType: MESSAGE, tier: '3000', now: 30 * 1000 }).deduped, true);
+});
+
+test('a gift recipient who later gifts subs to others is never deduped (paying it forward)', () => {
+  const d = createSubDedup();
+  d.evaluate({ broadcaster: 'b1', userId: 'grateful', subType: SUBSCRIBE, isGift: true, tier: '1000', now: 0 });
+  // channel.subscription.gift never reaches subDedup.evaluate in server.js at all (only
+  // channel.subscribe / channel.subscription.message are checked there) — this documents
+  // that guarantee at the dedup layer so it can't regress silently.
+  assert.equal(
+    d.evaluate({ broadcaster: 'b1', userId: 'grateful', subType: 'channel.subscription.gift', now: 5000 }).deduped,
+    false,
+  );
+});
+
 test('sweep drops expired entries and keeps live ones', () => {
   const d = createSubDedup({ ttlMs: 10 * MIN });
   d.evaluate({ broadcaster: 'b1', userId: 'old', subType: SUBSCRIBE, now: 0 });

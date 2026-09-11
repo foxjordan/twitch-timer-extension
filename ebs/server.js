@@ -32,6 +32,7 @@ import {
   clearTimer,
   setCapForcedOn,
   persistTimerState,
+  removeSeconds,
 } from "./state.js";
 import {
   DEFAULT_STYLE,
@@ -601,6 +602,7 @@ mountTimerRoutes(app, {
   state,
   getRemainingSeconds,
   addSeconds,
+  removeSeconds,
   setHype,
   setBonusTime,
   pauseTimer,
@@ -2902,20 +2904,37 @@ async function handleEventSub(notification, expectedUserId = null) {
   // time == sub time (the common subathon setup); revisit if a streamer needs
   // them weighted differently.
   if (subType === "channel.subscribe" || subType === "channel.subscription.message") {
+    const isGiftEvt = Boolean(e.is_gift || e.was_gift);
     const { deduped } = subDedup.evaluate({
       broadcaster: timerUid,
       userId: e.user_id || e.user_login || "",
       subType,
-      isGift: Boolean(e.is_gift || e.was_gift),
+      isGift: isGiftEvt,
+      tier: e.tier,
       now,
     });
     if (deduped) {
+      // What this event would have credited had it not been swallowed as a
+      // duplicate — lets the streamer judge whether the drop was correct and,
+      // if not, add exactly this many seconds back via the event log's
+      // "Add anyway" action (or /api/timer/add by hand). Safe to call here:
+      // for these two subTypes secondsFromEvent is a pure tier lookup with no
+      // side effects (the bits-pooling branch is a different subType).
+      const suppressedSeconds = secondsFromEvent(notification, timerUid);
       addLogEntry({
         type: "sub_deduped",
         subType,
         userId: timerUid,
         userName: e.user_name || e.user_login || e.user_id || undefined,
         subTier: e.tier,
+        isGift: isGiftEvt,
+        suppressedSeconds,
+        // Only channel.subscription.message carries these — surfaced (not
+        // acted on) so the streamer can spot a multi-month resub Twitch's API
+        // doesn't otherwise let us credit automatically. See sub_dedup.js.
+        cumulativeMonths: e.cumulative_months ?? undefined,
+        streakMonths: e.streak_months ?? undefined,
+        durationMonths: e.duration_months ?? undefined,
         baseSeconds: 0,
         appliedSeconds: 0,
         actualSeconds: 0,
@@ -2924,6 +2943,7 @@ async function handleEventSub(notification, expectedUserId = null) {
         broadcasterId: timerUid,
         userId: e.user_id || e.user_login,
         subType,
+        suppressedSeconds,
       });
       return;
     }

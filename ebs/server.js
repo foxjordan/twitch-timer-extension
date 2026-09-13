@@ -633,11 +633,24 @@ app.get("/api/events/log", async (req, res) => {
   // ask for only what's new, instead of re-reading its whole window every
   // time — this endpoint is on a client-side poll (see overlayConfigPage.js).
   const sinceTs = Number(req.query?.since);
-  res.json({
-    entries: await getLogEntries(uid ? String(uid) : null, {
-      sinceTs: Number.isFinite(sinceTs) && sinceTs > 0 ? sinceTs : undefined,
-    }),
+  const incremental = Number.isFinite(sinceTs) && sinceTs > 0;
+  const entries = await getLogEntries(uid ? String(uid) : null, {
+    sinceTs: incremental ? sinceTs : undefined,
   });
+  // Temporary: this endpoint was the single largest source of Supabase
+  // egress (see incident notes, Sept 2026) — a poller left open across a
+  // deploy keeps running its old un-throttled loop, invisible to Supabase's
+  // own usage dashboard (day-granularity, no per-query/per-user breakdown).
+  // Logging this here, not there, because only the app knows which
+  // broadcaster a call belongs to. Remove once a few days of quiet confirm
+  // the fix stuck.
+  logger.info("event_log_poll", {
+    uid,
+    incremental,
+    rows: entries.length,
+    approxBytes: JSON.stringify(entries).length,
+  });
+  res.json({ entries });
 });
 
 app.post("/api/events/log/clear", async (req, res) => {

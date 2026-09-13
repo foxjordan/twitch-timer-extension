@@ -3259,29 +3259,89 @@ export function renderSoundConfigPage(options = {}) {
           return row;
         }
 
+        // Same underlying /api/events/log endpoint and same incremental
+        // "since" support as the Log & Debug panel (overlayConfigPage.js) —
+        // this view just filters down to sound_alert/tts_alert. Cached to
+        // localStorage for the same reason: a reload of this page (this was
+        // the actual endpoint an auto-refreshing tab/dock kept hitting —
+        // fetchLog's own fix didn't cover this separate call site) would
+        // otherwise wipe an in-memory "since" cursor and land back on a full,
+        // non-incremental re-fetch every time.
+        var alertHistoryCacheKey = 'lsh_alert_history_cache:' + USER_KEY;
+        var alertHistoryEntries = []; // sound_alert/tts_alert only, newest first
+        var alertHistoryLastSeenTs = 0;
+
+        (function loadCachedAlertHistory() {
+          try {
+            var cached = JSON.parse(localStorage.getItem(alertHistoryCacheKey) || 'null');
+            if (cached && Array.isArray(cached.entries) && typeof cached.lastSeenTs === 'number') {
+              alertHistoryEntries = cached.entries;
+              alertHistoryLastSeenTs = cached.lastSeenTs;
+            }
+          } catch (e) {}
+        })();
+
+        function saveCachedAlertHistory() {
+          try {
+            localStorage.setItem(alertHistoryCacheKey, JSON.stringify({ entries: alertHistoryEntries, lastSeenTs: alertHistoryLastSeenTs }));
+          } catch (e) {}
+        }
+
+        function renderAlertHistory() {
+          if (!alertHistoryListEl) return;
+          alertHistoryListEl.textContent = '';
+          // Preserves the original oldest-of-the-window-first ordering:
+          // reverse the newest-first list, then take the first 50 of that.
+          var toShow = alertHistoryEntries.slice().reverse().slice(0, 50);
+
+          if (toShow.length === 0) {
+            if (alertHistoryEmptyEl) alertHistoryEmptyEl.style.display = '';
+            return;
+          }
+          if (alertHistoryEmptyEl) alertHistoryEmptyEl.style.display = 'none';
+
+          toShow.forEach(function(e) {
+            alertHistoryListEl.appendChild(buildAlertRow(e));
+          });
+        }
+
         async function fetchAlertHistory() {
           try {
-            var r = await fetch('/api/events/log');
+            var incremental = alertHistoryLastSeenTs > 0;
+            var url = incremental ? '/api/events/log?since=' + alertHistoryLastSeenTs : '/api/events/log';
+            var r = await fetch(url);
             var data = await r.json();
-            var entries = (data.entries || []).filter(function(e) {
+            var incoming = data.entries || [];
+            if (incremental && !incoming.length) return; // nothing new — skip the re-render too
+
+            // Track the newest ts across ALL incoming entries, not just the
+            // ones that pass the type filter below — otherwise the next
+            // incremental fetch would keep re-asking for events of other
+            // types we already saw and discarded.
+            var incomingMaxTs = incoming.reduce(function(max, e) { return e.ts > max ? e.ts : max; }, 0);
+            var incomingFiltered = incoming.filter(function(e) {
               return e.type === 'sound_alert' || e.type === 'tts_alert';
             });
-            entries.reverse();
 
-            if (!alertHistoryListEl) return;
-            alertHistoryListEl.textContent = '';
-
-            if (entries.length === 0) {
-              if (alertHistoryEmptyEl) alertHistoryEmptyEl.style.display = '';
-              return;
+            if (!incremental) {
+              alertHistoryEntries = incomingFiltered;
+            } else if (incomingFiltered.length) {
+              // "since" is inclusive, so re-merge by id rather than append.
+              var byId = {};
+              alertHistoryEntries.forEach(function(e) { byId[e.id] = e; });
+              incomingFiltered.forEach(function(e) { byId[e.id] = e; });
+              alertHistoryEntries = Object.keys(byId).map(function(id) { return byId[id]; });
+              alertHistoryEntries.sort(function(a, b) { return b.ts - a.ts; });
+              if (alertHistoryEntries.length > 200) alertHistoryEntries.length = 200;
             }
-            if (alertHistoryEmptyEl) alertHistoryEmptyEl.style.display = 'none';
 
-            entries.slice(0, 50).forEach(function(e) {
-              alertHistoryListEl.appendChild(buildAlertRow(e));
-            });
+            if (incomingMaxTs > alertHistoryLastSeenTs) alertHistoryLastSeenTs = incomingMaxTs;
+            saveCachedAlertHistory();
+            renderAlertHistory();
           } catch {}
         }
+
+        if (alertHistoryEntries.length) renderAlertHistory();
 
         if (refreshHistoryBtn) {
           refreshHistoryBtn.addEventListener('click', function() {

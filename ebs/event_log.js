@@ -9,6 +9,52 @@ import { logger } from "./logger.js";
 // timer or the overlay. Reads are on-demand (an admin opening Log & Debug).
 const READ_LIMIT = 500;
 
+// Caches the plain ("give me your most recent window") read per user, since
+// that's the one a caller who never sends `since` — whether that's a stale
+// browser session, a kiosk display that clears its own storage every reload,
+// or a script hitting the endpoint directly with a saved cookie — keeps
+// re-running unchanged. Invalidated on every write for that user (see
+// addLogEntry/clearLogEntries) so it's never stale beyond "since the last
+// actual change"; the TTL below is just a backstop (e.g. multiple server
+// instances not sharing this in-memory cache, or a write that reaches the
+// table some other way) rather than the normal invalidation path.
+// The incremental (`since`) path is deliberately NOT cached — it's already
+// cheap (bounded by the user_id/ts index, usually 0 rows), and it's what a
+// well-behaved poller uses, so it should always read fresh.
+const FULL_WINDOW_BACKSTOP_TTL_MS = 120_000;
+const fullWindowCache = new Map(); // cacheKeyFor(userId) -> { rows, computedAt }
+
+function cacheKeyFor(userId) {
+  return userId ? String(userId) : "*";
+}
+
+// A write for one user can also change what the cross-user ("*") view
+// returns, so both keys are dropped together.
+function invalidateFullWindow(userId) {
+  fullWindowCache.delete(cacheKeyFor(userId));
+  fullWindowCache.delete("*");
+}
+
+async function getFullWindow(userId) {
+  const key = cacheKeyFor(userId);
+  const cached = fullWindowCache.get(key);
+  if (cached && Date.now() - cached.computedAt < FULL_WINDOW_BACKSTOP_TTL_MS) {
+    return cached.rows;
+  }
+  const r = userId
+    ? await db.query(
+        "SELECT id, user_id, ts, type, data FROM event_log WHERE user_id = $1 ORDER BY ts DESC LIMIT $2",
+        [String(userId), READ_LIMIT],
+      )
+    : await db.query(
+        "SELECT id, user_id, ts, type, data FROM event_log ORDER BY ts DESC LIMIT $1",
+        [READ_LIMIT],
+      );
+  const rows = r.rows.map(rowToEntry);
+  fullWindowCache.set(key, { rows, computedAt: Date.now() });
+  return rows;
+}
+
 // An entry is a flat object: { id, userId, ts, type, ...whatever the caller
 // passed }. The table stores id/user_id/ts/type as columns and the rest as a
 // single jsonb `data` blob.
@@ -37,7 +83,9 @@ export function addLogEntry(entry) {
      VALUES ($1, $2, $3, $4, $5::jsonb)
      ON CONFLICT (id) DO NOTHING`,
     [row.id, row.user_id, row.ts, row.type, JSON.stringify(row.data)],
-  ).catch((err) => logger.error("event_log_insert_failed", { message: err?.message }));
+  )
+    .then(() => invalidateFullWindow(row.user_id))
+    .catch((err) => logger.error("event_log_insert_failed", { message: err?.message }));
   return e;
 }
 
@@ -84,25 +132,16 @@ export async function getLogEntriesByType(userId, type, limit = 20) {
 export async function getLogEntries(userId, { sinceTs } = {}) {
   const since = Number.isFinite(sinceTs) && sinceTs > 0 ? sinceTs : null;
   try {
+    if (!since) return await getFullWindow(userId);
     const r = userId
-      ? since
-        ? await db.query(
-            "SELECT id, user_id, ts, type, data FROM event_log WHERE user_id = $1 AND ts >= $2 ORDER BY ts DESC LIMIT $3",
-            [String(userId), since, READ_LIMIT],
-          )
-        : await db.query(
-            "SELECT id, user_id, ts, type, data FROM event_log WHERE user_id = $1 ORDER BY ts DESC LIMIT $2",
-            [String(userId), READ_LIMIT],
-          )
-      : since
-        ? await db.query(
-            "SELECT id, user_id, ts, type, data FROM event_log WHERE ts >= $1 ORDER BY ts DESC LIMIT $2",
-            [since, READ_LIMIT],
-          )
-        : await db.query(
-            "SELECT id, user_id, ts, type, data FROM event_log ORDER BY ts DESC LIMIT $1",
-            [READ_LIMIT],
-          );
+      ? await db.query(
+          "SELECT id, user_id, ts, type, data FROM event_log WHERE user_id = $1 AND ts >= $2 ORDER BY ts DESC LIMIT $3",
+          [String(userId), since, READ_LIMIT],
+        )
+      : await db.query(
+          "SELECT id, user_id, ts, type, data FROM event_log WHERE ts >= $1 ORDER BY ts DESC LIMIT $2",
+          [since, READ_LIMIT],
+        );
     return r.rows.map(rowToEntry);
   } catch (err) {
     logger.error("event_log_list_failed", { message: err?.message });
@@ -114,8 +153,10 @@ export async function clearLogEntries(userId) {
   try {
     if (userId) {
       await db.query("DELETE FROM event_log WHERE user_id = $1", [String(userId)]);
+      invalidateFullWindow(userId);
     } else {
       await db.query("DELETE FROM event_log");
+      fullWindowCache.clear();
     }
   } catch (err) {
     logger.error("event_log_clear_failed", { message: err?.message });

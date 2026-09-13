@@ -1007,8 +1007,38 @@ export function renderOverlayConfigPage(options = {}) {
       // entries at-or-after it (see fetchLog), instead of re-reading the
       // same rows on every poll. Reset alongside the visible log whenever it
       // is cleared (see the #clearLog handler).
+      //
+      // Persisted to localStorage, keyed to this broadcaster's overlay key,
+      // so a full page reload doesn't lose it — a plain in-memory variable
+      // looked incremental in the same tab/session, but a reload (an OBS
+      // dock refreshing itself, a tab-reloader extension, anything short of
+      // actually closing the panel) reset it to empty every time, which
+      // silently put every poll straight back on the non-incremental,
+      // full-window path forever. Caught this in production: one broadcaster
+      // showed nothing but incremental=false polls, ~60s apart, with an
+      // unchanging row count — a same-tab poll would have been 20s apart and
+      // gone incremental after the first call, so that cadence only fits a
+      // reload wiping the in-memory state each time.
+      var overlayUserKey = (document.getElementById('key') || {}).value || '';
+      var eventLogCacheKey = 'lsh_event_log_cache:' + overlayUserKey;
       var logEntries = [];
       var lastSeenTs = 0;
+
+      (function loadCachedLog() {
+        try {
+          var cached = JSON.parse(localStorage.getItem(eventLogCacheKey) || 'null');
+          if (cached && Array.isArray(cached.entries) && typeof cached.lastSeenTs === 'number') {
+            logEntries = cached.entries;
+            lastSeenTs = cached.lastSeenTs;
+          }
+        } catch (e) {}
+      })();
+
+      function saveCachedLog() {
+        try {
+          localStorage.setItem(eventLogCacheKey, JSON.stringify({ entries: logEntries, lastSeenTs: lastSeenTs }));
+        } catch (e) {}
+      }
 
       async function fetchLog() {
         try {
@@ -1038,9 +1068,15 @@ export function renderOverlayConfigPage(options = {}) {
           }
 
           lastSeenTs = logEntries.reduce(function (max, e) { return e.ts > max ? e.ts : max; }, 0);
+          saveCachedLog();
           renderLog(logEntries);
         } catch (e) {}
       }
+
+      // Paint from the cached copy immediately (before the network round
+      // trip) so a reload doesn't show an empty panel for a moment — fetchLog
+      // still runs right after to pick up anything new.
+      if (logEntries.length) renderLog(logEntries);
 
       async function getHypeActive() {
         try { const r = await fetch('/api/hype'); const j = await r.json(); return !!j.hype; } catch(e) { return false; }
@@ -1849,9 +1885,14 @@ export function renderOverlayConfigPage(options = {}) {
             try { await fetch('/api/events/log/clear', { method: 'POST' }); } catch (err) {}
             // Keep the incremental-fetch state in fetchLog() in sync with the
             // clear — otherwise the next poll's "since" merge would bring
-            // deleted rows back from its stale in-memory copy.
+            // deleted rows back from its stale in-memory (and persisted) copy.
             logEntries = [];
             lastSeenTs = 0;
+            saveCachedLog();
+            // The Sound Alerts page (soundConfigPage.js) keeps its own cached
+            // copy of the same underlying log, filtered down to alert types —
+            // clear it too, or a clear done here wouldn't show up there.
+            try { localStorage.removeItem('lsh_alert_history_cache:' + overlayUserKey); } catch (err) {}
             renderLog([]);
           });
         }

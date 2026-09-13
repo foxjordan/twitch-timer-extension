@@ -9,7 +9,7 @@ import assert from "node:assert/strict";
 // that is the fire-and-forget contract working, not a test failure.
 process.env.DATABASE_URL =
   process.env.DATABASE_URL || "postgres://u:p@localhost:5432/db";
-const { addLogEntry, entryToRow, rowToEntry, getLogEntries } = await import("./event_log.js");
+const { addLogEntry, entryToRow, rowToEntry, getLogEntries, clearLogEntries } = await import("./event_log.js");
 const { db } = await import("./db.js");
 
 // getLogEntries just shapes a query for db.query and maps rows back — stub
@@ -127,17 +127,60 @@ test("getLogEntries with sinceTs but no userId scopes across users (super-admin)
 });
 
 for (const bad of [0, -5, NaN, undefined]) {
+  // Distinct uid per case (not "42") — the plain-window path is cached per
+  // uid (see below), and reusing "42" here would hit that cache instead of
+  // exercising db.query, since node:test runs a file's tests in order.
+  const uid = `badsince-${bad}`;
   test(`getLogEntries ignores a non-positive/invalid sinceTs (${bad}) and falls back to the plain window`, async () => {
     const stub = stubDbQuery([]);
     try {
-      await getLogEntries("42", { sinceTs: bad });
+      await getLogEntries(uid, { sinceTs: bad });
       assert.doesNotMatch(stub.calls[0].text, /ts >=/);
-      assert.deepEqual(stub.calls[0].params, ["42", 500]);
+      assert.deepEqual(stub.calls[0].params, [uid, 500]);
     } finally {
       stub.restore();
     }
   });
 }
+
+test("getLogEntries caches the plain (no-sinceTs) window per uid — a second call doesn't re-query", async () => {
+  const stub = stubDbQuery([{ id: "a", user_id: "cacheuser", ts: "1", type: "manual_add", data: {} }]);
+  try {
+    const first = await getLogEntries("cacheuser");
+    const second = await getLogEntries("cacheuser");
+    assert.equal(stub.calls.length, 1, "second call should be served from cache, not re-query");
+    assert.deepEqual(second, first);
+  } finally {
+    stub.restore();
+  }
+});
+
+test("addLogEntry invalidates that uid's cached plain window", async () => {
+  const stub = stubDbQuery([]);
+  try {
+    await getLogEntries("invalidateuser"); // populate the cache
+    addLogEntry({ userId: "invalidateuser", type: "manual_add" });
+    // addLogEntry's own insert + cache invalidation happen in a
+    // fire-and-forget promise chain — let the microtask queue drain.
+    await new Promise((resolve) => setImmediate(resolve));
+    await getLogEntries("invalidateuser");
+    assert.equal(stub.calls.length, 3, "insert + two real reads (cache invalidated in between)");
+  } finally {
+    stub.restore();
+  }
+});
+
+test("clearLogEntries invalidates that uid's cached plain window", async () => {
+  const stub = stubDbQuery([]);
+  try {
+    await getLogEntries("clearuser"); // populate the cache
+    await clearLogEntries("clearuser");
+    await getLogEntries("clearuser");
+    assert.equal(stub.calls.length, 3, "read + delete + a fresh read (cache invalidated by the clear)");
+  } finally {
+    stub.restore();
+  }
+});
 
 test("addLogEntry returns the full entry synchronously with a fresh id + ts", () => {
   const before = Date.now();

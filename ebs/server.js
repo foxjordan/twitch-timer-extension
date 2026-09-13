@@ -629,7 +629,15 @@ app.get("/api/events/log", async (req, res) => {
   if (!req?.session?.isAdmin)
     return res.status(401).json({ error: "Admin login required" });
   const uid = req.session?.twitchUser?.id;
-  res.json({ entries: await getLogEntries(uid ? String(uid) : null) });
+  // ?since=<ts> lets a poller that already has everything up to that point
+  // ask for only what's new, instead of re-reading its whole window every
+  // time — this endpoint is on a client-side poll (see overlayConfigPage.js).
+  const sinceTs = Number(req.query?.since);
+  res.json({
+    entries: await getLogEntries(uid ? String(uid) : null, {
+      sinceTs: Number.isFinite(sinceTs) && sinceTs > 0 ? sinceTs : undefined,
+    }),
+  });
 });
 
 app.post("/api/events/log/clear", async (req, res) => {

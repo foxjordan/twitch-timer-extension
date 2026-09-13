@@ -9,7 +9,20 @@ import assert from "node:assert/strict";
 // that is the fire-and-forget contract working, not a test failure.
 process.env.DATABASE_URL =
   process.env.DATABASE_URL || "postgres://u:p@localhost:5432/db";
-const { addLogEntry, entryToRow, rowToEntry } = await import("./event_log.js");
+const { addLogEntry, entryToRow, rowToEntry, getLogEntries } = await import("./event_log.js");
+const { db } = await import("./db.js");
+
+// getLogEntries just shapes a query for db.query and maps rows back — stub
+// db.query to inspect what was asked for without needing a real database.
+function stubDbQuery(rows) {
+  const calls = [];
+  const original = db.query;
+  db.query = async (text, params) => {
+    calls.push({ text, params });
+    return { rows };
+  };
+  return { calls, restore: () => { db.query = original; } };
+}
 
 test("entryToRow keeps id/user_id/ts/type as columns and nests the rest in data", () => {
   const row = entryToRow({
@@ -76,6 +89,55 @@ test("an entry round-trips entryToRow -> (pg bigint string) -> rowToEntry", () =
   const back = rowToEntry({ ...row, ts: String(row.ts) });
   assert.deepEqual(back, original);
 });
+
+test("getLogEntries with no sinceTs reads the plain most-recent window, scoped to userId", async () => {
+  const stub = stubDbQuery([]);
+  try {
+    await getLogEntries("42");
+    assert.equal(stub.calls.length, 1);
+    assert.match(stub.calls[0].text, /WHERE user_id = \$1 ORDER BY ts DESC/);
+    assert.deepEqual(stub.calls[0].params, ["42", 500]);
+  } finally {
+    stub.restore();
+  }
+});
+
+test("getLogEntries with sinceTs adds an inclusive ts >= filter, userId scoped", async () => {
+  const stub = stubDbQuery([]);
+  try {
+    await getLogEntries("42", { sinceTs: 1700000000000 });
+    assert.equal(stub.calls.length, 1);
+    assert.match(stub.calls[0].text, /WHERE user_id = \$1 AND ts >= \$2 ORDER BY ts DESC/);
+    assert.deepEqual(stub.calls[0].params, ["42", 1700000000000, 500]);
+  } finally {
+    stub.restore();
+  }
+});
+
+test("getLogEntries with sinceTs but no userId scopes across users (super-admin) with the ts filter", async () => {
+  const stub = stubDbQuery([]);
+  try {
+    await getLogEntries(null, { sinceTs: 1700000000000 });
+    assert.equal(stub.calls.length, 1);
+    assert.match(stub.calls[0].text, /FROM event_log WHERE ts >= \$1 ORDER BY ts DESC/);
+    assert.deepEqual(stub.calls[0].params, [1700000000000, 500]);
+  } finally {
+    stub.restore();
+  }
+});
+
+for (const bad of [0, -5, NaN, undefined]) {
+  test(`getLogEntries ignores a non-positive/invalid sinceTs (${bad}) and falls back to the plain window`, async () => {
+    const stub = stubDbQuery([]);
+    try {
+      await getLogEntries("42", { sinceTs: bad });
+      assert.doesNotMatch(stub.calls[0].text, /ts >=/);
+      assert.deepEqual(stub.calls[0].params, ["42", 500]);
+    } finally {
+      stub.restore();
+    }
+  });
+}
 
 test("addLogEntry returns the full entry synchronously with a fresh id + ts", () => {
   const before = Date.now();

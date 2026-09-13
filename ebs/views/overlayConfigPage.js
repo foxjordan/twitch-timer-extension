@@ -1002,15 +1002,43 @@ export function renderOverlayConfigPage(options = {}) {
           .join('');
       }
 
+      // Entries currently on screen, newest first, and the newest ts among
+      // them — once we've loaded a window we only ask the server for
+      // entries at-or-after it (see fetchLog), instead of re-reading the
+      // same rows on every poll. Reset alongside the visible log whenever it
+      // is cleared (see the #clearLog handler).
+      var logEntries = [];
+      var lastSeenTs = 0;
+
       async function fetchLog() {
         try {
           // The multiplier/remove inputs now live in the actions modal, outside
           // #eventLog — a poll rebuilding the log's innerHTML can no longer wipe
           // an in-progress edit, so this just re-renders unconditionally.
-          const r = await fetch('/api/events/log', { cache: 'no-store' });
+          const incremental = lastSeenTs > 0;
+          const url = incremental ? '/api/events/log?since=' + lastSeenTs : '/api/events/log';
+          const r = await fetch(url, { cache: 'no-store' });
           if (!r.ok) return;
           const j = await r.json();
-          renderLog(j.entries || []);
+          const incoming = j.entries || [];
+
+          if (!incremental) {
+            logEntries = incoming;
+          } else if (incoming.length) {
+            // "since" is inclusive, so re-merge by id (a row or two at the
+            // boundary comes back again) rather than assuming a plain append.
+            const byId = {};
+            logEntries.forEach(function (e) { byId[e.id] = e; });
+            incoming.forEach(function (e) { byId[e.id] = e; });
+            logEntries = Object.keys(byId).map(function (id) { return byId[id]; });
+            logEntries.sort(function (a, b) { return b.ts - a.ts; });
+            if (logEntries.length > 500) logEntries.length = 500;
+          } else {
+            return; // nothing new — skip the re-render too
+          }
+
+          lastSeenTs = logEntries.reduce(function (max, e) { return e.ts > max ? e.ts : max; }, 0);
+          renderLog(logEntries);
         } catch (e) {}
       }
 
@@ -1819,6 +1847,11 @@ export function renderOverlayConfigPage(options = {}) {
             e.preventDefault();
             flashButton(clearLogBtn);
             try { await fetch('/api/events/log/clear', { method: 'POST' }); } catch (err) {}
+            // Keep the incremental-fetch state in fetchLog() in sync with the
+            // clear — otherwise the next poll's "since" merge would bring
+            // deleted rows back from its stale in-memory copy.
+            logEntries = [];
+            lastSeenTs = 0;
             renderLog([]);
           });
         }
@@ -1966,7 +1999,30 @@ export function renderOverlayConfigPage(options = {}) {
           });
         }
 
-        setInterval(fetchLog, 5000);
+        // fetchLog hits the DB-backed event log on every tick (up to 500 rows),
+        // and this page is often left open in a background tab (e.g. an OBS
+        // dock) for hours or days at a stretch. Pause the poll while the tab
+        // isn't visible and back off the interval — this was the single
+        // largest source of Supabase egress on the project.
+        var logPollTimer = null;
+        function startLogPoll() {
+          if (logPollTimer) return;
+          logPollTimer = setInterval(fetchLog, 20000);
+        }
+        function stopLogPoll() {
+          if (!logPollTimer) return;
+          clearInterval(logPollTimer);
+          logPollTimer = null;
+        }
+        document.addEventListener('visibilitychange', function() {
+          if (document.hidden) {
+            stopLogPoll();
+          } else {
+            fetchLog();
+            startLogPoll();
+          }
+        });
+        if (!document.hidden) { fetchLog(); startLogPoll(); }
       }
 
       bind();

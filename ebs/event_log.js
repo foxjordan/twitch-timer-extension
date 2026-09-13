@@ -72,17 +72,37 @@ export async function getLogEntriesByType(userId, type, limit = 20) {
 }
 
 // userId omitted -> the super-admin cross-user read (still capped).
-export async function getLogEntries(userId) {
+//
+// sinceTs (epoch ms, optional) scopes the read to entries at or after that
+// point instead of the usual "most recent READ_LIMIT" window — for a caller
+// that already holds everything up to sinceTs and just wants what's new.
+// `>=` (not `>`) is deliberate: entries can share a ts down to the
+// millisecond (e.g. a gift-sub fan-out writing several rows in one loop), so
+// an inclusive bound plus id-based de-dup on the caller's side is what
+// avoids silently dropping a same-millisecond row, at the cost of the
+// boundary row(s) coming back once more.
+export async function getLogEntries(userId, { sinceTs } = {}) {
+  const since = Number.isFinite(sinceTs) && sinceTs > 0 ? sinceTs : null;
   try {
     const r = userId
-      ? await db.query(
-          "SELECT id, user_id, ts, type, data FROM event_log WHERE user_id = $1 ORDER BY ts DESC LIMIT $2",
-          [String(userId), READ_LIMIT],
-        )
-      : await db.query(
-          "SELECT id, user_id, ts, type, data FROM event_log ORDER BY ts DESC LIMIT $1",
-          [READ_LIMIT],
-        );
+      ? since
+        ? await db.query(
+            "SELECT id, user_id, ts, type, data FROM event_log WHERE user_id = $1 AND ts >= $2 ORDER BY ts DESC LIMIT $3",
+            [String(userId), since, READ_LIMIT],
+          )
+        : await db.query(
+            "SELECT id, user_id, ts, type, data FROM event_log WHERE user_id = $1 ORDER BY ts DESC LIMIT $2",
+            [String(userId), READ_LIMIT],
+          )
+      : since
+        ? await db.query(
+            "SELECT id, user_id, ts, type, data FROM event_log WHERE ts >= $1 ORDER BY ts DESC LIMIT $2",
+            [since, READ_LIMIT],
+          )
+        : await db.query(
+            "SELECT id, user_id, ts, type, data FROM event_log ORDER BY ts DESC LIMIT $1",
+            [READ_LIMIT],
+          );
     return r.rows.map(rowToEntry);
   } catch (err) {
     logger.error("event_log_list_failed", { message: err?.message });

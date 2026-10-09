@@ -670,7 +670,8 @@ function mapEventToDelta(goal, type, event = {}) {
       if (!value) return null;
       return { value, segmentKey: "follows" };
     }
-    case "streamelements.tip": {
+    case "streamelements.tip":
+    case "gofundme.donation": {
       if (!rules.autoTrackTips) return null;
       const amount = e.amount?.value ?? 0;
       const decimals = e.amount?.decimal_places ?? 2;

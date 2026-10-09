@@ -155,6 +155,26 @@ test("getLogEntries caches the plain (no-sinceTs) window per uid — a second ca
   }
 });
 
+test("getLogEntries reports cacheHit via the optional cacheInfo hook", async () => {
+  const stub = stubDbQuery([]);
+  try {
+    const miss = {};
+    await getLogEntries("cacheinfouser", { cacheInfo: miss });
+    assert.equal(miss.cacheHit, false);
+
+    const hit = {};
+    await getLogEntries("cacheinfouser", { cacheInfo: hit });
+    assert.equal(hit.cacheHit, true);
+
+    // The incremental path is never cached, so cacheInfo is left untouched.
+    const skipped = {};
+    await getLogEntries("cacheinfouser", { sinceTs: 1, cacheInfo: skipped });
+    assert.equal(skipped.cacheHit, undefined);
+  } finally {
+    stub.restore();
+  }
+});
+
 test("addLogEntry invalidates that uid's cached plain window", async () => {
   const stub = stubDbQuery([]);
   try {

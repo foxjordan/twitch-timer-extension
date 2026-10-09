@@ -61,6 +61,7 @@ import { mountAnalyticsRoutes } from "./routes_analytics.js";
 import { mountOfficialLibraryRoutes } from "./routes_official_library.js";
 import { isDelegate } from "./delegate_store.js";
 import { isSuperAdminId } from "./super_admin.js";
+import { overlayClientMeta, describeOverlayClients } from "./overlay_clients.js";
 import { mountHomePageRoutes } from "./routes_home_page.js";
 import { mountGoalRoutes } from "./routes_goals.js";
 import { logger, requestLogger, setLoggerContext } from "./logger.js";
@@ -115,6 +116,13 @@ import {
   disconnectAllStreamElements,
   getStreamElementsStatus,
 } from "./streamelements.js";
+import { mountGoFundMeRoutes } from "./routes_gofundme.js";
+import {
+  connectGoFundMe,
+  disconnectGoFundMe,
+  disconnectAllGoFundMe,
+  normalizeCursor,
+} from "./gofundme.js";
 
 const app = express();
 // honor X-Forwarded-* so req.protocol resolves to https behind Fly
@@ -470,6 +478,12 @@ function setUserSettings(uid, patch) {
   if (patch && typeof patch.seJwtToken !== "undefined") {
     next.seJwtToken = String(patch.seJwtToken || "").slice(0, 2000);
   }
+  if (patch && typeof patch.gfmSlug !== "undefined") {
+    next.gfmSlug = String(patch.gfmSlug || "").slice(0, 200);
+  }
+  if (patch && typeof patch.gfmLastDonationId !== "undefined") {
+    next.gfmLastDonationId = normalizeCursor(patch.gfmLastDonationId);
+  }
   if (
     patch &&
     patch.panelCollapsedSections &&
@@ -628,14 +642,18 @@ mountTimerRoutes(app, {
 app.get("/api/events/log", async (req, res) => {
   if (!req?.session?.isAdmin)
     return res.status(401).json({ error: "Admin login required" });
-  const uid = req.session?.twitchUser?.id;
+  // Follows delegate / super-admin "manage as", like the timer routes the
+  // log's Credit/Remove actions call.
+  const uid = resolveTimerUserIdFromRequest(req);
   // ?since=<ts> lets a poller that already has everything up to that point
   // ask for only what's new, instead of re-reading its whole window every
   // time — this endpoint is on a client-side poll (see overlayConfigPage.js).
   const sinceTs = Number(req.query?.since);
   const incremental = Number.isFinite(sinceTs) && sinceTs > 0;
+  const cacheInfo = {};
   const entries = await getLogEntries(uid ? String(uid) : null, {
     sinceTs: incremental ? sinceTs : undefined,
+    cacheInfo,
   });
   // Temporary: this endpoint was the single largest source of Supabase
   // egress (see incident notes, Sept 2026) — a poller left open across a
@@ -644,9 +662,12 @@ app.get("/api/events/log", async (req, res) => {
   // Logging this here, not there, because only the app knows which
   // broadcaster a call belongs to. Remove once a few days of quiet confirm
   // the fix stuck.
+  // cacheHit is null on the incremental path — that path is never cached
+  // (see event_log.js), so the field wouldn't mean anything there.
   logger.info("event_log_poll", {
     uid,
     incremental,
+    cacheHit: incremental ? null : cacheInfo.cacheHit,
     rows: entries.length,
     approxBytes: JSON.stringify(entries).length,
   });
@@ -656,15 +677,17 @@ app.get("/api/events/log", async (req, res) => {
 app.post("/api/events/log/clear", async (req, res) => {
   if (!req?.session?.isAdmin)
     return res.status(401).json({ error: "Admin login required" });
-  const uid = req.session?.twitchUser?.id;
+  const uid = resolveTimerUserIdFromRequest(req);
   await clearLogEntries(uid ? String(uid) : null);
   res.json({ ok: true });
 });
 
 // Overlay connection status — lets broadcaster/viewers know if overlay can receive alerts
 app.get("/api/overlay/status", (req, res) => {
-  // Support both session auth (dashboard) and channelId query param (extension panel)
-  const uid = req.session?.twitchUser?.id || req.query.channelId;
+  // Support both session auth (dashboard) and channelId query param (extension panel).
+  // Follows "manage as" like /api/overlay/stream does — otherwise a delegate or
+  // super admin managing a channel sees their own count, not that channel's.
+  const uid = resolveTimerUserIdFromRequest(req) || req.query.channelId;
   if (!uid) return res.json({ connected: false, clients: 0 });
   let count = 0;
   for (const client of sseClients) {
@@ -673,13 +696,23 @@ app.get("/api/overlay/status", (req, res) => {
   res.json({ connected: count > 0, clients: count });
 });
 
+// Super-admin diagnostic: which overlay pages a channel has connected right
+// now (timer vs sound overlay vs dashboard Live Preview, OBS vs browser, and
+// whether a session or the URL key picked the channel). soundCapable > 1
+// means every alert plays more than once — the usual cause of "echoing".
+app.get("/api/admin/overlay-clients/:userId", (req, res) => {
+  if (!req.session?.isAdmin || !isSuperAdminId(req.session?.twitchUser?.id))
+    return res.status(403).json({ error: "Super admin only" });
+  res.json(describeOverlayClients(sseClients, req.params.userId));
+});
+
 // Replay a previous alert from the event log
 const TTS_AUDIO_DIR = path.resolve(process.env.DATA_DIR || process.cwd(), "tts_audio");
 
 app.post("/api/alerts/replay/:alertId", async (req, res) => {
   if (!req?.session?.isAdmin)
     return res.status(401).json({ error: "Admin login required" });
-  const uid = req.session?.twitchUser?.id;
+  const uid = resolveTimerUserIdFromRequest(req);
   if (!uid) return res.status(401).json({ error: "Not authenticated" });
 
   const entry = await getLogEntryById(req.params.alertId);
@@ -1775,12 +1808,17 @@ app.get("/api/overlay/stream", (req, res) => {
   const timerUserId = resolveTimerUserIdFromRequest(req);
   const wheelId = typeof req.query.wheelId === "string" ? req.query.wheelId.trim() : "";
   const boardId = typeof req.query.boardId === "string" ? req.query.boardId.trim() : "";
-  const client = { res, key, goalUserId, timerUserId, wheelId, boardId };
+  const meta = overlayClientMeta(req, { keyOwner: key ? getUserIdForKey(key) : null });
+  const client = { res, key, goalUserId, timerUserId, wheelId, boardId, meta };
   sseClients.add(client);
   observability.totalSseClientsServed += 1;
   logger.info("sse_client_connected", {
     requestId: req.requestId,
     key,
+    timerUserId,
+    pageKind: meta.pageKind,
+    app: meta.app,
+    resolvedVia: meta.resolvedVia,
     activeClients: sseClients.size,
   });
 
@@ -1981,6 +2019,7 @@ mountAuthRoutes(app, {
       } catch (seErr) {
         logger.error("se_auto_reconnect_failed", { userId, message: seErr?.message });
       }
+      startGoFundMeForUser(userId);
     } catch (e) {
       logger.error("admin_login_handler_failed", { message: e?.message });
     }
@@ -1990,6 +2029,7 @@ mountAuthRoutes(app, {
       logger.info("user_logout", { userId });
       closeEventSubForUser(userId);
       disconnectStreamElements(userId);
+      disconnectGoFundMe(userId);
     } catch (e) {
       logger.error("logout_handler_failed", { userId, message: e?.message });
     }
@@ -2619,6 +2659,13 @@ mountStreamElementsRoutes(app, {
   handleStreamElementsTip,
 });
 
+mountGoFundMeRoutes(app, {
+  getUserSettings,
+  setUserSettings,
+  startGoFundMeForUser,
+  resolveTimerUserId: resolveTimerUserIdFromRequest,
+});
+
 // ---- Self-service account deletion ----
 import { deleteAllUserData } from "./user_data_deletion.js";
 
@@ -2652,7 +2699,7 @@ function fmtSecs(s) {
   return n + "s";
 }
 
-function buildRulesSummary(rules) {
+function buildRulesSummary(rules, { gofundmeConnected = false } = {}) {
   const parts = [];
   if (rules.bits?.add_seconds > 0) {
     parts.push(`${rules.bits.per} bits=+${fmtSecs(rules.bits.add_seconds)}`);
@@ -2680,6 +2727,10 @@ function buildRulesSummary(rules) {
   if (rules.thirdPartyTip?.per_unit > 0) {
     const min = rules.thirdPartyTip.min_amount > 0 ? `$${rules.thirdPartyTip.min_amount}+` : "$1+";
     parts.push(`Tips ${min}=+${fmtSecs(rules.thirdPartyTip.per_unit)}`);
+  }
+  if (gofundmeConnected && rules.gofundme?.per_unit > 0) {
+    const min = rules.gofundme.min_amount > 0 ? `$${rules.gofundme.min_amount}+` : "$1+";
+    parts.push(`GoFundMe ${min}=+${fmtSecs(rules.gofundme.per_unit)}`);
   }
   if (rules.follow?.enabled && rules.follow?.add_seconds > 0) {
     parts.push(`Follow +${fmtSecs(rules.follow.add_seconds)}`);
@@ -2709,6 +2760,8 @@ function applyCustomMessage(template, rules) {
     charity_per: fmtSecs(r.charity?.per_usd ?? 0),
     tip_per:     fmtSecs(r.thirdPartyTip?.per_unit ?? 0),
     tip_min:     String(r.thirdPartyTip?.min_amount ?? 1),
+    gfm_per:     fmtSecs(r.gofundme?.per_unit ?? 0),
+    gfm_min:     String(r.gofundme?.min_amount ?? 1),
     follow:      fmtSecs(r.follow?.add_seconds ?? 0),
     raid:        fmtSecs(r.raid?.base_seconds ?? 0),
     raid_per_viewer: fmtSecs(r.raid?.perViewerEnabled ? (r.raid?.perViewerSeconds ?? 0) : 0),
@@ -2747,7 +2800,7 @@ async function handleChatCommand(event, broadcasterId) {
 
   const message = cmd.customMessage?.trim()
     ? applyCustomMessage(cmd.customMessage, rules)
-    : buildRulesSummary(rules);
+    : buildRulesSummary(rules, { gofundmeConnected: Boolean(getUserSettings(broadcasterId).gfmSlug) });
   logger.info("chat_command_firing", { broadcasterId, command: cmd.command, messageLength: message.length });
   const accessToken = await getValidAccessToken(broadcasterId).catch(() => null);
   sendBroadcasterChatMessage({ broadcasterId, accessToken, text: message }).catch((err) => {
@@ -3094,20 +3147,21 @@ async function processEventTimer(notification, timerUid, id, now) {
   return appliedSeconds;
 }
 
-// ---- StreamElements tip handler ----
-function handleStreamElementsTip(uid, tip) {
+// ---- 3rd-party donation handlers (StreamElements tips, GoFundMe) ----
+// Shared crediting for amount-based sources outside EventSub: per-unit
+// seconds with a minimum, then the usual hype/bonus multipliers, then goals.
+function creditExternalDonation(uid, { amount, currency, username, message, rule, logType, logFields, goalType, source }) {
   const timerUid = String(uid);
   const R = getRules(timerUid);
-  const tipRules = R.thirdPartyTip || {};
-  const minAmount = Number(tipRules.min_amount || 1);
-  const perUnit = Number(tipRules.per_unit || 60);
+  const minAmount = Number(rule?.min_amount ?? 1);
+  const perUnit = Number(rule?.per_unit ?? 60);
 
-  if (tip.amount < minAmount) {
-    logger.info("se_tip_below_minimum", { userId: timerUid, amount: tip.amount, min: minAmount });
+  if (amount < minAmount) {
+    logger.info(`${source}_below_minimum`, { userId: timerUid, amount, min: minAmount });
     return;
   }
 
-  let baseSeconds = Math.floor(tip.amount * perUnit);
+  let baseSeconds = Math.floor(amount * perUnit);
   let appliedSeconds = baseSeconds;
   let hypeMultiplier = 1;
   let bonusMultiplier = 1;
@@ -3134,16 +3188,17 @@ function handleStreamElementsTip(uid, tip) {
     observability.lastTimerMutationAt = new Date().toISOString();
 
     addLogEntry({
-      type: "streamelements_tip",
+      type: logType,
       baseSeconds,
       hypeMultiplier,
       bonusMultiplier,
       appliedSeconds,
       actualSeconds: actual,
-      tipAmount: tip.amount,
-      tipCurrency: tip.currency,
-      tipUsername: tip.username,
-      tipMessage: tip.message,
+      tipAmount: amount,
+      tipCurrency: currency,
+      tipUsername: username,
+      tipMessage: message,
+      ...logFields,
       userId: timerUid,
     });
 
@@ -3166,15 +3221,71 @@ function handleStreamElementsTip(uid, tip) {
   try {
     const applied = applyGoalAutoContribution({
       uid: timerUid,
-      type: "streamelements.tip",
-      event: { amount: { value: Math.round(tip.amount * 100), decimal_places: 2 }, currency: tip.currency },
+      type: goalType,
+      event: { amount: { value: Math.round(amount * 100), decimal_places: 2 }, currency },
       timestamp: Date.now(),
     });
     if (applied && applied.length) {
       broadcastGoalSnapshot(timerUid);
     }
   } catch (err) {
-    logger.error("goal_auto_apply_failed", { message: err?.message, source: "streamelements" });
+    logger.error("goal_auto_apply_failed", { message: err?.message, source });
+  }
+}
+
+function handleStreamElementsTip(uid, tip) {
+  creditExternalDonation(uid, {
+    amount: tip.amount,
+    currency: tip.currency,
+    username: tip.username,
+    message: tip.message,
+    rule: getRules(String(uid)).thirdPartyTip,
+    logType: "streamelements_tip",
+    goalType: "streamelements.tip",
+    source: "se_tip",
+  });
+}
+
+function handleGoFundMeDonation(uid, donation) {
+  logger.info("gfm_donation_received", { userId: String(uid), donationId: donation.id, amount: donation.amount, currency: donation.currency });
+  creditExternalDonation(uid, {
+    amount: donation.amount,
+    currency: donation.currency,
+    username: donation.username,
+    message: "",
+    rule: getRules(String(uid)).gofundme,
+    logType: "gofundme_donation",
+    logFields: { gfmDonationId: donation.id },
+    goalType: "gofundme.donation",
+    source: "gfm_donation",
+  });
+}
+
+// GoFundMe polling only runs while the stream is live (EventSub WS open or
+// mid-reconnect) AND the timer is actually counting down. Checked in memory
+// on every poller tick, before any request to GoFundMe.
+function gfmShouldPoll(uid) {
+  const conn = broadcasterConnections.get(String(uid));
+  if (!conn || !(conn.ws || conn.reconnectTimer)) return { ok: false, reason: "offline" };
+  if (state.users.get(String(uid))?.paused) return { ok: false, reason: "paused" };
+  if (getRemainingSeconds(String(uid)) <= 0) return { ok: false, reason: "stopped" };
+  return { ok: true };
+}
+
+function startGoFundMeForUser(uid) {
+  try {
+    const userId = String(uid);
+    const us = getUserSettings(userId);
+    if (!us.gfmSlug) return;
+    connectGoFundMe(userId, {
+      slug: us.gfmSlug,
+      lastDonationId: normalizeCursor(us.gfmLastDonationId),
+      shouldPoll: () => gfmShouldPoll(userId),
+      onDonation: (donation) => handleGoFundMeDonation(userId, donation),
+      onCursor: (id) => setUserSettings(userId, { gfmLastDonationId: id }),
+    });
+  } catch (err) {
+    logger.error("gfm_start_failed", { userId: String(uid), message: err?.message });
   }
 }
 
@@ -3584,6 +3695,7 @@ setTimeout(async () => {
         logger.info("se_restored_from_settings", { userId: uid });
       }
     } catch {}
+    startGoFundMeForUser(uid);
   }
 }, 2000);
 
@@ -3591,6 +3703,7 @@ setTimeout(async () => {
 async function gracefulShutdown(signal) {
   logger.info("shutdown_signal", { signal, bootId: SERVER_BOOT_ID });
   disconnectAllStreamElements();
+  disconnectAllGoFundMe();
   try {
     await Promise.all([
       persistTimerState(),

@@ -2317,6 +2317,9 @@ export function renderAdminDashboardPage(options = {}) {
               var tipSymbol = e.tipCurrency ? (new Intl.NumberFormat('en', { style: 'currency', currency: e.tipCurrency }).formatToParts(0).find(function(p) { return p.type === 'currency'; }) || {}).value || e.tipCurrency : '$';
               detail = (e.tipUsername || 'Anon') + ' tipped ' + tipSymbol + tipAmt.toFixed(2);
             } else detail = 'SE Tip';
+          } else if (src === 'gofundme_donation') {
+            var gfmAmt = Number(e.tipAmount || 0);
+            detail = (e.tipUsername || 'Anonymous') + ' donated' + (gfmAmt > 0 ? ' ' + (e.tipCurrency || 'USD') + ' ' + gfmAmt.toFixed(2) : '') + ' (GoFundMe)';
           } else if (src === 'channel.follow') {
             detail = (who || 'Someone') + ' followed';
           } else if (src === 'channel.hype_train.begin') {

@@ -35,10 +35,15 @@ function invalidateFullWindow(userId) {
   fullWindowCache.delete("*");
 }
 
-async function getFullWindow(userId) {
+// `info`, if passed, gets a `cacheHit` field set — purely an observability
+// hook (see the /api/events/log route) for confirming from the logs alone
+// whether a given poll actually reached Postgres, since the row/byte counts
+// in that log line look identical either way.
+async function getFullWindow(userId, info) {
   const key = cacheKeyFor(userId);
   const cached = fullWindowCache.get(key);
   if (cached && Date.now() - cached.computedAt < FULL_WINDOW_BACKSTOP_TTL_MS) {
+    if (info) info.cacheHit = true;
     return cached.rows;
   }
   const r = userId
@@ -52,6 +57,7 @@ async function getFullWindow(userId) {
       );
   const rows = r.rows.map(rowToEntry);
   fullWindowCache.set(key, { rows, computedAt: Date.now() });
+  if (info) info.cacheHit = false;
   return rows;
 }
 
@@ -129,10 +135,10 @@ export async function getLogEntriesByType(userId, type, limit = 20) {
 // an inclusive bound plus id-based de-dup on the caller's side is what
 // avoids silently dropping a same-millisecond row, at the cost of the
 // boundary row(s) coming back once more.
-export async function getLogEntries(userId, { sinceTs } = {}) {
+export async function getLogEntries(userId, { sinceTs, cacheInfo } = {}) {
   const since = Number.isFinite(sinceTs) && sinceTs > 0 ? sinceTs : null;
   try {
-    if (!since) return await getFullWindow(userId);
+    if (!since) return await getFullWindow(userId, cacheInfo);
     const r = userId
       ? await db.query(
           "SELECT id, user_id, ts, type, data FROM event_log WHERE user_id = $1 AND ts >= $2 ORDER BY ts DESC LIMIT $3",

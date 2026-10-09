@@ -558,6 +558,26 @@ export function renderOverlayConfigPage(options = {}) {
       </div><!-- end streamelements panel -->
 
       <div class="panel" style="margin-top:16px;">
+        <div style="padding: 12px; font-size: 15px; font-weight: 600;">GoFundMe Donations <span style="font-size:11px; font-weight:600; padding:2px 6px; border-radius:4px; background:#facc15; color:#1a1a1a; vertical-align:middle; margin-left:4px;">EXPERIMENTAL</span></div>
+        <div style="padding: 0 12px 12px;">
+                <p class="hint" style="margin-bottom:12px;">Paste your GoFundMe fundraiser link to add time automatically when people donate. Donations are checked about every 20 seconds, and only while you're live and the timer is running &mdash; donations made while offline or paused don't add time. This uses GoFundMe's public fundraiser feed, which isn't an official integration and may stop working without notice.</p>
+                <div class="control">
+                  <label>Fundraiser link</label>
+                  <input id="gfmUrl" type="text" placeholder="https://www.gofundme.com/f/your-fundraiser" autocomplete="off" />
+                </div>
+                <div class="row2" style="gap:8px; display:flex; align-items:center; margin-top:8px;">
+                  <button id="gfmConnect">Connect</button>
+                  <button class="secondary" id="gfmDisconnect">Disconnect</button>
+                  <span id="gfmStatus" style="opacity:.7; font-size:13px;"></span>
+                </div>
+                <div class="control" style="margin-top:12px;"><label>Time added per 1.00 donated (sec)</label><input id="r_gfm_per_unit" type="number" min="0" step="1" value="60"></div>
+                <div class="control"><label>Min. donation to trigger</label><input id="r_gfm_min" type="number" min="0" step="0.01" value="1"></div>
+                <div class="row2"><button id="gfmSaveRules">Save GoFundMe Rules</button></div>
+                <div class="hint" style="margin-top:6px;">Hype Train and Bonus Time multipliers apply to GoFundMe donations too.</div>
+        </div>
+      </div><!-- end gofundme panel -->
+
+      <div class="panel" style="margin-top:16px;">
         <div style="padding: 12px; font-size: 15px; font-weight: 600;">Chat Command</div>
         <div style="padding: 0 12px 12px;">
           <p class="hint" style="margin-bottom:12px;">Let viewers type a command in chat to have the bot post the current timer rules. Requires re-authorizing if you haven't done so since this feature was added.</p>
@@ -607,6 +627,7 @@ export function renderOverlayConfigPage(options = {}) {
                 <span class="cmd-var">{charity_per}<span class="cmd-var-tip"><div class="cmd-var-tip-name">{charity_per}</div><div class="cmd-var-tip-desc">Time added per $1 donated to charity.</div><div class="cmd-var-tip-val" data-var="charity_per">—</div></span></span>
                 <span class="cmd-var">{tip_per}<span class="cmd-var-tip"><div class="cmd-var-tip-name">{tip_per}</div><div class="cmd-var-tip-desc">Time added per unit of a 3rd-party tip (e.g. per £1 on StreamElements).</div><div class="cmd-var-tip-val" data-var="tip_per">—</div></span></span>
                 <span class="cmd-var">{tip_min}<span class="cmd-var-tip"><div class="cmd-var-tip-name">{tip_min}</div><div class="cmd-var-tip-desc">Minimum tip amount required to add time.</div><div class="cmd-var-tip-val" data-var="tip_min">—</div></span></span>
+                <span class="cmd-var">{gfm_per}<span class="cmd-var-tip"><div class="cmd-var-tip-name">{gfm_per}</div><div class="cmd-var-tip-desc">Time added per 1.00 donated on GoFundMe (experimental).</div><div class="cmd-var-tip-val" data-var="gfm_per">—</div></span></span>
                 <span class="cmd-var">{follow}<span class="cmd-var-tip"><div class="cmd-var-tip-name">{follow}</div><div class="cmd-var-tip-desc">Time added when someone follows the channel (only if follows are enabled).</div><div class="cmd-var-tip-val" data-var="follow">—</div></span></span>
                 <span class="cmd-var">{raid}<span class="cmd-var-tip"><div class="cmd-var-tip-name">{raid}</div><div class="cmd-var-tip-desc">Flat time added per raid (only if raids are enabled).</div><div class="cmd-var-tip-val" data-var="raid">—</div></span></span>
                 <span class="cmd-var">{raid_per_viewer}<span class="cmd-var-tip"><div class="cmd-var-tip-name">{raid_per_viewer}</div><div class="cmd-var-tip-desc">Extra time added per raider, on top of the flat amount (only if raid scaling is enabled).</div><div class="cmd-var-tip-val" data-var="raid_per_viewer">—</div></span></span>
@@ -627,6 +648,7 @@ export function renderOverlayConfigPage(options = {}) {
           <div id="eventLog" class="log-box"></div>
           <div class="row2" style="margin-top:8px;">
             <button class="secondary" id="clearLog">Clear Log</button>
+            <button class="secondary" id="logOrderToggle" title="Change log order"></button>
           </div>
         </div>
       </div>
@@ -820,6 +842,7 @@ export function renderOverlayConfigPage(options = {}) {
         'channel.raid': true,
         'channel.follow': true,
         'streamelements_tip': true,
+        'gofundme_donation': true,
       };
 
       // Each of credit/multiplier/remove is a one-shot action per log entry —
@@ -915,9 +938,24 @@ export function renderOverlayConfigPage(options = {}) {
       var logEntriesById = {};
       var logActionedMap = {};
 
+      // Log order is a per-viewer preference (each streamer / OBS dock keeps
+      // its own), so plain localStorage is enough. Default: newest at the top.
+      var LOG_ORDER_STORAGE_KEY = 'lsh_event_log_order';
+      var logNewestFirst = true;
+      try { logNewestFirst = localStorage.getItem(LOG_ORDER_STORAGE_KEY) !== 'oldest'; } catch (e) {}
+      var logHasRendered = false;
+      // The log usually renders while its section is hidden (scrollHeight 0),
+      // where setting scrollTop is a no-op — so remember to finish the
+      // scroll-to-bottom once the box is actually on screen.
+      var logScrollPending = false;
+
       function renderLog(entries) {
         const box = document.getElementById('eventLog');
         if (!box) return;
+        // Oldest-first reads like a chat: follow new entries at the bottom,
+        // but only if the viewer was already there (don't yank them away
+        // from an entry they scrolled up to).
+        var wasAtBottom = box.scrollHeight - box.scrollTop - box.clientHeight < 24;
         if (!entries || !entries.length) {
           box.textContent = 'No entries yet.';
           logEntriesById = {};
@@ -927,9 +965,8 @@ export function renderOverlayConfigPage(options = {}) {
         logActionedMap = buildActionedMap(entries);
         logEntriesById = {};
         entries.forEach(function(e) { logEntriesById[e.id] = e; });
-        box.innerHTML = entries
-          .slice()
-          .reverse()
+        var ordered = logNewestFirst ? entries.slice() : entries.slice().reverse();
+        box.innerHTML = ordered
           .map(function(e) {
             var ts = e.ts ? new Date(e.ts) : new Date();
             var tStr = ts.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
@@ -962,6 +999,10 @@ export function renderOverlayConfigPage(options = {}) {
                 var tipSymbol = e.tipCurrency ? (new Intl.NumberFormat('en', { style: 'currency', currency: e.tipCurrency }).formatToParts(0).find(function(p) { return p.type === 'currency'; }) || {}).value || e.tipCurrency : '$';
                 detail = (e.tipUsername || 'Anon') + ' tipped ' + tipSymbol + tipAmt.toFixed(2);
               } else detail = 'SE Tip';
+            } else if (src === 'gofundme_donation') {
+              var gfmAmt = Number(e.tipAmount || 0);
+              var gfmSymbol = e.tipCurrency ? (new Intl.NumberFormat('en', { style: 'currency', currency: e.tipCurrency }).formatToParts(0).find(function(p) { return p.type === 'currency'; }) || {}).value || e.tipCurrency : '$';
+              detail = (e.tipUsername || 'Anonymous') + ' donated' + (gfmAmt > 0 ? ' ' + gfmSymbol + gfmAmt.toFixed(2) : '') + ' (GoFundMe)';
             } else if (src === 'channel.follow') {
               detail = (who || 'Someone') + ' followed';
             } else if (src === 'channel.raid') {
@@ -1000,7 +1041,40 @@ export function renderOverlayConfigPage(options = {}) {
             return logRowHtml(e, tStr, src + (detail ? ' – ' + detail : '') + ': +' + actual + 's' + hypeInfo + capNote);
           })
           .join('');
+        if (!logNewestFirst && (wasAtBottom || !logHasRendered)) {
+          box.scrollTop = box.scrollHeight;
+          if (!box.clientHeight) logScrollPending = true;
+        }
+        logHasRendered = true;
       }
+
+      (function watchLogVisibility() {
+        var box = document.getElementById('eventLog');
+        if (!box || !('IntersectionObserver' in window)) return;
+        new IntersectionObserver(function(obs) {
+          if (obs[0].isIntersecting && logScrollPending && !logNewestFirst) {
+            box.scrollTop = box.scrollHeight;
+            logScrollPending = false;
+          }
+        }).observe(box);
+      })();
+
+      (function initLogOrderToggle() {
+        var btn = document.getElementById('logOrderToggle');
+        if (!btn) return;
+        function label() { btn.textContent = logNewestFirst ? 'Newest first \u2195' : 'Oldest first \u2195'; }
+        label();
+        btn.addEventListener('click', function(e) {
+          e.preventDefault();
+          logNewestFirst = !logNewestFirst;
+          try { localStorage.setItem(LOG_ORDER_STORAGE_KEY, logNewestFirst ? 'newest' : 'oldest'); } catch (err) {}
+          label();
+          var box = document.getElementById('eventLog');
+          logHasRendered = false; // jump to the newest end after switching
+          renderLog(logEntries);
+          if (box && logNewestFirst) box.scrollTop = 0;
+        });
+      })();
 
       // Entries currently on screen, newest first, and the newest ts among
       // them — once we've loaded a window we only ask the server for
@@ -1602,6 +1676,10 @@ export function renderOverlayConfigPage(options = {}) {
               if (document.getElementById('r_raid_per_viewer_enabled')) document.getElementById('r_raid_per_viewer_enabled').checked = Boolean(rr.raid.perViewerEnabled);
               if (document.getElementById('r_raid_per_viewer_seconds')) document.getElementById('r_raid_per_viewer_seconds').value = rr.raid.perViewerSeconds ?? 0;
             }
+            if (rr && rr.gofundme) {
+              if (document.getElementById('r_gfm_per_unit')) document.getElementById('r_gfm_per_unit').value = rr.gofundme.per_unit ?? 60;
+              if (document.getElementById('r_gfm_min')) document.getElementById('r_gfm_min').value = rr.gofundme.min_amount ?? 1;
+            }
             if (rr && rr.thirdPartyTip) {
               if (document.getElementById('r_tip_per_unit')) document.getElementById('r_tip_per_unit').value = rr.thirdPartyTip.per_unit ?? 60;
               if (document.getElementById('r_tip_min')) document.getElementById('r_tip_min').value = rr.thirdPartyTip.min_amount ?? 1;
@@ -1658,7 +1736,7 @@ export function renderOverlayConfigPage(options = {}) {
             hypeTrain: { multiplier: Number(document.getElementById('r_hype').value||2) },
             bonusTime: { multiplier: Number(document.getElementById('r_bonus')?.value||2), stackWithHype: Boolean(document.getElementById('r_bonus_stack')?.checked) }
           };
-          window.DEV_RULES = body;
+          window.DEV_RULES = Object.assign({}, window.DEV_RULES, body);
           try { await fetch('/api/rules', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }); if (window.lsh) lsh.use('timer', 'rules_saved'); } catch(e) {}
         });
 
@@ -1697,6 +1775,8 @@ export function renderOverlayConfigPage(options = {}) {
               charity_per: fmtSecsClient(r.charity?.per_usd ?? 0),
               tip_per:     fmtSecsClient(r.thirdPartyTip?.per_unit ?? 0),
               tip_min:     String(r.thirdPartyTip?.min_amount ?? 1),
+              gfm_per:     fmtSecsClient(r.gofundme?.per_unit ?? 0),
+              gfm_min:     String(r.gofundme?.min_amount ?? 1),
               follow:      fmtSecsClient(r.follow?.add_seconds ?? 0),
               raid:        fmtSecsClient(r.raid?.base_seconds ?? 0),
               raid_per_viewer: fmtSecsClient(r.raid?.perViewerEnabled ? (r.raid?.perViewerSeconds ?? 0) : 0),
@@ -1727,6 +1807,10 @@ export function renderOverlayConfigPage(options = {}) {
             if (r.thirdPartyTip?.per_unit > 0) {
               var min = r.thirdPartyTip.min_amount > 0 ? '$' + r.thirdPartyTip.min_amount + '+' : '$1+';
               parts.push('Tips ' + min + '=+' + fmtSecsClient(r.thirdPartyTip.per_unit));
+            }
+            if (window.GFM_CONNECTED && r.gofundme?.per_unit > 0) {
+              var gfmMin = r.gofundme.min_amount > 0 ? '$' + r.gofundme.min_amount + '+' : '$1+';
+              parts.push('GoFundMe ' + gfmMin + '=+' + fmtSecsClient(r.gofundme.per_unit));
             }
             if (r.follow?.enabled && r.follow?.add_seconds > 0) parts.push('Follow +' + fmtSecsClient(r.follow.add_seconds));
             if (r.raid?.enabled) {
@@ -1874,6 +1958,110 @@ export function renderOverlayConfigPage(options = {}) {
               updateSeStatusUI({ connected: false, status: 'disconnected', hasToken: false });
             } catch(err) {}
             setBusy(seDisconnectBtn, false);
+          });
+        })();
+
+        // ---- GoFundMe (experimental) UI ----
+        (function initGFM() {
+          var gfmUrlInput = document.getElementById('gfmUrl');
+          var gfmConnectBtn = document.getElementById('gfmConnect');
+          var gfmDisconnectBtn = document.getElementById('gfmDisconnect');
+          var gfmStatusEl = document.getElementById('gfmStatus');
+          var gfmSaveBtn = document.getElementById('gfmSaveRules');
+          if (!gfmUrlInput) return;
+          if (window.lsh) lsh.feature('gofundme');
+
+          var IDLE_TEXT = {
+            offline: 'Idle \u2013 checks start when you go live',
+            paused: 'Idle \u2013 timer paused',
+            stopped: 'Idle \u2013 timer not running',
+          };
+
+          function agoText(iso) {
+            if (!iso) return '';
+            var secs = Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 1000));
+            return secs < 60 ? secs + 's ago' : Math.round(secs / 60) + 'm ago';
+          }
+
+          function updateGfmStatusUI(data) {
+            window.GFM_CONNECTED = Boolean(data && data.connected);
+            if (!gfmStatusEl) return;
+            if (!data || !data.connected) {
+              gfmStatusEl.textContent = (data && data.error) ? data.error : 'Not connected';
+              gfmStatusEl.style.color = (data && data.error) ? '#ef4444' : '';
+              return;
+            }
+            var count = data.donationCount ? ' \u00b7 ' + data.donationCount + ' donation' + (data.donationCount === 1 ? '' : 's') : '';
+            if (data.status === 'watching') {
+              gfmStatusEl.textContent = 'Watching' + count + (data.lastCheckedAt ? ' \u00b7 checked ' + agoText(data.lastCheckedAt) : '');
+              gfmStatusEl.style.color = '#22c55e';
+            } else if (data.status === 'error') {
+              gfmStatusEl.textContent = 'Having trouble reaching GoFundMe (' + (data.error || 'unknown') + ') \u2013 retrying';
+              gfmStatusEl.style.color = '#ef4444';
+            } else {
+              gfmStatusEl.textContent = (IDLE_TEXT[data.idleReason] || 'Idle') + count;
+              gfmStatusEl.style.color = '#facc15';
+            }
+          }
+
+          function loadGfmStatus() {
+            return fetch('/api/gofundme/status').then(function(r) { return r.json(); }).then(function(data) {
+              if (data.savedSlug && !gfmUrlInput.value) gfmUrlInput.value = 'https://www.gofundme.com/f/' + data.savedSlug;
+              updateGfmStatusUI(data);
+            }).catch(function() {});
+          }
+          loadGfmStatus();
+          // Only refresh the status line while it's on screen — the page may
+          // sit open for a whole stream.
+          setInterval(function() {
+            if (!document.hidden && window.GFM_CONNECTED) loadGfmStatus();
+          }, 20000);
+
+          if (gfmConnectBtn) gfmConnectBtn.addEventListener('click', async function(e) {
+            e.preventDefault();
+            var url = gfmUrlInput.value.trim();
+            if (!url) { updateGfmStatusUI({ error: 'Paste your fundraiser link first' }); return; }
+            flashButton(gfmConnectBtn);
+            setBusy(gfmConnectBtn, true);
+            gfmStatusEl.textContent = 'Checking fundraiser\u2026';
+            gfmStatusEl.style.color = '#facc15';
+            try {
+              var r = await fetch('/api/gofundme/connect', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ url: url }) });
+              var j = await r.json();
+              if (j.ok) {
+                if (window.lsh) lsh.use('gofundme', 'connected');
+                gfmUrlInput.value = 'https://www.gofundme.com/f/' + j.slug;
+                updateGfmStatusUI(j);
+              } else {
+                updateGfmStatusUI({ error: j.error || 'Failed to connect' });
+              }
+            } catch (err) {
+              updateGfmStatusUI({ error: 'Network error' });
+            }
+            setBusy(gfmConnectBtn, false);
+          });
+
+          if (gfmDisconnectBtn) gfmDisconnectBtn.addEventListener('click', async function(e) {
+            e.preventDefault();
+            flashButton(gfmDisconnectBtn);
+            setBusy(gfmDisconnectBtn, true);
+            try {
+              await fetch('/api/gofundme/disconnect', { method: 'POST' });
+              gfmUrlInput.value = '';
+              updateGfmStatusUI({ connected: false });
+            } catch (err) {}
+            setBusy(gfmDisconnectBtn, false);
+          });
+
+          if (gfmSaveBtn) gfmSaveBtn.addEventListener('click', async function(e) {
+            e.preventDefault();
+            flashButton(gfmSaveBtn);
+            var gofundme = {
+              per_unit: Number((document.getElementById('r_gfm_per_unit') || {}).value || 60),
+              min_amount: Number((document.getElementById('r_gfm_min') || {}).value || 1),
+            };
+            window.DEV_RULES = Object.assign({}, window.DEV_RULES, { gofundme: gofundme });
+            try { await fetch('/api/rules', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ gofundme: gofundme }) }); } catch (err) {}
           });
         })();
 

@@ -74,6 +74,12 @@ function mergeRules(base, patch = {}) {
       min_amount: numberOr(next.thirdPartyTip?.min_amount ?? 1, patch.thirdPartyTip.min_amount, 0)
     };
   }
+  if (patch.gofundme) {
+    next.gofundme = {
+      per_unit: numberOr(next.gofundme?.per_unit ?? 60, patch.gofundme.per_unit, 0),
+      min_amount: numberOr(next.gofundme?.min_amount ?? 1, patch.gofundme.min_amount, 0)
+    };
+  }
   if (patch.chatCommand) {
     const rawCmd = typeof patch.chatCommand.command === 'string' ? patch.chatCommand.command.trim().replace(/^!+/, '') : null;
     next.chatCommand = {

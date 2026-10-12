@@ -164,12 +164,53 @@ export function renderSoundAlertOverlayPage() {
         var isPlaying = false;
         var currentAudio = null;
         var currentMediaContainer = null;
+        // Bumped on every advance so a late ended/error/timeout from an item
+        // that's already been moved past can't advance the queue a second time.
+        var playToken = 0;
+        var watchdog = null;
+        // Recently played alertIds, so a duplicate delivery never plays twice.
+        var recentAlertIds = [];
+
+        function clearWatchdog() {
+          if (watchdog) { clearTimeout(watchdog); watchdog = null; }
+        }
 
         function advance() {
+          clearWatchdog();
+          playToken++;
           currentAudio = null;
           currentMediaContainer = null;
           isPlaying = false;
           playNext();
+        }
+
+        // Audio that stalls while loading fires neither 'ended' nor 'error',
+        // which used to leave isPlaying stuck true and silently queue every
+        // later alert forever. Give it 20s to start, then its own length + 5s.
+        function guardAudio(audio) {
+          var token = playToken;
+          function bail() {
+            if (token !== playToken) return;
+            try { audio.pause(); } catch (e) {}
+            advance();
+          }
+          clearWatchdog();
+          watchdog = setTimeout(bail, 20000);
+          audio.addEventListener('playing', function() {
+            if (token !== playToken) return;
+            clearWatchdog();
+            var d = isFinite(audio.duration) && audio.duration > 0 ? audio.duration : 120;
+            watchdog = setTimeout(bail, Math.min(d, 600) * 1000 + 5000);
+          });
+          return function once() { if (token === playToken) advance(); };
+        }
+
+        function seenAlert(id) {
+          if (!id) return false;
+          if (recentAlertIds.indexOf(id) !== -1) return true;
+          recentAlertIds.push(id);
+          if (recentAlertIds.length > 200) recentAlertIds.shift();
+          return false;
         }
 
         function skipCurrent() {
@@ -216,9 +257,10 @@ export function renderSoundAlertOverlayPage() {
           var audio = new Audio('/api/sounds/file/' + encodeURIComponent(item.soundId) + '?key=' + encodeURIComponent(overlayKey));
           audio.volume = vol;
           currentAudio = audio;
-          audio.onended = advance;
-          audio.onerror = advance;
-          audio.play().catch(advance);
+          var done = guardAudio(audio);
+          audio.onended = done;
+          audio.onerror = done;
+          audio.play().catch(done);
         }
 
         function playClip(item) {
@@ -307,9 +349,10 @@ export function renderSoundAlertOverlayPage() {
           var audio = new Audio(audioUrl);
           audio.volume = vol;
           currentAudio = audio;
-          audio.onended = advance;
-          audio.onerror = advance;
-          audio.play().catch(advance);
+          var done = guardAudio(audio);
+          audio.onended = done;
+          audio.onerror = done;
+          audio.play().catch(done);
         }
 
         function showTtsPopup(voiceName, message, viewerName) {
@@ -415,7 +458,12 @@ export function renderSoundAlertOverlayPage() {
         // Connect to SSE with reconnect + exponential backoff
         (function connectSSE() {
           var retryDelay = 4000;
-          var es = new EventSource('/api/overlay/stream?key=' + encodeURIComponent(overlayKey));
+          // role=sounds tells the server this page plays alert audio — it's
+          // the only kind of page alerts are sent to. preview=1 marks the
+          // hub's Live Preview copy, which only gets test alerts.
+          var streamUrl = '/api/overlay/stream?key=' + encodeURIComponent(overlayKey) + '&role=sounds';
+          if (qs.get('preview') === '1') streamUrl += '&preview=1';
+          var es = new EventSource(streamUrl);
 
           es.addEventListener('open', function() { retryDelay = 4000; });
 
@@ -423,6 +471,7 @@ export function renderSoundAlertOverlayPage() {
             try {
               var data = JSON.parse(ev.data);
               if (!data.soundId || !data.soundName) return;
+              if (!data.replay && seenAlert(data.alertId)) return;
               if (alertQueue.length >= maxQueue) return;
               alertQueue.push(data);
               playNext();
@@ -433,6 +482,7 @@ export function renderSoundAlertOverlayPage() {
             try {
               var data = JSON.parse(ev.data);
               if (!data.audioUrl) return;
+              if (!data.replay && seenAlert(data.alertId)) return;
               if (alertQueue.length >= maxQueue) return;
               data.type = 'tts';
               alertQueue.push(data);

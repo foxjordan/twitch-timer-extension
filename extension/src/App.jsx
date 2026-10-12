@@ -412,7 +412,14 @@ function App() {
       // Check overlay connection status
       fetch(`${EBS_BASE}/api/overlay/status?channelId=${authData.channelId}`)
         .then((r) => r.json())
-        .then((data) => setOverlayConnected(data.connected))
+        .then((data) =>
+          setOverlayConnected(
+            // Prefer the sound-overlay-only count; older EBS builds lack it.
+            typeof data.soundOverlayConnected === "boolean"
+              ? data.soundOverlayConnected
+              : data.connected,
+          ),
+        )
         .catch(() => {});
     });
 

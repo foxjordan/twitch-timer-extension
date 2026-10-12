@@ -642,7 +642,9 @@ export function renderSoundConfigPage(options = {}) {
           if (USER_KEY) p.set('key', USER_KEY);
           var overlayFullUrl = window.location.origin + '/overlay/sounds' + (p.toString() ? ('?' + p.toString()) : '');
           soundUrlEl.textContent = overlayFullUrl;
-          if (soundLivePreviewEl) soundLivePreviewEl.src = overlayFullUrl;
+          // preview=1: the server sends this copy test alerts only, so a real
+          // redeem never also plays out of the dashboard.
+          if (soundLivePreviewEl) soundLivePreviewEl.src = overlayFullUrl + (overlayFullUrl.indexOf('?') === -1 ? '?' : '&') + 'preview=1';
         }
 
         if (soundGlobalVolumeEl) soundGlobalVolumeEl.addEventListener('input', function() {
@@ -876,18 +878,20 @@ export function renderSoundConfigPage(options = {}) {
               setBusy(testBtn, true);
               if (soundTestHintEl) soundTestHintEl.textContent = '';
               try {
-                var statusRes = await fetch('/api/overlay/status');
-                var statusData = await statusRes.json().catch(function() { return {}; });
-                if (!statusData.connected) {
-                  if (soundTestHintEl) soundTestHintEl.textContent = 'Live Preview still connecting — try again in a moment.';
-                  setBusy(testBtn, false);
-                  return;
-                }
+                // Always send — no status pre-check. The response says where
+                // it actually went, which is what the hint reports.
                 var r = await fetch(API_BASE + '/test/' + encodeURIComponent(s.id), { method: 'POST' });
                 if (!r.ok) throw new Error();
+                var tr = await r.json().catch(function() { return {}; });
+                var d = tr.delivered || {};
                 if (soundTestHintEl) {
-                  soundTestHintEl.textContent = 'Playing in Live Preview!';
-                  setTimeout(function() { soundTestHintEl.textContent = ''; }, 2500);
+                  var where = [];
+                  if (d.previews) where.push('Live Preview');
+                  if (d.overlays) where.push(d.overlays === 1 ? 'your OBS sound overlay' : d.overlays + ' sound overlays');
+                  soundTestHintEl.textContent = where.length
+                    ? 'Playing in ' + where.join(' and ') + '!'
+                    : 'Sent — no sound overlay is connected right now, so nothing played.';
+                  setTimeout(function() { soundTestHintEl.textContent = ''; }, 4000);
                 }
               } catch (e) {
                 if (soundTestHintEl) soundTestHintEl.textContent = 'Couldn\\'t send to Live Preview';
@@ -3167,12 +3171,15 @@ export function renderSoundConfigPage(options = {}) {
             if (overlayStatusEl) {
               overlayStatusEl.textContent = '';
               var dot = document.createElement('span');
-              dot.className = data.connected ? 'overlay-online' : 'overlay-offline';
+              // Sound overlays only (not the timer, not this page's Live
+              // Preview). Informational — alerts are always sent regardless.
+              var n = data.soundOverlays || 0;
+              dot.className = n > 0 ? 'overlay-online' : 'overlay-offline';
               dot.textContent = '\\u25CF ';
               overlayStatusEl.appendChild(dot);
-              var label = data.connected
-                ? 'Overlay connected' + (data.clients > 1 ? ' (' + data.clients + ' clients)' : '')
-                : 'Overlay not connected';
+              var label = n > 0
+                ? 'Sound overlay connected' + (n > 1 ? ' (' + n + ' copies open — each one plays every alert)' : '')
+                : 'Sound overlay not detected — check that the sound alerts browser source is open in OBS';
               overlayStatusEl.appendChild(document.createTextNode(label));
             }
           } catch {

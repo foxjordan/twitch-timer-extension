@@ -48,6 +48,11 @@ export function overlayClientMeta(req, { keyOwner = null } = {}) {
   else if (keyOwner) resolvedVia = "key";
   return {
     connectedAt: Date.now(),
+    // Set by the sound overlay page itself (?role=sounds on its stream URL);
+    // the hub's Live Preview iframe adds ?preview=1. Only these pages are sent
+    // alert audio — see sendToSoundOverlays.
+    role: req.query?.role === "sounds" ? "sounds" : null,
+    preview: req.query?.preview === "1",
     page,
     pageKind: (page && PAGE_KINDS[page]) || "unknown",
     app: detectApp(ua),
@@ -64,6 +69,8 @@ export function describeOverlayClients(clients, userId, now = Date.now()) {
     const m = c.meta || {};
     list.push({
       pageKind: m.pageKind || "unknown",
+      role: m.role || null,
+      preview: Boolean(m.preview),
       page: m.page || null,
       app: m.app || "unknown",
       userAgent: m.userAgent || "",
@@ -78,6 +85,60 @@ export function describeOverlayClients(clients, userId, now = Date.now()) {
     userId: String(userId),
     total: list.length,
     soundCapable: list.filter((c) => SOUND_PAGE_KINDS.has(c.pageKind)).length,
+    soundOverlays: countSoundOverlays(clients, userId),
     clients: list,
   };
+}
+
+// A connection that should receive alert audio. Pages loaded before ?role=
+// existed (still open in OBS until it reloads them) are recognised by path;
+// one with no usable referer is given the benefit of the doubt so an old
+// sound overlay never goes silent after a deploy. Known non-sound pages
+// (timer, goals, games) are always excluded.
+export function isSoundOverlayClient(client) {
+  const m = client?.meta || {};
+  if (m.role) return m.role === "sounds";
+  return m.pageKind === "sound_alerts" || !m.pageKind || m.pageKind === "unknown";
+}
+
+function belongsTo(client, userId) {
+  // Strict: a connection whose key didn't resolve to a channel has a null
+  // timerUserId and must never receive anyone's alerts.
+  return client?.timerUserId != null && userId != null && String(client.timerUserId) === String(userId);
+}
+
+export function countSoundOverlays(clients, userId) {
+  let overlays = 0;
+  let previews = 0;
+  for (const c of clients) {
+    if (!belongsTo(c, userId) || !isSoundOverlayClient(c)) continue;
+    if (c.meta?.preview) previews++;
+    else overlays++;
+  }
+  return { overlays, previews };
+}
+
+// The only path alert audio events (sound_alert, tts_alert, skip_alert,
+// remove_alert, sound_settings) take to the browser. Goes to that channel's
+// sound overlay pages and nothing else — never the timer, goals or games
+// overlays. The hub's Live Preview gets an event only with includePreview
+// (tests and controls), so a real redeem can't also play out of the
+// streamer's dashboard and get picked up by Desktop Audio.
+export function sendToSoundOverlays(clients, userId, event, data, { includePreview = false } = {}) {
+  const frame = `event: ${event}\ndata: ${typeof data === "string" ? data : JSON.stringify(data)}\n\n`;
+  let overlays = 0;
+  let previews = 0;
+  for (const c of Array.from(clients)) {
+    if (!belongsTo(c, userId) || !isSoundOverlayClient(c)) continue;
+    const isPreview = Boolean(c.meta?.preview);
+    if (isPreview && !includePreview) continue;
+    try {
+      c.res.write(frame);
+      if (isPreview) previews++;
+      else overlays++;
+    } catch {
+      clients.delete?.(c);
+    }
+  }
+  return { overlays, previews };
 }

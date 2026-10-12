@@ -176,6 +176,7 @@ export function mountTtsRoutes(app, deps = {}) {
           volume: settings.volume,
           txId: null,
           viewerUserId: null,
+          preview: true,
         });
       }
 

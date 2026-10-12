@@ -61,7 +61,7 @@ import { mountAnalyticsRoutes } from "./routes_analytics.js";
 import { mountOfficialLibraryRoutes } from "./routes_official_library.js";
 import { isDelegate } from "./delegate_store.js";
 import { isSuperAdminId } from "./super_admin.js";
-import { overlayClientMeta, describeOverlayClients } from "./overlay_clients.js";
+import { overlayClientMeta, describeOverlayClients, sendToSoundOverlays, countSoundOverlays } from "./overlay_clients.js";
 import { mountHomePageRoutes } from "./routes_home_page.js";
 import { mountGoalRoutes } from "./routes_goals.js";
 import { logger, requestLogger, setLoggerContext } from "./logger.js";
@@ -688,12 +688,17 @@ app.get("/api/overlay/status", (req, res) => {
   // Follows "manage as" like /api/overlay/stream does — otherwise a delegate or
   // super admin managing a channel sees their own count, not that channel's.
   const uid = resolveTimerUserIdFromRequest(req) || req.query.channelId;
-  if (!uid) return res.json({ connected: false, clients: 0 });
+  if (!uid) return res.json({ connected: false, clients: 0, soundOverlays: 0, soundOverlayConnected: false });
+  // Informational only — nothing should refuse to send an alert because of
+  // this. `connected`/`clients` keep their old meaning (any overlay page,
+  // e.g. the timer) for already-shipped extension builds; the sound-specific
+  // fields count only real sound overlays, not the hub's Live Preview.
   let count = 0;
   for (const client of sseClients) {
-    if (String(client.timerUserId) === String(uid)) count++;
+    if (String(client.timerUserId) === String(uid) && !client.meta?.preview) count++;
   }
-  res.json({ connected: count > 0, clients: count });
+  const { overlays } = countSoundOverlays(sseClients, uid);
+  res.json({ connected: count > 0, clients: count, soundOverlays: overlays, soundOverlayConnected: overlays > 0 });
 });
 
 // Super-admin diagnostic: which overlay pages a channel has connected right
@@ -733,15 +738,7 @@ app.post("/api/alerts/replay/:alertId", async (req, res) => {
         volume: entry.volume || 80,
         replay: true,
       });
-      let sent = 0;
-      for (const client of Array.from(sseClients)) {
-        if (client.timerUserId && String(client.timerUserId) !== String(uid)) continue;
-        try {
-          client.res.write("event: sound_alert\n");
-          client.res.write(`data: ${payload}\n\n`);
-          sent++;
-        } catch { sseClients.delete(client); }
-      }
+      const sent = sendToSoundOverlays(sseClients, uid, "sound_alert", payload).overlays;
       logger.info("alert_replayed", { type: "sound_alert", alertId: entry.id, userId: uid, sent });
       return res.json({ ok: true, type: "sound_alert", sent });
 
@@ -772,15 +769,7 @@ app.post("/api/alerts/replay/:alertId", async (req, res) => {
         ts: Date.now(),
         replay: true,
       });
-      let sent = 0;
-      for (const client of Array.from(sseClients)) {
-        if (client.timerUserId && String(client.timerUserId) !== String(uid)) continue;
-        try {
-          client.res.write("event: tts_alert\n");
-          client.res.write(`data: ${payload}\n\n`);
-          sent++;
-        } catch { sseClients.delete(client); }
-      }
+      const sent = sendToSoundOverlays(sseClients, uid, "tts_alert", payload).overlays;
       logger.info("alert_replayed", { type: "tts_alert", alertId: entry.id, userId: uid, sent });
       return res.json({ ok: true, type: "tts_alert", sent });
 
@@ -2262,7 +2251,7 @@ function bitsInExtensionSeconds(timerUid, bits) {
 // handler below, passing `channelPointsAmount` instead) — same overlay
 // broadcast, same extension pubsub, same chat notification either way, just
 // different wording for what the viewer actually spent.
-function handleSoundAlert({ channelId, soundId, soundName, tier, txId, viewerUserId, type, clipSlug, volume, channelPointsAmount, imageFilename, popupStyle }) {
+function handleSoundAlert({ channelId, soundId, soundName, tier, txId, viewerUserId, type, clipSlug, volume, channelPointsAmount, imageFilename, popupStyle, preview = false }) {
   const isTestAlert = !txId || txId.startsWith('test_');
   if (!isTestAlert) {
     logSoundEvent({ channelId, viewerUserId, soundId, soundName, alertType: type, tier, txId, clipSlug, eventKind: 'played' });
@@ -2310,19 +2299,8 @@ function handleSoundAlert({ channelId, soundId, soundName, tier, txId, viewerUse
     hasImage: Boolean(imageFilename),
     popupStyle: popupStyle === "large" ? "large" : "corner",
   });
-  for (const client of Array.from(sseClients)) {
-    if (
-      client.timerUserId &&
-      String(client.timerUserId) !== String(channelId)
-    )
-      continue;
-    try {
-      client.res.write("event: sound_alert\n");
-      client.res.write(`data: ${payload}\n\n`);
-    } catch (e) {
-      sseClients.delete(client);
-    }
-  }
+  const delivered = sendToSoundOverlays(sseClients, channelId, "sound_alert", payload, { includePreview: preview });
+  logger.info("sound_alert_delivered", { channelId, alertId, txId: txId || null, preview, ...delivered });
   broadcastToChannel({
     broadcasterId: channelId,
     type: "sound_alert",
@@ -2424,14 +2402,7 @@ mountSoundRoutes(app, {
       const idx = cq.findIndex(a => a.alertId === alertId);
       if (idx !== -1) cq.splice(idx, 1);
     }
-    const payload = JSON.stringify({ alertId, ts: Date.now() });
-    for (const client of Array.from(sseClients)) {
-      if (client.timerUserId && String(client.timerUserId) !== String(channelId)) continue;
-      try {
-        client.res.write("event: remove_alert\n");
-        client.res.write(`data: ${payload}\n\n`);
-      } catch { sseClients.delete(client); }
-    }
+    sendToSoundOverlays(sseClients, channelId, "remove_alert", { alertId, ts: Date.now() }, { includePreview: true });
   },
   onSoundAlert: handleSoundAlert,
   deduplicateTx: (txId) => {
@@ -2446,7 +2417,7 @@ mountTtsRoutes(app, {
   requireOverlayAuth,
   getSessionUserId: (req) => req.session?.managingAs || req.session?.twitchUser?.id,
   getUserIdForKey,
-  onTtsAlert: ({ channelId, message, voiceName, voiceId, fileId, volume, txId, viewerUserId, viewerDisplayName, tier }) => {
+  onTtsAlert: ({ channelId, message, voiceName, voiceId, fileId, volume, txId, viewerUserId, viewerDisplayName, tier, preview = false }) => {
     if (txId && !txId.startsWith('test_')) {
       logTtsEvent({ channelId, viewerUserId, voiceId, voiceName, message, tier, txId, eventKind: 'played' });
     }
@@ -2488,19 +2459,8 @@ mountTtsRoutes(app, {
       volume: volume || 80,
       ts: Date.now(),
     });
-    for (const client of Array.from(sseClients)) {
-      if (
-        client.timerUserId &&
-        String(client.timerUserId) !== String(channelId)
-      )
-        continue;
-      try {
-        client.res.write("event: tts_alert\n");
-        client.res.write(`data: ${payload}\n\n`);
-      } catch (e) {
-        sseClients.delete(client);
-      }
-    }
+    const delivered = sendToSoundOverlays(sseClients, channelId, "tts_alert", payload, { includePreview: preview });
+    logger.info("tts_alert_delivered", { channelId, alertId, txId: txId || null, preview, ...delivered });
     broadcastToChannel({
       broadcasterId: channelId,
       type: "tts_alert",
@@ -2538,16 +2498,7 @@ mountTtsRoutes(app, {
   },
   onSkipAlert: ({ channelId }) => {
     pendingAlerts.delete(String(channelId));
-    const payload = JSON.stringify({ ts: Date.now() });
-    for (const client of Array.from(sseClients)) {
-      if (client.timerUserId && String(client.timerUserId) !== String(channelId)) continue;
-      try {
-        client.res.write("event: skip_alert\n");
-        client.res.write(`data: ${payload}\n\n`);
-      } catch {
-        sseClients.delete(client);
-      }
-    }
+    sendToSoundOverlays(sseClients, channelId, "skip_alert", { ts: Date.now() }, { includePreview: true });
   },
   deduplicateTx: (txId) => {
     const key = `ttstx:${txId}`;
@@ -2603,19 +2554,13 @@ mountAdminRoutes(app, {
   onSoundAlert: ({ channelId, soundId, soundName, tier, txId, viewerUserId, type, clipSlug, volume }) => {
     addLogEntry({ type: "sound_alert", userId: String(channelId), soundId, soundName, alertType: type || "sound", volume: volume || 80, txId: txId || undefined });
     const payload = JSON.stringify({ soundId, soundName, channelId, txId, ts: Date.now(), type: type || "sound", clipSlug: clipSlug || "", volume: volume || 80 });
-    for (const client of Array.from(sseClients)) {
-      if (client.timerUserId && String(client.timerUserId) !== String(channelId)) continue;
-      try { client.res.write("event: sound_alert\n"); client.res.write(`data: ${payload}\n\n`); } catch { sseClients.delete(client); }
-    }
+    sendToSoundOverlays(sseClients, channelId, "sound_alert", payload);
     broadcastToChannel({ broadcasterId: channelId, type: "sound_alert", payload: { soundId, soundName } }).catch(() => {});
   },
   onTtsAlert: ({ channelId, message, voiceName, voiceId, fileId, volume, txId, viewerDisplayName }) => {
     addLogEntry({ type: "tts_alert", userId: String(channelId), message, voiceName, voiceId: voiceId || undefined, volume: volume || 80, viewerDisplayName: viewerDisplayName || undefined, txId: txId || undefined });
     const payload = JSON.stringify({ type: "tts", message, voiceName, channelId, txId, viewerDisplayName: viewerDisplayName || null, audioUrl: `/api/tts/audio/${fileId}`, volume: volume || 80, ts: Date.now() });
-    for (const client of Array.from(sseClients)) {
-      if (client.timerUserId && String(client.timerUserId) !== String(channelId)) continue;
-      try { client.res.write("event: tts_alert\n"); client.res.write(`data: ${payload}\n\n`); } catch { sseClients.delete(client); }
-    }
+    sendToSoundOverlays(sseClients, channelId, "tts_alert", payload);
     broadcastToChannel({ broadcasterId: channelId, type: "tts_alert", payload: { message, voiceName, viewerDisplayName: viewerDisplayName || null } }).catch(() => {});
   },
   onUserBanned: (uid) => {
@@ -2643,10 +2588,7 @@ mountAdminSoundRoutes(app, {
   onSoundAlert: ({ channelId, soundId, soundName, tier, txId, type, clipSlug, volume }) => {
     addLogEntry({ type: "sound_alert", userId: String(channelId), soundId, soundName, alertType: type || "sound", volume: volume || 80, txId: txId || undefined });
     const payload = JSON.stringify({ soundId, soundName, channelId, txId, ts: Date.now(), type: type || "sound", clipSlug: clipSlug || "", volume: volume || 80 });
-    for (const client of Array.from(sseClients)) {
-      if (client.timerUserId && String(client.timerUserId) !== String(channelId)) continue;
-      try { client.res.write("event: sound_alert\n"); client.res.write(`data: ${payload}\n\n`); } catch { sseClients.delete(client); }
-    }
+    sendToSoundOverlays(sseClients, channelId, "sound_alert", payload);
     broadcastToChannel({ broadcasterId: channelId, type: "sound_alert", payload: { soundId, soundName } }).catch(() => {});
   },
 });

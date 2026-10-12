@@ -1,3 +1,4 @@
+import { countSoundOverlays, sendToSoundOverlays } from "./overlay_clients.js";
 import { logger } from "./logger.js";
 import { isPro } from "./subscription_store.js";
 import { isSuperAdmin } from "./routes_admin.js";
@@ -1231,13 +1232,7 @@ export function mountSoundRoutes(app, deps = {}) {
     logger.info("sound_settings_updated", { userId: uid });
     if (sseClients) {
       const ssPayload = JSON.stringify({ maxQueueSize: settings.maxQueueSize, overlayDurationMs: settings.overlayDurationMs, videoSize: settings.videoSize || "medium" });
-      for (const client of Array.from(sseClients)) {
-        if (client.timerUserId && String(client.timerUserId) !== String(uid)) continue;
-        try {
-          client.res.write("event: sound_settings\n");
-          client.res.write(`data: ${ssPayload}\n\n`);
-        } catch { sseClients.delete(client); }
-      }
+      sendToSoundOverlays(sseClients, uid, "sound_settings", ssPayload, { includePreview: true });
     }
     res.json({ settings });
   });
@@ -1355,8 +1350,12 @@ export function mountSoundRoutes(app, deps = {}) {
       volume: sound.volume || 80,
       imageFilename: sound.imageFilename || "",
       popupStyle: sound.popupStyle || "corner",
+      preview: true,
     });
-    res.json({ ok: true, sound: { id: sound.id, name: sound.name } });
+    // Reported back so the hub can say where it actually went, instead of
+    // pre-checking a status and refusing to send.
+    const delivered = sseClients ? countSoundOverlays(sseClients, uid) : { overlays: 0, previews: 0 };
+    res.json({ ok: true, sound: { id: sound.id, name: sound.name }, delivered });
   });
 
   // Serve sound file for admin preview/trim (session auth)

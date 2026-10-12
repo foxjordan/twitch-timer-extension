@@ -1548,20 +1548,18 @@ function SoundRow({
   async function handleTest() {
     setTesting(true);
     try {
-      const statusRes = await fetch(
-        `${EBS_BASE}/api/overlay/status?channelId=${auth.channelId}`,
-      );
-      const statusData = await statusRes.json().catch(() => ({}));
-      if (!statusData.connected) {
-        onError?.("Overlay not connected — open your OBS browser source or overlay page first.");
-        return;
-      }
+      // Always send — no status pre-check; report where it actually went.
       const res = await fetch(`${EBS_BASE}/api/sounds/test/${sound.id}`, {
         method: "POST",
         headers: { Authorization: `Bearer ${auth.token}` },
       });
       if (!res.ok) throw new Error();
-      onSuccess?.("Sent to overlay!");
+      const data = await res.json().catch(() => ({}));
+      if (data.delivered && data.delivered.overlays === 0) {
+        onError?.("Sent, but no sound overlay is connected — open your sound alerts browser source in OBS.");
+      } else {
+        onSuccess?.("Sent to overlay!");
+      }
     } catch {
       onError?.("Test failed");
     } finally {

@@ -81,6 +81,7 @@ import { createPlinkoQueue } from "./plinko_queue.js";
 import { createSubDedup } from "./sub_dedup.js";
 import {
   addLogEntry,
+  patchLogEntry,
   getLogEntries,
   getLogEntryById,
   getLogEntriesByType,
@@ -2274,6 +2275,29 @@ function handleSoundAlert({ channelId, soundId, soundName, tier, txId, viewerUse
   const cq = pendingAlerts.get(String(channelId)) || [];
   cq.push(queueItem);
   pendingAlerts.set(String(channelId), cq);
+
+  // Add timer time for Bits-in-Extensions usage (same rules as cheers) —
+  // skipped for test-fired alerts, which must never mutate real timer state.
+  // Channel Points redemptions never reach this branch (no `tier`), matching
+  // the original design intent that only Bits count toward the timer.
+  // Computed BEFORE addLogEntry: the log row is serialized at insert time, so
+  // fields set on the entry afterwards would never reach the database.
+  let loggedBits;
+  let loggedSecs;
+  if (tier && !isTestAlert) {
+    const bits = Number(tier.replace("sound_", "")) || 0;
+    if (bits > 0) {
+      loggedBits = bits;
+      const timerUid = String(channelId);
+      const secs = bitsInExtensionSeconds(timerUid, bits);
+      if (secs > 0) {
+        addSeconds(timerUid, secs);
+        loggedSecs = secs;
+        logger.info("bits_in_ext_timer_add", { userId: timerUid, bits, seconds: secs, source: "sound_alert" });
+      }
+    }
+  }
+
   const logEntry = addLogEntry({
     type: "sound_alert",
     userId: String(channelId),
@@ -2283,6 +2307,9 @@ function handleSoundAlert({ channelId, soundId, soundName, tier, txId, viewerUse
     volume: volume || 80,
     viewerUserId: viewerUserId || undefined,
     txId: txId || undefined,
+    bitsAmount: loggedBits,
+    secondsAdded: loggedSecs,
+    channelPointsAmount: channelPointsAmount || undefined,
   });
   const payload = JSON.stringify({
     alertId,
@@ -2307,31 +2334,13 @@ function handleSoundAlert({ channelId, soundId, soundName, tier, txId, viewerUse
     payload: { soundId, soundName },
   }).catch(() => {});
 
-  // Add timer time for Bits-in-Extensions usage (same rules as cheers) —
-  // skipped for test-fired alerts, which must never mutate real timer state.
-  // Channel Points redemptions never reach this branch (no `tier`), matching
-  // the original design intent that only Bits count toward the timer.
-  if (tier && !isTestAlert) {
-    const bits = Number(tier.replace("sound_", "")) || 0;
-    if (bits > 0) {
-      logEntry.bitsAmount = bits;
-      const timerUid = String(channelId);
-      const secs = bitsInExtensionSeconds(timerUid, bits);
-      if (secs > 0) {
-        addSeconds(timerUid, secs);
-        logEntry.secondsAdded = secs;
-        logger.info("bits_in_ext_timer_add", { userId: timerUid, bits, seconds: secs, source: "sound_alert" });
-      }
-    }
-  }
-
   // Post to chat (async, best-effort) — also backfill display name on the log entry
   if (viewerUserId && (tier || channelPointsAmount)) {
     const costText = tier ? `${tier.replace("sound_", "")} Bits` : `${channelPointsAmount} Channel Points`;
     (async () => {
       const displayName = await fetchUserDisplayName(viewerUserId, channelId);
       if (displayName) {
-        logEntry.viewerDisplayName = displayName;
+        patchLogEntry(logEntry, { viewerDisplayName: displayName });
         queueItem.viewerDisplayName = displayName;
       }
       const who = displayName || viewerUserId;

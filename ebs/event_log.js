@@ -81,18 +81,48 @@ export function rowToEntry(row) {
   return { id: row.id, ts: Number(row.ts) || 0, userId: row.user_id, type: row.type, ...data };
 }
 
+// id -> in-flight INSERT promise, so patchLogEntry can wait for the row to
+// exist before updating it (the insert is fire-and-forget and may still be
+// running when a caller's async follow-up — e.g. a display-name lookup —
+// finishes). Entries are removed once the insert settles.
+const pendingInserts = new Map();
+
+// NOTE: the row is serialized at call time. Mutating the returned object
+// afterwards does NOT persist — use patchLogEntry for late-arriving fields.
 export function addLogEntry(entry) {
   const e = { id: crypto.randomUUID(), ts: Date.now(), ...entry };
   const row = entryToRow(e);
-  db.query(
+  const p = db.query(
     `INSERT INTO event_log (id, user_id, ts, type, data)
      VALUES ($1, $2, $3, $4, $5::jsonb)
      ON CONFLICT (id) DO NOTHING`,
     [row.id, row.user_id, row.ts, row.type, JSON.stringify(row.data)],
   )
     .then(() => invalidateFullWindow(row.user_id))
-    .catch((err) => logger.error("event_log_insert_failed", { message: err?.message }));
+    .catch((err) => logger.error("event_log_insert_failed", { message: err?.message }))
+    .finally(() => pendingInserts.delete(row.id));
+  pendingInserts.set(row.id, p);
   return e;
+}
+
+// Merges `patch` into an existing entry's jsonb data (shallow). Fire-and-forget
+// like addLogEntry. Also applies the patch to `entry` in memory so callers
+// holding the object see the same values.
+export function patchLogEntry(entry, patch) {
+  if (!entry?.id || !patch || typeof patch !== "object") return;
+  const { id: _i, userId: _u, ts: _t, type: _ty, ...data } = patch;
+  if (Object.keys(data).length === 0) return;
+  Object.assign(entry, data);
+  const userId = String(entry.userId ?? "");
+  Promise.resolve(pendingInserts.get(entry.id))
+    .then(() =>
+      db.query("UPDATE event_log SET data = data || $2::jsonb WHERE id = $1", [
+        String(entry.id),
+        JSON.stringify(data),
+      ]),
+    )
+    .then(() => invalidateFullWindow(userId))
+    .catch((err) => logger.error("event_log_patch_failed", { message: err?.message }));
 }
 
 export async function getLogEntryById(alertId) {

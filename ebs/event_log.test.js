@@ -9,7 +9,7 @@ import assert from "node:assert/strict";
 // that is the fire-and-forget contract working, not a test failure.
 process.env.DATABASE_URL =
   process.env.DATABASE_URL || "postgres://u:p@localhost:5432/db";
-const { addLogEntry, entryToRow, rowToEntry, getLogEntries, clearLogEntries } = await import("./event_log.js");
+const { addLogEntry, patchLogEntry, entryToRow, rowToEntry, getLogEntries, clearLogEntries } = await import("./event_log.js");
 const { db } = await import("./db.js");
 
 // getLogEntries just shapes a query for db.query and maps rows back — stub
@@ -212,4 +212,35 @@ test("addLogEntry returns the full entry synchronously with a fresh id + ts", ()
   assert.equal(e.userId, "1");
   assert.equal(e.type, "tts_alert");
   assert.equal(e.message, "hi");
+});
+
+test("patchLogEntry runs its UPDATE only after the entry's INSERT settles, merging into data", async () => {
+  const calls = [];
+  const original = db.query;
+  let releaseInsert;
+  db.query = (text, params) => {
+    calls.push({ text, params });
+    if (/^\s*INSERT/.test(text)) return new Promise((r) => { releaseInsert = () => r({ rows: [] }); });
+    return Promise.resolve({ rows: [] });
+  };
+  try {
+    const e = addLogEntry({ userId: "9", type: "sound_alert", viewerUserId: "555", bitsAmount: 100, secondsAdded: 60 });
+    // Fields known up front go in with the INSERT itself.
+    const inserted = JSON.parse(calls[0].params[4]);
+    assert.equal(inserted.bitsAmount, 100);
+    assert.equal(inserted.secondsAdded, 60);
+
+    patchLogEntry(e, { viewerDisplayName: "CoolViewer" });
+    assert.equal(e.viewerDisplayName, "CoolViewer", "in-memory entry updated immediately");
+    await new Promise((r) => setTimeout(r, 10));
+    assert.equal(calls.length, 1, "UPDATE must wait for the pending INSERT");
+
+    releaseInsert();
+    await new Promise((r) => setTimeout(r, 10));
+    assert.equal(calls.length, 2);
+    assert.match(calls[1].text, /UPDATE event_log SET data = data \|\| \$2::jsonb WHERE id = \$1/);
+    assert.deepEqual(calls[1].params, [e.id, JSON.stringify({ viewerDisplayName: "CoolViewer" })]);
+  } finally {
+    db.query = original;
+  }
 });
